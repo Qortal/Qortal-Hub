@@ -12,7 +12,9 @@
  *   { type: 'error', requestId?, sourceAddr?, message: string }
  */
 
-import createLibopusFecModule, { type LibopusFecModule } from '../wasm-libopus-fec/libopus-fec.js';
+import createLibopusFecModule, {
+  type LibopusFecModule,
+} from '../wasm-libopus-fec/libopus-fec.js';
 
 import { GCALL_AUDIO_MAX_OPUS_LEN } from '../lib/group-call/audioPacketCodec';
 
@@ -81,7 +83,10 @@ function recreateOpusDecoder(M: EmscriptenModule, st: SourceState): boolean {
   return true;
 }
 
-function getOrCreateDecoder(M: EmscriptenModule, addr: string): SourceState | null {
+function getOrCreateDecoder(
+  M: EmscriptenModule,
+  addr: string
+): SourceState | null {
   let s = sources.get(addr);
   if (s) return s;
   const dec = M._gcall_opus_decoder_create(SAMPLE_RATE, CHANNELS);
@@ -103,7 +108,11 @@ function getOrCreateDecoder(M: EmscriptenModule, addr: string): SourceState | nu
   return s;
 }
 
-function ensurePacketBuffer(M: EmscriptenModule, st: SourceState, byteLen: number): boolean {
+function ensurePacketBuffer(
+  M: EmscriptenModule,
+  st: SourceState,
+  byteLen: number
+): boolean {
   if (byteLen <= st.dataCap && st.dataPtr !== 0) return true;
   if (st.dataPtr) M._free(st.dataPtr);
   const p = M._malloc(byteLen);
@@ -124,13 +133,21 @@ function copyHeapPcmInto(
   outFrameIndex: number
 ): void {
   const base = pcmPtr >> 2;
-  out.set(M.HEAPF32.subarray(base, base + FRAME_SAMPLES), outFrameIndex * FRAME_SAMPLES);
+  out.set(
+    M.HEAPF32.subarray(base, base + FRAME_SAMPLES),
+    outFrameIndex * FRAME_SAMPLES
+  );
 }
 
 /** Log negative libopus return codes (see opus_defines.h). */
 function logOpusDecodeFailure(
   ret: number,
-  ctx: { phase: 'plc' | 'fec' | 'normal'; decodeFec: 0 | 1; gap: number; sourceAddr: string }
+  ctx: {
+    phase: 'plc' | 'fec' | 'normal';
+    decodeFec: 0 | 1;
+    gap: number;
+    sourceAddr: string;
+  }
 ): void {
   if (ret >= 0) return;
   console.error('[GCall] opus-fec wasm gcall_opus_decode_float failed', {
@@ -140,7 +157,10 @@ function logOpusDecodeFailure(
 }
 
 /** Coarse FEC success: positive sample count and non-trivial energy (refinement D). */
-function fecOutputLooksValid(samplesDecoded: number, pcm: Float32Array): boolean {
+function fecOutputLooksValid(
+  samplesDecoded: number,
+  pcm: Float32Array
+): boolean {
   if (samplesDecoded <= 0) return false;
   let e = 0;
   for (let i = 0; i < pcm.length; i++) e += pcm[i] * pcm[i];
@@ -185,14 +205,18 @@ function decodePacket(
   const dataPtr = st.dataPtr;
   const dec = st.dec;
 
-  const maxFrames =
-    plcCount + (effectiveGap >= 1 && st.fecAllowed ? 1 : 0) + 1;
+  const maxFrames = plcCount + (effectiveGap >= 1 && st.fecAllowed ? 1 : 0) + 1;
   const scratch = new Float32Array(maxFrames * FRAME_SAMPLES);
   let frameIdx = 0;
 
   for (let i = 0; i < plcCount; i++) {
     const n = M._gcall_opus_decode_float(dec, 0, 0, pcmPtr, FRAME_SAMPLES, 0);
-    logOpusDecodeFailure(n, { phase: 'plc', decodeFec: 0, gap: effectiveGap, sourceAddr });
+    logOpusDecodeFailure(n, {
+      phase: 'plc',
+      decodeFec: 0,
+      gap: effectiveGap,
+      sourceAddr,
+    });
     if (n > 0) {
       copyHeapPcmInto(M, pcmPtr, scratch, frameIdx);
       frameIdx++;
@@ -209,7 +233,12 @@ function decodePacket(
       FRAME_SAMPLES,
       1
     );
-    logOpusDecodeFailure(nFec, { phase: 'fec', decodeFec: 1, gap: effectiveGap, sourceAddr });
+    logOpusDecodeFailure(nFec, {
+      phase: 'fec',
+      decodeFec: 1,
+      gap: effectiveGap,
+      sourceAddr,
+    });
     fecAttempts++;
     if (nFec > 0) {
       copyHeapPcmInto(M, pcmPtr, scratch, frameIdx);
@@ -230,7 +259,12 @@ function decodePacket(
     FRAME_SAMPLES,
     0
   );
-  logOpusDecodeFailure(nCur, { phase: 'normal', decodeFec: 0, gap: effectiveGap, sourceAddr });
+  logOpusDecodeFailure(nCur, {
+    phase: 'normal',
+    decodeFec: 0,
+    gap: effectiveGap,
+    sourceAddr,
+  });
 
   if (nCur > 0) {
     st.consecutiveNormalFailures = 0;
@@ -240,10 +274,13 @@ function decodePacket(
   } else {
     st.consecutiveNormalFailures++;
     if (st.consecutiveNormalFailures >= CONSECUTIVE_NORMAL_FAILS_BEFORE_RESET) {
-      console.warn('[GCall] opus-fec wasm: repeated normal decode failures, resetting decoder', {
-        sourceAddr: sourceAddr.slice(0, 12),
-        consecutiveNormalFailures: st.consecutiveNormalFailures,
-      });
+      console.warn(
+        '[GCall] opus-fec wasm: repeated normal decode failures, resetting decoder',
+        {
+          sourceAddr: sourceAddr.slice(0, 12),
+          consecutiveNormalFailures: st.consecutiveNormalFailures,
+        }
+      );
       if (!recreateOpusDecoder(M, st)) {
         throw new Error('opus decoder recreate after decode failures failed');
       }
@@ -259,12 +296,24 @@ function decodePacket(
     pcm.set(scratch.subarray(0, totalSamples));
   }
 
-  return { pcm, frameCount: frameIdx, plcFrames, fecAttempts, fecSuccessCoarse };
+  return {
+    pcm,
+    frameCount: frameIdx,
+    plcFrames,
+    fecAttempts,
+    fecSuccessCoarse,
+  };
 }
 
 self.onmessage = async (
   e: MessageEvent<
-    | { type: 'decode'; requestId: number; sourceAddr: string; packet: ArrayBuffer; gap: number }
+    | {
+        type: 'decode';
+        requestId: number;
+        sourceAddr: string;
+        packet: ArrayBuffer;
+        gap: number;
+      }
     | { type: 'reset'; sourceAddr: string }
     | { type: 'dispose'; sourceAddr: string }
   >
@@ -304,13 +353,8 @@ self.onmessage = async (
       return;
     }
 
-    const { pcm, frameCount, plcFrames, fecAttempts, fecSuccessCoarse } = decodePacket(
-      M,
-      st,
-      packet,
-      gap,
-      sourceAddr
-    );
+    const { pcm, frameCount, plcFrames, fecAttempts, fecSuccessCoarse } =
+      decodePacket(M, st, packet, gap, sourceAddr);
 
     const payload = {
       type: 'decoded' as const,

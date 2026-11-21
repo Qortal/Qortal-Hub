@@ -1036,6 +1036,11 @@ type ReticulumChatPendingReadSync =
       groupId: number;
       channelId: string;
       upToTimestamp: number;
+      coverage?: Array<{
+        authorAddress: string;
+        authorStreamId: string;
+        coveredSeq: number;
+      }>;
     }
   | {
       scopeType: 'dm';
@@ -1337,6 +1342,46 @@ export type ReticulumChatReadSyncWire = {
   z: string;
 };
 
+/**
+ * Per-author read coverage, carried on its own wire.
+ *
+ * It cannot ride on the receipt: the Reticulum JSON budget is 383 bytes, a bare
+ * group receipt already spends 287 of them, and one coverage entry costs 84. A
+ * receipt carrying coverage therefore never fit, and `wireFitsReticulumChat`
+ * rejected it — which silently dropped the read instead of degrading. One entry
+ * per wire fits; the sender emits as many wires as the coverage needs.
+ *
+ * Every field is spent deliberately because a generated channel id is 39–40
+ * characters (`ch-` plus a UUID) and one author entry is 66 characters of
+ * identity before any punctuation:
+ *
+ * - no `upToTimestamp`. The receiver never read it — `handleReadCoverage` only
+ *   writes the entries — and it duplicated a 13-digit millisecond timestamp on
+ *   every wire. Removing it is what took a created channel from 396 bytes to
+ *   375, inside the budget.
+ * - the entry is one `address:stream:seq` string rather than a three-element
+ *   array, which saves the JSON brackets and quotes per wire.
+ *
+ * `signedAt` is kept: it is what binds the coverage to the receipt that
+ * produced it, so a coverage wire cannot be lifted onto a different read. The
+ * sender measures the assembled wire before signing it, so an entry too large
+ * to fit is counted instead of silently dropped.
+ */
+export type ReticulumChatReadCoverageWire = {
+  /** Group id. */
+  g: number;
+  /** Channel id. */
+  c: string;
+  /** `signedAt` of the receipt this coverage belongs to. */
+  n: number;
+  /** Owner public key, base58. Also identifies whose read this is. */
+  p: string;
+  /** Signature over this payload, base58. */
+  z: string;
+  /** `address:stream:seq`, one entry per wire. */
+  v: [string];
+};
+
 export type ReticulumChatReadSyncAckWire = {
   y: 'g' | 'd';
   c: string;
@@ -1491,6 +1536,13 @@ export function buildReticulumChatReadSyncSignedFields(input: {
   upToTimestamp: number;
   signedAt: number;
 }): Record<string, unknown> {
+  // These fields are frozen. Every Hub since 3.0.0 rebuilds exactly this object
+  // and checks the signature against it, so adding a field here makes the
+  // receipt unverifiable on any device that has not upgraded — a read taken on
+  // an updated device would stop reaching the account's other devices. That is
+  // why per-author coverage is signed separately, in
+  // `buildReticulumChatReadSyncCoverageSignedFields`, and travels in its own
+  // wire field that older peers simply ignore.
   return {
     type: 'RCHAT_READ_SYNC_V1',
     scopeType: input.scopeType,
@@ -1507,6 +1559,166 @@ export function buildReticulumChatReadSyncSignedFields(input: {
     upToTimestamp: input.upToTimestamp,
     signedAt: input.signedAt,
   };
+}
+
+/**
+ * Signed fields for the per-author coverage that rides alongside a read receipt.
+ *
+ * Separate from the receipt itself so an unupgraded peer can keep verifying the
+ * receipt while ignoring this. It repeats the receipt's identity — owner, scope,
+ * `upToTimestamp`, `signedAt` — so a coverage payload cannot be lifted off one
+ * receipt and replayed onto another, and cannot be widened without the key.
+ */
+export function buildReticulumChatReadSyncCoverageSignedFields(input: {
+  ownerAddress: string;
+  groupId: number;
+  channelId: string;
+  signedAt: number;
+  coverage: Array<{
+    authorAddress: string;
+    authorStreamId: string;
+    coveredSeq: number;
+  }>;
+}): Record<string, unknown> {
+  // No `upToTimestamp`. It was in the signed set and on the wire only for the
+  // receiver to discard, and a 13-digit millisecond timestamp was the difference
+  // between a created channel's coverage fitting in the 383-byte budget and being
+  // dropped. `signedAt` carries the binding instead: `nextReadSyncSignedAt` makes
+  // it strictly increasing per owner, so it uniquely identifies the read this
+  // coverage belongs to. Coverage wires only ever reach peers that negotiate
+  // `read_sync_v2`, so there is no released verifier to stay compatible with.
+  return {
+    type: 'RCHAT_READ_SYNC_COVERAGE_V1',
+    ownerAddress: input.ownerAddress,
+    groupId: input.groupId,
+    channelId: input.channelId,
+    signedAt: input.signedAt,
+    coverage: input.coverage.map((entry) => [
+      entry.authorAddress,
+      entry.authorStreamId,
+      entry.coveredSeq,
+    ]),
+  };
+}
+
+/**
+ * Validates and normalises the per-author coverage of a V2 read receipt.
+ *
+ * Bounded so a peer cannot make us write unbounded rows, and every field is
+ * checked because this arrives from the wire. Returns undefined when the receipt
+ * carries none, which is how a V1 receipt stays distinguishable.
+ */
+export const RETICULUM_CHAT_MAX_READ_SYNC_COVERAGE = 200;
+
+/**
+ * Parses the coverage array.
+ *
+ * An entry is `address:stream:seq` on the wire rather than a three-element
+ * array: a generated channel id is 39–40 characters, and the brackets and quotes
+ * of the array form were enough to push a created channel's wire over the
+ * 383-byte budget.
+ */
+function parseReadSyncCoverage(
+  raw: unknown
+):
+  | Array<{ authorAddress: string; authorStreamId: string; coveredSeq: number }>
+  | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const coverage: Array<{
+    authorAddress: string;
+    authorStreamId: string;
+    coveredSeq: number;
+  }> = [];
+  for (const entry of raw.slice(0, RETICULUM_CHAT_MAX_READ_SYNC_COVERAGE)) {
+    if (typeof entry !== 'string') continue;
+    const parts = entry.split(':');
+    if (parts.length !== 3) continue;
+    const authorAddress = parts[0].trim();
+    const authorStreamId = normalizeReticulumChatAuthorStreamId(parts[1]);
+    const coveredSeq = Number(parts[2]);
+    if (!isValidQortalAddress(authorAddress)) continue;
+    if (!authorStreamId) continue;
+    if (!Number.isInteger(coveredSeq) || coveredSeq <= 0) continue;
+    coverage.push({ authorAddress, authorStreamId, coveredSeq });
+  }
+  return coverage.length > 0 ? coverage : undefined;
+}
+
+/** The wire form of one coverage entry: `address:stream:seq`. */
+function serializeReadCoverageEntry(entry: {
+  authorAddress: string;
+  authorStreamId: string;
+  coveredSeq: number;
+}): string {
+  return `${entry.authorAddress}:${entry.authorStreamId}:${entry.coveredSeq}`;
+}
+
+/**
+ * Verifies one `read_cov` wire.
+ *
+ * Returns the coverage it carries only when the signature checks out over this
+ * wire's own identity (owner, group, channel and the receipt's `signedAt`) plus
+ * the coverage itself. Anything else is discarded, and the receiving device
+ * simply keeps the sender-time approximation the receipt already gave it. A bad
+ * coverage wire must never cost the read itself.
+ */
+export function verifyReticulumChatReadCoverageWire(
+  wire: ReticulumChatReadCoverageWire,
+  now = Date.now()
+): {
+  ownerAddress: string;
+  groupId: number;
+  channelId: string;
+  signedAt: number;
+  coverage: Array<{
+    authorAddress: string;
+    authorStreamId: string;
+    coveredSeq: number;
+  }>;
+} | null {
+  try {
+    const ownerAddress = deriveAddressFromPublicKey(wire.p);
+    const groupId = Number(wire.g);
+    const channelId = normalizeReticulumChatChannelId(wire.c);
+    const signedAt = Math.floor(Number(wire.n));
+    if (
+      !isValidQortalAddress(ownerAddress) ||
+      !Number.isSafeInteger(groupId) ||
+      groupId <= 0 ||
+      !channelId ||
+      typeof wire.c !== 'string' ||
+      wire.c.trim().toLowerCase() !== channelId ||
+      !Number.isSafeInteger(signedAt) ||
+      signedAt <= 0 ||
+      signedAt > now + RETICULUM_CHAT_CONTROL_MAX_FUTURE_SKEW_MS ||
+      typeof wire.z !== 'string' ||
+      !wire.z
+    ) {
+      return null;
+    }
+    const coverage = parseReadSyncCoverage(wire.v);
+    if (!coverage) return null;
+    const fields = {
+      ...buildReticulumChatReadSyncCoverageSignedFields({
+        ownerAddress,
+        groupId,
+        channelId,
+        signedAt,
+        coverage,
+      }),
+      authorAddress: ownerAddress,
+      authorPublicKey: wire.p,
+    };
+    return verifyEd25519Detached(
+      new Uint8Array(canonicalizeForSigning(fields)),
+      new Uint8Array(base58Decode(wire.z)),
+      new Uint8Array(base58Decode(wire.p))
+    )
+      ? { ownerAddress, groupId, channelId, signedAt, coverage }
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 export function verifyReticulumChatReadSyncWire(
@@ -1736,6 +1948,7 @@ type ReticulumDmPageResource = {
 export type ReticulumChatWire =
   | { t: 'RCHAT'; k: 'hello_v3'; v: 3; f: ReticulumChatProtocolFeature[] }
   | { t: 'RCHAT'; k: 'read_sync'; w: ReticulumChatReadSyncWire }
+  | { t: 'RCHAT'; k: 'read_cov'; w: ReticulumChatReadCoverageWire }
   | { t: 'RCHAT'; k: 'read_sync_ack'; w: ReticulumChatReadSyncAckWire }
   | { t: 'RCHAT'; k: 'call_history'; w: ReticulumDirectCallHistoryWire }
   | {
@@ -2628,6 +2841,11 @@ const RETICULUM_CHAT_AUTHOR_GAP_ROUTE_BACKOFF_MS = [
   3_000, 10_000, 30_000, 60_000,
 ] as const;
 const RETICULUM_CHAT_AUTHOR_GAP_ROUTE_BACKOFF_RESET_MS = 10 * 60_000;
+// A peer that answered `history_unavailable` for a group cannot serve *any* of
+// its ranges (it has no local history for the group). Exclude it from that
+// group's repair candidates for about an hour, and don't count it toward the
+// denial threshold while excluded.
+const RETICULUM_CHAT_AUTHOR_GAP_HISTORY_UNAVAILABLE_EXCLUSION_MS = 60 * 60_000;
 const RETICULUM_CHAT_AUTHOR_GAP_QUARANTINE_MS = 6 * 60 * 60_000;
 const RETICULUM_CHAT_AUTHOR_GAP_QUARANTINE_PEERS = 3;
 const RETICULUM_CHAT_AUTHOR_GAP_KNOWN_UNAVAILABLE_RECHECK_MS =
@@ -5877,6 +6095,20 @@ export function verifyReticulumDmNotify(
   );
 }
 
+function reticulumDmNotifyRejectionReason(
+  wire: ReticulumDmNotifyWire,
+  now = Date.now()
+): string {
+  const peerAddress = typeof wire?.b === 'string' ? wire.b.trim() : '';
+  const requestId = normalizeReticulumControlRequestId(wire?.q);
+  const sourcePeerHash = normalizePeerHashFromWire(wire?.sp) ?? '';
+  if (!peerAddress || !requestId || !sourcePeerHash) return 'bad_shape';
+  if (!Number.isFinite(wire.n)) return 'bad_shape';
+  if (wire.n > now + RETICULUM_CHAT_CONTROL_MAX_FUTURE_SKEW_MS) return 'future';
+  if (wire.n < now - RETICULUM_CHAT_DM_NOTIFY_TTL_MS) return 'stale';
+  return 'bad_shape';
+}
+
 function reticulumDmNotifySignatureMaterial(
   wire: ReticulumDmNotifyWire,
   now = Date.now()
@@ -7038,7 +7270,7 @@ export class ReticulumChatManager extends EventEmitter {
   private localGroupAdminIds = new Set<number>();
   private localGroupAuthoritativeAdminStatusIds = new Set<number>();
   private localGroupAddresses = new Map<number, string>();
-  private publicGroupDirectoryIds = new Set<number>();
+  private discoveryGroupDirectoryIds = new Set<number>();
   private publicGroupActivityStates = new Map<
     number,
     ReticulumPublicGroupActivityLocalState
@@ -7168,8 +7400,9 @@ export class ReticulumChatManager extends EventEmitter {
   private tempEventBlobPaths = new Set<string>();
   private tempEventBlobLastSweepAt = 0;
   private tempEventBlobSweepPromise: Promise<void> | null = null;
-  private tempEventBlobDeferredSweepTimer: ReturnType<typeof setTimeout> | null =
-    null;
+  private tempEventBlobDeferredSweepTimer: ReturnType<
+    typeof setTimeout
+  > | null = null;
   private backgroundAuthorGapRepairTimer: ReturnType<typeof setTimeout> | null =
     null;
   private backgroundAuthorGapRepairDueAt = 0;
@@ -7377,6 +7610,7 @@ export class ReticulumChatManager extends EventEmitter {
     string,
     ReturnType<typeof setTimeout>
   >();
+  private staleMetadataSnapshotHashes = new Map<string, number>();
   private deferredMetadataSnapshots = new Map<
     string,
     {
@@ -7423,6 +7657,11 @@ export class ReticulumChatManager extends EventEmitter {
   >();
   private authorGapControlSendsInFlight = new Map<string, number>();
   private backgroundAuthorGapGroupNextAttemptAt = new Map<number, number>();
+  // groupId:peerHash -> timestamp until which the peer is known not to hold
+  // this group's history (answered `history_unavailable`). Such peers cannot
+  // serve any range for the group, so exclude them from candidate selection
+  // for about an hour instead of asking them once per range repeatedly.
+  private authorGapHistoryUnavailableUntil = new Map<string, number>();
   private peerProtocolFeatures = new Map<
     string,
     Set<ReticulumChatProtocolFeature>
@@ -7674,10 +7913,15 @@ export class ReticulumChatManager extends EventEmitter {
   private channelMetadataProjectionQueue: string[] = [];
   private channelMetadataProjectionQueuedIds = new Set<string>();
   private channelMetadataProjectionAttemptedIds = new Set<string>();
+  // Skipped metadata events are remembered per (group, author) so they can be
+  // re-queued once that author becomes admin again (a failed admin-list fetch
+  // must not lose an admin's edits for the whole session).
+  private channelMetadataSkippedByAuthor = new Set<string>();
   private channelMetadataProjectionRetryTimers = new Map<
     string,
     ReturnType<typeof setTimeout>
   >();
+  private channelMetadataProjectionRetryAttempts = new Map<string, number>();
   private pendingPrivilegedMentionValidationEvents = new Map<
     string,
     ReticulumChatEvent
@@ -7776,6 +8020,12 @@ export class ReticulumChatManager extends EventEmitter {
   private readSyncRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private readSyncRetryDelayMs = RETICULUM_CHAT_READ_SYNC_RETRY_INITIAL_MS;
   private readSyncLastSignedAt = new Map<string, number>();
+  // Per channel, the highest `author_seq` this device has already sent coverage
+  // for, keyed `author|stream`. A read used to sign and send one wire per author
+  // who had ever posted in the channel even when only one entry had moved, so a
+  // 25-author channel cost 25 signatures and 25 wires per read and the same
+  // again after a single new message. Only what changed is sent now.
+  private sentReadCoverage = new Map<string, Map<string, number>>();
   private readSyncPeerAcks = new Map<string, number>();
   private readSyncReplayActive = false;
   private readSyncReplayPending = false;
@@ -7802,6 +8052,8 @@ export class ReticulumChatManager extends EventEmitter {
   private localNotifyWatcher: fs.FSWatcher | null = null;
   private localNotifyTimer: ReturnType<typeof setTimeout> | null = null;
   private localNotifyScanInterval: ReturnType<typeof setInterval> | null = null;
+  private localNotifyCleanupInterval: ReturnType<typeof setInterval> | null =
+    null;
   private seenLocalNotifyFiles = new Set<string>();
   private readonly localNotifyManagerStartedAt = Date.now();
   private localNotifyWatcherHasStarted = false;
@@ -8889,6 +9141,7 @@ export class ReticulumChatManager extends EventEmitter {
     this.channelMetadataProjectionQueue = [];
     this.channelMetadataProjectionQueuedIds.clear();
     this.channelMetadataProjectionAttemptedIds.clear();
+    this.channelMetadataSkippedByAuthor.clear();
     this.channelMetadataProjectionRepairGroups.clear();
     if (this.membershipInitializationTimer) {
       clearTimeout(this.membershipInitializationTimer);
@@ -8977,11 +9230,7 @@ export class ReticulumChatManager extends EventEmitter {
     const previousAuthoritativeAdminStatusIds =
       this.localGroupAuthoritativeAdminStatusIds;
     const previousGroupAddresses = this.localGroupAddresses;
-    const previousPublicGroupIds = new Set(
-      [...this.localGroupIds].filter(
-        (groupId) => !this.localPrivateGroupIds.has(groupId)
-      )
-    );
+    const previousActivityGroupIds = new Set(this.localGroupIds);
     const normalizedMemberships =
       this.normalizeLocalGroupMemberships(memberships);
     const groupsWithExpandedHistoryAccess = membershipsWereInitialized
@@ -9069,11 +9318,9 @@ export class ReticulumChatManager extends EventEmitter {
     this.hydrateAllPendingReadSync();
     void this.replayReadStatesToOwnDevices();
     this.scheduleNextCalendarReminder();
-    const nextPublicGroupIds = new Set(
-      nextGroupIds.filter((groupId) => !this.localPrivateGroupIds.has(groupId))
-    );
-    for (const groupId of previousPublicGroupIds) {
-      if (nextPublicGroupIds.has(groupId)) continue;
+    const nextActivityGroupIds = new Set(nextGroupIds);
+    for (const groupId of previousActivityGroupIds) {
+      if (nextActivityGroupIds.has(groupId)) continue;
       this.publicGroupActivityStates.delete(groupId);
       this.publicGroupActivityDirty.delete(groupId);
       this.db.deletePublicGroupActivity(groupId);
@@ -9140,7 +9387,8 @@ export class ReticulumChatManager extends EventEmitter {
     } else {
       this.enqueueMembershipInitialization(groupsRequiringInitialization);
     }
-    if (this.hasKnownPublicGroups()) this.schedulePublicActivityRefresh(1_000);
+    if (this.hasKnownDiscoveryGroups())
+      this.schedulePublicActivityRefresh(1_000);
   }
 
   private initializeMembershipGroup(groupId: number): void {
@@ -9207,22 +9455,24 @@ export class ReticulumChatManager extends EventEmitter {
   }
 
   setPublicGroupDirectory(groupIds: number[]): void {
-    this.publicGroupDirectoryIds = new Set(
+    // Keep the public API name for wire/preload compatibility. The directory
+    // now contains every group eligible for discovery activity.
+    this.discoveryGroupDirectoryIds = new Set(
       (Array.isArray(groupIds) ? groupIds : [])
         .map((groupId) => Number(groupId))
         .filter((groupId) => Number.isInteger(groupId) && groupId > 0)
     );
     for (const groupId of this.publicGroupActivitySamples.keys()) {
-      if (!this.isKnownPublicGroup(groupId)) {
+      if (!this.isKnownDiscoveryGroup(groupId)) {
         this.publicGroupActivitySamples.delete(groupId);
       }
     }
-    if (this.hasKnownPublicGroups()) this.schedulePublicActivityRefresh(0);
+    if (this.hasKnownDiscoveryGroups()) this.schedulePublicActivityRefresh(0);
   }
 
   getPublicGroupActivitySummaries(): ReticulumPublicGroupActivitySummary[] {
     if (
-      this.hasKnownPublicGroups() &&
+      this.hasKnownDiscoveryGroups() &&
       this.now() - this.publicGroupActivityLastRequestedAt >=
         RETICULUM_PUBLIC_ACTIVITY_REFRESH_MS
     ) {
@@ -9235,7 +9485,7 @@ export class ReticulumChatManager extends EventEmitter {
 
   getPublicGroupActivitySnapshot(): ReticulumPublicGroupActivitySnapshot {
     if (
-      this.hasKnownPublicGroups() &&
+      this.hasKnownDiscoveryGroups() &&
       this.now() - this.publicGroupActivityLastRequestedAt >=
         RETICULUM_PUBLIC_ACTIVITY_REFRESH_MS
     ) {
@@ -9248,7 +9498,8 @@ export class ReticulumChatManager extends EventEmitter {
       )
     );
     for (const groupId of this.localGroupIds) {
-      if (!this.isLocalPublicGroup(groupId) || byGroup.has(groupId)) continue;
+      if (!this.isLocalDiscoveryGroup(groupId) || byGroup.has(groupId))
+        continue;
       byGroup.set(
         groupId,
         summarizeReticulumPublicGroupActivity(
@@ -9266,37 +9517,29 @@ export class ReticulumChatManager extends EventEmitter {
     };
   }
 
-  private isLocalPublicGroup(groupId: number): boolean {
+  private isLocalDiscoveryGroup(groupId: number): boolean {
     return (
-      this.localGroupMembershipsInitialized &&
-      this.localGroupIds.has(groupId) &&
-      !this.localPrivateGroupIds.has(groupId)
+      this.localGroupMembershipsInitialized && this.localGroupIds.has(groupId)
     );
   }
 
-  private isKnownPublicGroup(groupId: number): boolean {
-    if (
-      this.localGroupMembershipsInitialized &&
-      this.localPrivateGroupIds.has(groupId)
-    ) {
-      return false;
-    }
+  private isKnownDiscoveryGroup(groupId: number): boolean {
     return (
-      this.publicGroupDirectoryIds.has(groupId) ||
-      this.isLocalPublicGroup(groupId)
+      this.discoveryGroupDirectoryIds.has(groupId) ||
+      this.isLocalDiscoveryGroup(groupId)
     );
   }
 
-  private hasKnownPublicGroups(): boolean {
-    if (this.publicGroupDirectoryIds.size > 0) return true;
+  private hasKnownDiscoveryGroups(): boolean {
+    if (this.discoveryGroupDirectoryIds.size > 0) return true;
     for (const groupId of this.localGroupIds) {
-      if (this.isLocalPublicGroup(groupId)) return true;
+      if (this.isLocalDiscoveryGroup(groupId)) return true;
     }
     return false;
   }
 
   private recordPublicGroupActivity(event: ReticulumChatEvent): void {
-    if (!this.isLocalPublicGroup(event.groupId)) return;
+    if (!this.isLocalDiscoveryGroup(event.groupId)) return;
     if (event.eventType !== 'message') {
       return;
     }
@@ -9340,7 +9583,7 @@ export class ReticulumChatManager extends EventEmitter {
     const now = this.now();
     for (const groupId of this.publicGroupActivityDirty) {
       const state = this.publicGroupActivityStates.get(groupId);
-      if (!state || !this.isLocalPublicGroup(groupId)) continue;
+      if (!state || !this.isLocalDiscoveryGroup(groupId)) continue;
       this.db.upsertPublicGroupActivityLocalState(
         groupId,
         JSON.stringify(state),
@@ -9361,7 +9604,7 @@ export class ReticulumChatManager extends EventEmitter {
     )) {
       if (
         record.localStateJson ||
-        !this.isKnownPublicGroup(record.groupId) ||
+        !this.isKnownDiscoveryGroup(record.groupId) ||
         record.observedAt < now - RETICULUM_PUBLIC_ACTIVITY_SAMPLE_TTL_MS
       ) {
         continue;
@@ -9376,7 +9619,7 @@ export class ReticulumChatManager extends EventEmitter {
       });
     }
     for (const [groupId, state] of this.publicGroupActivityStates) {
-      if (!this.isLocalPublicGroup(groupId)) continue;
+      if (!this.isLocalDiscoveryGroup(groupId)) continue;
       byGroup.set(
         groupId,
         summarizeReticulumPublicGroupActivity(groupId, state, now)
@@ -9405,7 +9648,7 @@ export class ReticulumChatManager extends EventEmitter {
   ): ReticulumPublicGroupActivitySummary[] {
     const now = this.now();
     return [...this.publicGroupActivityStates]
-      .filter(([groupId]) => this.isLocalPublicGroup(groupId))
+      .filter(([groupId]) => this.isLocalDiscoveryGroup(groupId))
       .map(([groupId, state]) =>
         summarizeReticulumPublicGroupActivity(groupId, state, now)
       )
@@ -9426,7 +9669,7 @@ export class ReticulumChatManager extends EventEmitter {
   }
 
   private schedulePublicActivityRefresh(delayMs: number): void {
-    if (this.isClosed || !this.hasKnownPublicGroups()) return;
+    if (this.isClosed || !this.hasKnownDiscoveryGroups()) return;
     const delay = Math.max(0, Math.floor(delayMs));
     const dueAt = this.now() + delay;
     if (
@@ -9482,7 +9725,7 @@ export class ReticulumChatManager extends EventEmitter {
     if (
       this.isClosed ||
       this.publicGroupActivityRefreshInFlight ||
-      !this.hasKnownPublicGroups()
+      !this.hasKnownDiscoveryGroups()
     ) {
       return;
     }
@@ -9619,7 +9862,7 @@ export class ReticulumChatManager extends EventEmitter {
       if (
         !Number.isInteger(groupId) ||
         groupId <= 0 ||
-        !this.isKnownPublicGroup(groupId) ||
+        !this.isKnownDiscoveryGroup(groupId) ||
         ![messages24h, messages7d, activeAuthors7d, observedAt].every(
           Number.isFinite
         ) ||
@@ -9683,7 +9926,7 @@ export class ReticulumChatManager extends EventEmitter {
       .filter((sample) => sample.expiresAt > now)
       .map((sample) => sample.summary);
     const localState = this.publicGroupActivityStates.get(groupId);
-    if (localState && this.isLocalPublicGroup(groupId)) {
+    if (localState && this.isLocalDiscoveryGroup(groupId)) {
       summaries.push(
         summarizeReticulumPublicGroupActivity(groupId, localState, now)
       );
@@ -9772,6 +10015,7 @@ export class ReticulumChatManager extends EventEmitter {
     this.readSyncReplayPending = false;
     this.readSyncLastSignedAt.clear();
     this.readSyncPeerAcks.clear();
+    this.sentReadCoverage.clear();
 
     this.pendingInitialDmDiscovery = false;
     this.stopDmDigestTimer();
@@ -10229,7 +10473,8 @@ export class ReticulumChatManager extends EventEmitter {
 
   notifyOverlayHealthChanged(isHealthy: boolean): void {
     if (!isHealthy) return;
-    if (this.hasKnownPublicGroups()) this.schedulePublicActivityRefresh(1_000);
+    if (this.hasKnownDiscoveryGroups())
+      this.schedulePublicActivityRefresh(1_000);
     this.flushPendingDmDiscoveryIfHealthy('overlay-health');
     void this.replayReadStatesToOwnDevices();
     for (const [conversationId, pref] of this.activeDmLinkPreferences) {
@@ -12143,7 +12388,8 @@ export class ReticulumChatManager extends EventEmitter {
     // This path also runs after resume/reconnect. Re-evaluate the single
     // nearest reminder timer in case the system slept through its deadline.
     this.scheduleNextCalendarReminder();
-    if (this.hasKnownPublicGroups()) this.schedulePublicActivityRefresh(1_000);
+    if (this.hasKnownDiscoveryGroups())
+      this.schedulePublicActivityRefresh(1_000);
     if (this.subscribedGroups.size === 0) return;
     this.enqueueSubscriptionFanouts([this.buildHelloWire()]);
     this.refreshSubscriptions(false);
@@ -12356,6 +12602,10 @@ export class ReticulumChatManager extends EventEmitter {
         error: 'Invalid event',
       };
     }
+    // Emit the own post to the UI directly instead of waiting for the local
+    // notify-file round trip (which would flag the file as seen anyway). The
+    // notify file is still written for other managers sharing the database.
+    this.emitGroupEventIfVisible(event);
     const fanoutResult = await this.fanoutPublishedEvent(event, channelId);
     if (!fanoutResult.ok) {
       const failed = fanoutResult as Exclude<ReticulumSendResult, { ok: true }>;
@@ -14021,8 +14271,8 @@ export class ReticulumChatManager extends EventEmitter {
       candidatePeers: [],
     });
     if (
-      this.resourceTransfer.getDownloadStatus(manifest.fileHash).failureReason ===
-      'disk_full'
+      this.resourceTransfer.getDownloadStatus(manifest.fileHash)
+        .failureReason === 'disk_full'
     ) {
       return { ok: true };
     }
@@ -14373,15 +14623,18 @@ export class ReticulumChatManager extends EventEmitter {
     const replyTargetDeleted =
       !!event.replyToEventId &&
       this.db.isEventPayloadScrubbed(event.replyToEventId);
+    // Both read sources, not just the watermark. A V2 receipt deliberately does
+    // not move the channel-wide watermark, so considering it alone would leave
+    // messages this account already read on another device rendering as unread.
     const readByOwner =
       includeReadState &&
       !!localAddress &&
-      event.timestamp <=
-        this.db.getReadWatermark(
-          event.groupId,
-          normalizeReticulumChatChannelId(event.channelId),
-          localAddress
-        );
+      this.db.isEventCoveredByReadState(
+        event.groupId,
+        normalizeReticulumChatChannelId(event.channelId),
+        localAddress,
+        event
+      );
     const expiresAt = this.db.getEventExpiresAtForRenderer(event);
     const rendererEvent = {
       ...event,
@@ -15145,12 +15398,25 @@ export class ReticulumChatManager extends EventEmitter {
       Number.isFinite(upToTimestamp) &&
       upToTimestamp > 0
     ) {
+      const receiptChannelId = normalizeReticulumChatChannelId(channelId);
+      // The coverage describes exactly the events this read covers: each
+      // author's highest seq at or below the read timestamp. It is what lets the
+      // receiving device honour the read without comparing across clocks.
       this.queueReadSync({
         scopeType: 'group',
         ownerAddress,
         groupId,
-        channelId: normalizeReticulumChatChannelId(channelId),
+        channelId: receiptChannelId,
         upToTimestamp: Math.floor(upToTimestamp),
+        // Read after `db.markRead` above, so `local_read_at` is the moment this
+        // device just recorded and the coverage describes exactly what it had
+        // received then.
+        coverage: this.db.getLocalAuthorCoverageUpTo(
+          groupId,
+          receiptChannelId,
+          upToTimestamp,
+          ownerAddress
+        ),
       });
     }
   }
@@ -15289,12 +15555,34 @@ export class ReticulumChatManager extends EventEmitter {
     const signer = this.signLocalFields;
     if (!signer || this.isClosed) return null;
     const signedAt = this.nextReadSyncSignedAt(pending.ownerAddress);
-    const base = {
+    // Recomputed here rather than trusted from the pending row. The durable
+    // pending table has no coverage column, so a receipt replayed after a
+    // restart would otherwise go out as V1 and lose the per-author detail.
+    // Deriving it at signing time also keeps the coverage consistent with what
+    // this device had actually read when the receipt is finally sent.
+    const coverage =
+      pending.scopeType === 'group' &&
+      pending.groupId &&
+      pending.channelId &&
+      Number.isFinite(pending.upToTimestamp)
+        ? this.db.getLocalAuthorCoverageUpTo(
+            pending.groupId,
+            pending.channelId,
+            pending.upToTimestamp,
+            pending.ownerAddress
+          )
+        : [];
+    // The receipt signs the frozen V1 field set, which is what every released
+    // Hub rebuilds and verifies. Coverage is signed separately so the two can
+    // evolve independently: adding it here would have made the receipt
+    // unverifiable on any device that has not upgraded.
+    const receiptFields = {
       ...pending,
       signedAt,
     };
+    delete (receiptFields as { coverage?: unknown }).coverage;
     const signed = await signer(
-      buildReticulumChatReadSyncSignedFields(base)
+      buildReticulumChatReadSyncSignedFields(receiptFields)
     ).catch(() => null);
     // The signer may outlive the manager during shutdown. Never resume into
     // SQLite after close; the unsigned watermark remains in the durable
@@ -15319,7 +15607,21 @@ export class ReticulumChatManager extends EventEmitter {
       authorPublicKey: signed.authorPublicKey,
       signature: signed.signature,
     };
-    return this.deviceReadStateToWire(state) ? state : null;
+    const wire = this.deviceReadStateToWire(state);
+    if (wire) {
+      // Coverage cannot ride on the receipt: the Reticulum JSON budget is 383
+      // bytes and a bare group receipt already spends 287 of them, so a receipt
+      // carrying coverage never fits and `wireFitsReticulumChat` would reject it
+      // — dropping the read entirely.
+      //
+      // It is sent FIRST, and awaited. The receiver treats "this channel already
+      // has per-author coverage" as the signal to skip the channel-wide
+      // watermark, and applying the watermark is what re-created the
+      // cross-author over-coverage. Waiting here is what makes that signal
+      // reliable rather than a race against the receipt.
+      await this.sendReadCoverageToOwnDevices(state, coverage);
+    }
+    return wire ? state : null;
   }
 
   private ownDevicePeerHashes(ownerAddress: string): string[] {
@@ -15341,6 +15643,124 @@ export class ReticulumChatManager extends EventEmitter {
         this.sendToPeerOnce(peerHash, wire)
       )
     );
+  }
+
+  /**
+   * Sends per-author coverage as one `read_cov` wire per author.
+   *
+   * One entry per wire because the budget allows exactly that: a `read_cov`
+   * carrying a single entry is 375 bytes for a 39-character generated channel
+   * id — against the 383-byte limit — and two entries never fit. Chunking is not
+   * a nicety here, it is the only shape that fits.
+   *
+   * Each wire is signed over its own identity, so it stands alone: a receiver
+   * that gets the coverage but not the receipt — or the reverse — still applies
+   * what it can, and neither half can be replayed onto a different channel.
+   *
+   * The wire is measured BEFORE it is signed. Signing is a round trip into the
+   * renderer, so an entry that cannot fit used to be signed and then dropped —
+   * one wasted round trip per oversized entry, and the whole read silently
+   * unpropagated with nothing to observe.
+   *
+   * `peers` narrows the send to a specific device, which the replay path needs:
+   * a replay is per device, and broadcasting each replay to every device is what
+   * multiplied the coverage traffic by the device count.
+   */
+  private async sendReadCoverageToOwnDevices(
+    state: ReticulumChatDeviceReadState,
+    coverage: Array<{
+      authorAddress: string;
+      authorStreamId: string;
+      coveredSeq: number;
+    }>,
+    peers?: string[]
+  ): Promise<void> {
+    if (
+      state.scopeType !== 'group' ||
+      !state.groupId ||
+      !state.channelId ||
+      coverage.length === 0 ||
+      this.isClosed
+    ) {
+      return;
+    }
+    const signer = this.signLocalFields;
+    if (!signer) return;
+    // Absent `peers` means "every device of this account", which is the shape a
+    // fresh read uses. The replay path names one device instead.
+    const targets = peers ?? this.ownDevicePeerHashes(state.ownerAddress);
+    if (targets.length === 0) return;
+    const groupId = state.groupId;
+    const channelId = state.channelId;
+    for (const peerHash of targets) {
+      if (this.isClosed) return;
+      // Only what actually moved since the last coverage this device sent to THIS
+      // peer. A read signs one wire per author who has ever posted, so a channel
+      // with 25 authors spent 25 signatures and 25 wires per read, and the same
+      // again after any new message; most of those entries had not changed.
+      //
+      // Per peer rather than per channel: a device that was offline for a read
+      // still needs that read's coverage on replay, and a single shared counter
+      // would have already claimed it was sent.
+      const sentKey = `${state.ownerAddress}:${groupId}:${channelId}:${peerHash}`;
+      const alreadySent = this.sentReadCoverage.get(sentKey);
+      const moved = coverage.filter(
+        (entry) =>
+          (alreadySent?.get(`${entry.authorAddress}|${entry.authorStreamId}`) ??
+            0) < entry.coveredSeq
+      );
+      if (moved.length === 0) continue;
+      let sentNow = alreadySent;
+      for (const entry of moved) {
+        if (this.isClosed) return;
+        const entryWire = serializeReadCoverageEntry(entry);
+        const unsignedWire: Extract<ReticulumChatWire, { k: 'read_cov' }> = {
+          t: 'RCHAT',
+          k: 'read_cov',
+          w: {
+            g: groupId,
+            c: channelId,
+            n: state.signedAt,
+            // Worst-case public key and signature widths, so the check below is a
+            // true upper bound and never depends on the key this account happens
+            // to use.
+            p: '1'.repeat(44),
+            z: '1'.repeat(88),
+            v: [entryWire],
+          },
+        };
+        if (!wireFitsReticulumChat(unsignedWire)) continue;
+        const signed = await signer(
+          buildReticulumChatReadSyncCoverageSignedFields({
+            ownerAddress: state.ownerAddress,
+            groupId,
+            channelId,
+            signedAt: state.signedAt,
+            coverage: [entry],
+          })
+        ).catch(() => null);
+        if (this.isClosed) return;
+        if (!signed?.signature) continue;
+        const wire: Extract<ReticulumChatWire, { k: 'read_cov' }> = {
+          t: 'RCHAT',
+          k: 'read_cov',
+          w: {
+            ...unsignedWire.w,
+            p: signed.authorPublicKey,
+            z: signed.signature,
+          },
+        };
+        if (!wireFitsReticulumChat(wire)) continue;
+        const result = await this.sendToPeerOnce(peerHash, wire);
+        if (result && result.ok === false) continue;
+        if (sentNow === alreadySent) sentNow = new Map(alreadySent ?? []);
+        sentNow!.set(
+          `${entry.authorAddress}|${entry.authorStreamId}`,
+          entry.coveredSeq
+        );
+        this.sentReadCoverage.set(sentKey, sentNow!);
+      }
+    }
   }
 
   private async sendReadSyncAck(
@@ -15411,9 +15831,37 @@ export class ReticulumChatManager extends EventEmitter {
             const results = await Promise.all(
               batch.map(async (state) => {
                 const wire = this.deviceReadStateToWire(state);
-                return wire
-                  ? this.sendToPeerOnce(peerHash, wire)
-                  : ({ ok: false, reason: 'send-command-failed' } as const);
+                if (!wire) {
+                  return { ok: false, reason: 'send-command-failed' } as const;
+                }
+                // Coverage is resent from what this device can still compute,
+                // because it lives on its own wires and a peer may have missed
+                // them. Recomputed rather than stored: the pending and signed
+                // state tables have no room for it, and the read moment is
+                // durable, so the value is reproducible.
+                //
+                // Awaited, and addressed to this peer only. The receiver decides
+                // whether to apply the receipt's watermark by asking whether its
+                // coverage has arrived, so a receipt that overtakes its coverage
+                // re-creates the cross-author over-coverage C came from. And a
+                // replay is per device — broadcasting each one to every device
+                // multiplied the coverage traffic by the device count.
+                if (state.scopeType === 'group' && state.groupId) {
+                  await this.sendReadCoverageToOwnDevices(
+                    state,
+                    this.db.getLocalAuthorCoverageUpTo(
+                      state.groupId,
+                      state.channelId ?? '',
+                      state.upToTimestamp,
+                      state.ownerAddress
+                    ),
+                    [peerHash]
+                  );
+                  if (this.isClosed) {
+                    return { ok: false, reason: 'send-command-failed' } as const;
+                  }
+                }
+                return this.sendToPeerOnce(peerHash, wire);
               })
             );
             if (accountGeneration !== this.localAccountGeneration) return;
@@ -18537,6 +18985,12 @@ export class ReticulumChatManager extends EventEmitter {
           peerHash
         );
         return;
+      case 'read_cov':
+        this.handleReadCoverage(
+          wire as Extract<ReticulumChatWire, { k: 'read_cov' }>,
+          peerHash
+        );
+        return;
       case 'read_sync_ack':
         this.handleReadSyncAck(
           wire as Extract<ReticulumChatWire, { k: 'read_sync_ack' }>,
@@ -19709,11 +20163,54 @@ export class ReticulumChatManager extends EventEmitter {
       )
     );
     if (state.scopeType === 'group') {
-      this.db.markRead(
+      // Per-author coverage arrives as separate `read_cov` wires, sent before the
+      // receipt. If THIS receipt's coverage has landed, the per-author rows are
+      // authoritative — so the channel-wide watermark is deliberately NOT
+      // touched. Advancing it to the receipt's sender timestamp is exactly how a
+      // fast-clocked author's read came to cover a correctly-clocked author's
+      // later message.
+      //
+      // The question is per receipt, not per channel. Asking it per channel meant
+      // that once any device had ever sent coverage, every later receipt for that
+      // channel was skipped — including reads from an older Hub that sends no
+      // coverage at all, and an updated device's read whose coverage wires were
+      // lost. Both left the channel unread on every other device, permanently.
+      const hasAuthorCoverage = this.db.hasAuthorCoverageFromReceipt(
+        state.groupId!,
+        state.channelId!,
+        state.ownerAddress,
+        state.signedAt
+      );
+      if (hasAuthorCoverage) {
+        this.emitSummaryChanged(state.groupId!, undefined, {
+          readStateChanged: true,
+        });
+        return;
+      }
+      // No coverage for this receipt: either a peer that has not upgraded, or an
+      // updated peer whose coverage was lost. Sender time is the only signal the
+      // receipt carries, so this is the coarse approximation it always was.
+      // `markRead` clamps to the newest event stored on this device and drops the
+      // request when the channel is still empty, which is why the durable
+      // coverage row is written first — the receipt can arrive before the
+      // messages it covers.
+      this.db.applyRemoteReadCoverage(
         state.groupId!,
         state.channelId!,
         state.upToTimestamp,
         state.ownerAddress
+      );
+      // `recordReadMoment: false`. This read happened on another device, so this
+      // device's arrival position at this instant does not describe it. Recording
+      // it would make the next coverage resend from here claim messages that
+      // arrived after the other device's read as read, and peers would show a
+      // message nobody read as read.
+      this.db.markRead(
+        state.groupId!,
+        state.channelId!,
+        state.upToTimestamp,
+        state.ownerAddress,
+        { recordReadMoment: false }
       );
       this.emitSummaryChanged(state.groupId!, undefined, {
         readStateChanged: true,
@@ -19728,6 +20225,55 @@ export class ReticulumChatManager extends EventEmitter {
     this.emit('directSummaryChanged', {
       conversationId: state.conversationId,
       peerAddress: state.peerAddress,
+    });
+  }
+
+  /**
+   * Applies one `read_cov` wire: the per-author half of a read performed on
+   * another device of this account.
+   *
+   * Deliberately independent of `handleReadSync`. Coverage travels on its own
+   * wire because it cannot fit on the receipt, so it may arrive before or after
+   * the receipt, and duplicate or reordered deliveries are normal. The upsert is
+   * monotonic per author, so replaying one costs nothing.
+   *
+   * Nothing here touches the channel-wide watermark. That number is compared
+   * against every author's sender timestamp, so advancing it from another
+   * device's read is exactly how a fast sender's timestamp came to cover a
+   * correctly-clocked author's later message.
+   */
+  private handleReadCoverage(
+    wire: Extract<ReticulumChatWire, { k: 'read_cov' }>,
+    peerHash: string
+  ): void {
+    const height = verifyReticulumChatReadCoverageWire(wire.w, this.now());
+    if (!height) return;
+    const sourcePeer = this.routePeerHash(peerHash) ?? peerHash.toLowerCase();
+    if (
+      !sourcePeer ||
+      !this.getVerifiedDmPeerHashes(height.ownerAddress).includes(sourcePeer)
+    ) {
+      return;
+    }
+    if (
+      !this.localGroupIds.has(height.groupId) ||
+      this.localGroupAddresses.get(height.groupId) !== height.ownerAddress
+    ) {
+      return;
+    }
+    // `height.signedAt` is stored with the rows. It is how the matching receipt
+    // learns that its own coverage arrived, instead of the channel-wide "any
+    // coverage exists" test that swallowed every later read.
+    const applied = this.db.applyRemoteAuthorReadCoverage(
+      height.groupId,
+      height.channelId,
+      height.coverage,
+      height.ownerAddress,
+      height.signedAt
+    );
+    if (applied <= 0) return;
+    this.emitSummaryChanged(height.groupId, undefined, {
+      readStateChanged: true,
     });
   }
 
@@ -20656,8 +21202,9 @@ export class ReticulumChatManager extends EventEmitter {
     const now = this.now();
     const signatureMaterial = reticulumDmNotifySignatureMaterial(notify, now);
     if (!signatureMaterial) {
+      const reason = reticulumDmNotifyRejectionReason(notify, now);
       loggerWarn(
-        `[ReticulumChat] dm_notify_rejected peer=${String(peerHash || '').slice(0, 16)} reason=bad_signature_or_shape`
+        `[ReticulumChat] dm_notify_rejected peer=${String(peerHash || '').slice(0, 16)} reason=${reason}`
       );
       return;
     }
@@ -23715,6 +24262,13 @@ export class ReticulumChatManager extends EventEmitter {
     // well-tried range. Route failures and timeouts never qualify. This keeps
     // one stale or hostile provider from suppressing valid history while
     // allowing genuinely unavailable legacy holes to leave the hot loop.
+    //
+    // The park is bounded and retryable on purpose. An explicit refusal means
+    // "you may not read this", not "this was deleted": honest providers refuse
+    // a non-admin whose range holds only admin-channel events. Permanent
+    // exclusion would therefore strand history that a later membership or
+    // access grant makes readable, so the range stays eligible and is rechecked
+    // after the recheck interval, on a new provider, or once access changes.
     const shouldMarkKnownUnavailable =
       unavailablePeers.length >= RETICULUM_CHAT_AUTHOR_GAP_QUARANTINE_PEERS &&
       (persistedRange?.attempts ?? 0) >=
@@ -24131,6 +24685,55 @@ export class ReticulumChatManager extends EventEmitter {
     return RETICULUM_CHAT_AUTHOR_GAP_BACKOFF_MS[
       Math.min(safeAttempt - 1, RETICULUM_CHAT_AUTHOR_GAP_BACKOFF_MS.length - 1)
     ];
+  }
+
+  private authorGapHistoryUnavailableKey(
+    groupId: number,
+    peerHash: string
+  ): string {
+    return `${groupId}:${peerHash.trim().toLowerCase()}`;
+  }
+
+  private noteGroupHistoryUnavailable(
+    groupId: number,
+    peerHash: string,
+    now = this.now()
+  ): void {
+    const key = this.authorGapHistoryUnavailableKey(groupId, peerHash);
+    this.authorGapHistoryUnavailableUntil.set(
+      key,
+      now + RETICULUM_CHAT_AUTHOR_GAP_HISTORY_UNAVAILABLE_EXCLUSION_MS
+    );
+    if (this.authorGapHistoryUnavailableUntil.size > 4_096) {
+      for (const [staleKey, until] of this.authorGapHistoryUnavailableUntil) {
+        if (until <= now)
+          this.authorGapHistoryUnavailableUntil.delete(staleKey);
+      }
+      while (this.authorGapHistoryUnavailableUntil.size > 4_096) {
+        const oldest = this.authorGapHistoryUnavailableUntil.keys().next()
+          .value as string | undefined;
+        if (!oldest) break;
+        this.authorGapHistoryUnavailableUntil.delete(oldest);
+      }
+    }
+  }
+
+  private isGroupHistoryUnavailablePeer(
+    groupId: number,
+    peerHash: string,
+    now = this.now()
+  ): boolean {
+    const until = this.authorGapHistoryUnavailableUntil.get(
+      this.authorGapHistoryUnavailableKey(groupId, peerHash)
+    );
+    if (until === undefined) return false;
+    if (until <= now) {
+      this.authorGapHistoryUnavailableUntil.delete(
+        this.authorGapHistoryUnavailableKey(groupId, peerHash)
+      );
+      return false;
+    }
+    return true;
   }
 
   private authorGapRouteKey(groupId: number, peerHash: string): string {
@@ -24970,6 +25573,7 @@ export class ReticulumChatManager extends EventEmitter {
       if (
         peer === local ||
         peer === excluded ||
+        this.isGroupHistoryUnavailablePeer(groupId, peer) ||
         this.isAuthorGapRouteBackedOff(groupId, peer) ||
         this.db.hasMissingRangePeerUnavailable(
           groupId,
@@ -25033,7 +25637,10 @@ export class ReticulumChatManager extends EventEmitter {
       ...subscribedPeers,
     ];
     const local = this.localPeerHash() ?? '';
-    return [...new Set(candidates)].filter((peer) => peer !== local);
+    return [...new Set(candidates)].filter(
+      (peer) =>
+        peer !== local && !this.isGroupHistoryUnavailablePeer(groupId, peer)
+    );
   }
 
   private countUnavailableAuthorGapCandidates(
@@ -27334,10 +27941,8 @@ export class ReticulumChatManager extends EventEmitter {
           previousChannel.readMode ===
             RETICULUM_CHAT_CHANNEL_READ_MODE_ADMINS) &&
         channel.readMode !== RETICULUM_CHAT_CHANNEL_READ_MODE_ADMINS &&
-        this.db.wakeKnownUnavailableRangesForGroup(
-          event.groupId,
-          this.now()
-        ) > 0
+        this.db.wakeKnownUnavailableRangesForGroup(event.groupId, this.now()) >
+          0
       ) {
         this.scheduleBackgroundAuthorGapRepair(1);
       }
@@ -27476,9 +28081,21 @@ export class ReticulumChatManager extends EventEmitter {
     if (!CHANNEL_METADATA_EVENT_TYPES.has(event.eventType)) return;
     if (this.channelMetadataProjectionAttemptedIds.has(event.eventId)) return;
     if (this.channelMetadataProjectionQueuedIds.has(event.eventId)) return;
+    // A channel_create import provides the base that deferred events for the
+    // channel were waiting on; wake the group's deferred retries immediately.
+    if (event.eventType === 'channel_create') {
+      this.wakeChannelMetadataProjectionRetries(event.groupId);
+    }
     this.channelMetadataProjectionQueuedIds.add(event.eventId);
     this.channelMetadataProjectionQueue.push(event.eventId);
     void this.processChannelMetadataProjectionQueue();
+  }
+
+  private channelMetadataSkippedKey(
+    groupId: number,
+    authorAddress: string
+  ): string {
+    return `${groupId}:${authorAddress}`;
   }
 
   private queueChannelMetadataProjectionRepair(
@@ -27490,6 +28107,16 @@ export class ReticulumChatManager extends EventEmitter {
     if (this.channelMetadataProjectionRepairGroups.has(groupId)) return;
     this.channelMetadataProjectionRepairGroups.add(groupId);
     try {
+      // Re-queue metadata events whose author is now admin. They were skipped
+      // (and remembered) while the admin list was wrong/unavailable; once the
+      // author's admin status recovers, the edit should apply, not stay lost
+      // until a Hub restart. The Core check is async, but re-queuing can happen
+      // on the next membership re-init, so fire-and-forget is acceptable.
+      if (this.localGroupAdminIds.has(groupId)) {
+        void this.requeueSkippedMetadataForAdmins(groupId).catch(
+          () => undefined
+        );
+      }
       for (const event of this.db.getUnprojectedChannelCreateEvents(
         groupId,
         limit
@@ -27502,6 +28129,30 @@ export class ReticulumChatManager extends EventEmitter {
       }
     } finally {
       this.channelMetadataProjectionRepairGroups.delete(groupId);
+    }
+  }
+
+  private async requeueSkippedMetadataForAdmins(
+    groupId: number
+  ): Promise<void> {
+    for (const key of [...this.channelMetadataSkippedByAuthor]) {
+      if (this.isClosed) return;
+      const separator = key.indexOf(':');
+      const keyGroupId = Number(key.slice(0, separator));
+      const authorAddress = key.slice(separator + 1);
+      if (keyGroupId !== groupId) continue;
+      const authorIsAdmin = await this.getValidatedGroupAdminStatus(
+        groupId,
+        authorAddress
+      );
+      if (authorIsAdmin === 'admin') {
+        this.channelMetadataSkippedByAuthor.delete(key);
+        for (const event of this.db.getChannelMetadataEvents(groupId, 500)) {
+          if (event.authorAddress !== authorAddress) continue;
+          this.channelMetadataProjectionAttemptedIds.delete(event.eventId);
+          this.queueChannelMetadataProjection(event);
+        }
+      }
     }
   }
 
@@ -27576,11 +28227,25 @@ export class ReticulumChatManager extends EventEmitter {
     }
   }
 
+  private metadataProjectionRetryBackoffMs(attempt: number): number {
+    // 30 s → 1 min → 5 min → 30 min → 1 h. Most deferred projections cannot be
+    // fixed by time alone (missing create, former-admin creator); a fixed 30 s
+    // forever is pure background load with a fresh Core check each time.
+    const ladder = [30_000, 60_000, 5 * 60_000, 30 * 60_000, 60 * 60_000];
+    return ladder[
+      Math.min(Math.max(1, Math.floor(attempt)) - 1, ladder.length - 1)
+    ];
+  }
+
   private scheduleChannelMetadataProjectionRetry(eventId: string): void {
     if (this.isClosed || !eventId) return;
+    const attempts =
+      (this.channelMetadataProjectionRetryAttempts.get(eventId) ?? 0) + 1;
+    this.channelMetadataProjectionRetryAttempts.set(eventId, attempts);
+    const delayMs = this.metadataProjectionRetryBackoffMs(attempts);
     if (this.channelMetadataProjectionRetryTimers.has(eventId)) return;
     loggerLog(
-      `[ReticulumChat] channel_metadata_projection_retry_scheduled event=${eventId} retryMs=${RETICULUM_CHAT_METADATA_PROJECTION_RETRY_MS}`
+      `[ReticulumChat] channel_metadata_projection_retry_scheduled event=${eventId} attempt=${attempts} retryMs=${delayMs}`
     );
     const timer = setTimeout(() => {
       this.channelMetadataProjectionRetryTimers.delete(eventId);
@@ -27588,11 +28253,34 @@ export class ReticulumChatManager extends EventEmitter {
       const event = this.db.getEvent(eventId);
       if (!event || !CHANNEL_METADATA_EVENT_TYPES.has(event.eventType)) return;
       loggerLog(
-        `[ReticulumChat] channel_metadata_projection_retry event=${eventId} group=${event.groupId} type=${event.eventType}`
+        `[ReticulumChat] channel_metadata_projection_retry event=${eventId} group=${event.groupId} type=${event.eventType} attempt=${attempts}`
       );
       this.queueChannelMetadataProjection(event);
-    }, RETICULUM_CHAT_METADATA_PROJECTION_RETRY_MS);
+    }, delayMs);
     this.channelMetadataProjectionRetryTimers.set(eventId, timer);
+  }
+
+  private wakeChannelMetadataProjectionRetries(
+    groupId: number,
+    eventId?: string
+  ): void {
+    if (eventId) {
+      this.channelMetadataProjectionRetryAttempts.delete(eventId);
+      const timer = this.channelMetadataProjectionRetryTimers.get(eventId);
+      if (timer) clearTimeout(timer);
+      this.channelMetadataProjectionRetryTimers.delete(eventId);
+      return;
+    }
+    for (const [retryEventId, timer] of this
+      .channelMetadataProjectionRetryTimers) {
+      const event = this.db.getEvent(retryEventId);
+      if (event && event.groupId === groupId) {
+        this.channelMetadataProjectionRetryAttempts.delete(retryEventId);
+        clearTimeout(timer);
+        this.channelMetadataProjectionRetryTimers.delete(retryEventId);
+        this.queueChannelMetadataProjection(event);
+      }
+    }
   }
 
   private metadataEntityKey(
@@ -27735,14 +28423,34 @@ export class ReticulumChatManager extends EventEmitter {
       if (adminStatus === 'unknown') return 'deferred';
       if (adminStatus !== 'admin') {
         this.channelMetadataProjectionAttemptedIds.add(event.eventId);
+        // Remember (group, author) so a later admin-status recovery can re-queue
+        // this event instead of leaving the admin's edit lost for the session.
+        this.channelMetadataSkippedByAuthor.add(
+          this.channelMetadataSkippedKey(event.groupId, event.authorAddress)
+        );
         continue;
       }
       if (
         !channel &&
         event.eventType !== 'channel_create' &&
-        event.eventType !== 'channel_update'
+        event.eventType !== 'channel_update' &&
+        // Option A (former-admin channels): a channel exists once a current
+        // admin vouches for it. If a verified snapshot already stores the
+        // channel (e.g. created by a former admin who later lost the role), a
+        // current admin's reorder/category edit adopts it — start the rebuild
+        // from the stored row instead of ending `deferred` forever.
+        !previousChannel
       )
         continue;
+      if (!channel && previousChannel && event.eventType !== 'channel_update') {
+        channel = previousChannel;
+        revision =
+          this.db.getMetadataEntityRevisionRecord(
+            groupId,
+            'channel',
+            normalizedChannelId
+          )?.revision ?? null;
+      }
       const nextChannel = this.channelFromMetadataPayload(
         event,
         payload,
@@ -28086,6 +28794,13 @@ export class ReticulumChatManager extends EventEmitter {
     address: string
   ): Promise<boolean | null> {
     if (!Number.isInteger(groupId) || groupId <= 0) return false;
+    // Callers pass fields parsed out of inbound wires, so `address` can be
+    // undefined despite the parameter type. `undefined.trim()` used to throw
+    // from inside unawaited async paths (e.g. the metadata-snapshot request
+    // handler), which crashes the main process rather than rejecting the frame.
+    // A validator reports "not a member" for a malformed address; it does not
+    // throw.
+    if (typeof address !== 'string') return false;
     const normalizedAddress = address.trim();
     if (!normalizedAddress) return false;
     if (!this.validateGroupMember) return this.localGroupIds.has(groupId);
@@ -28201,6 +28916,10 @@ export class ReticulumChatManager extends EventEmitter {
     address: string
   ): Promise<ReticulumChatAdminValidationStatus> {
     if (!Number.isInteger(groupId) || groupId <= 0) return 'not_admin';
+    // Same reasoning as `isValidatedGroupMember`: the address may come from a
+    // parsed wire and can be undefined, and a validator reports "not an admin"
+    // rather than throwing out of an unawaited async path.
+    if (typeof address !== 'string') return 'not_admin';
     const normalizedAddress = address.trim();
     if (!normalizedAddress) return 'not_admin';
     if (
@@ -28327,6 +29046,16 @@ export class ReticulumChatManager extends EventEmitter {
       }, 2_000);
       this.localNotifyScanInterval.unref?.();
     }
+    if (!this.localNotifyCleanupInterval) {
+      // Notify files only need to wake a second manager sharing the DB; once a
+      // minute, delete files older than 10 min so the notify dir does not grow
+      // with uptime. Dropping removed names from the seen set keeps the scan
+      // working for a file written later with the same name.
+      this.localNotifyCleanupInterval = setInterval(() => {
+        this.cleanupOldLocalNotifications();
+      }, 60_000);
+      this.localNotifyCleanupInterval.unref?.();
+    }
     try {
       this.localNotifyWatcher = fs.watch(this.localNotifyDir, () => {
         this.scheduleLocalNotificationScan();
@@ -28349,6 +29078,10 @@ export class ReticulumChatManager extends EventEmitter {
     if (this.localNotifyScanInterval) {
       clearInterval(this.localNotifyScanInterval);
       this.localNotifyScanInterval = null;
+    }
+    if (this.localNotifyCleanupInterval) {
+      clearInterval(this.localNotifyCleanupInterval);
+      this.localNotifyCleanupInterval = null;
     }
     if (!this.localNotifyWatcher) return;
     this.localNotifyWatcher.close();
@@ -28463,6 +29196,11 @@ export class ReticulumChatManager extends EventEmitter {
         }),
         'utf8'
       );
+      // This manager's import path already emitted the event to the UI (and own
+      // posts are emitted directly from publishEvent). The file only needs to
+      // wake other managers sharing the database, so mark it seen to avoid a
+      // duplicate emit through the 2-second notify scan.
+      this.seenLocalNotifyFiles.add(fileName);
     } catch (err) {
       loggerWarn(
         '[ReticulumChat] Failed to write local event notification:',
@@ -28496,12 +29234,19 @@ export class ReticulumChatManager extends EventEmitter {
   private cleanupOldLocalNotifications(): void {
     try {
       const cutoff = this.now() - 10 * 60 * 1000;
+      const removed = new Set<string>();
       for (const file of fs.readdirSync(this.localNotifyDir)) {
         if (!file.endsWith('.json')) continue;
         const filePath = path.join(this.localNotifyDir, file);
         const stat = fs.statSync(filePath);
-        if (stat.mtimeMs < cutoff) fs.rmSync(filePath, { force: true });
+        if (stat.mtimeMs < cutoff) {
+          fs.rmSync(filePath, { force: true });
+          removed.add(file);
+        }
       }
+      // Drop the removed names from the seen set too, so a file written later
+      // with the same name (fs notifier events) is still processed.
+      for (const file of removed) this.seenLocalNotifyFiles.delete(file);
     } catch (err) {
       loggerWarn(
         '[ReticulumChat] Failed to clean local event notifications:',
@@ -30045,6 +30790,9 @@ export class ReticulumChatManager extends EventEmitter {
     if (this.db.getMetadataSnapshotByHash(offer.groupId, offer.snapshotHash)) {
       return;
     }
+    if (this.isStaleMetadataSnapshot(offer.groupId, offer.snapshotHash)) {
+      return;
+    }
     const peerHash = (
       offer.senderReticulumDestinationHash ||
       offer.sourcePeerHash ||
@@ -30465,7 +31213,11 @@ export class ReticulumChatManager extends EventEmitter {
         groupId,
         snapshot.snapshotHash
       );
-      this.notePeerViolation(peerHash, 'metadata_snapshot_non_admin');
+      // Valid signature whose signer is merely no longer admin: NOT a protocol
+      // violation. The relaying peer is not at fault (the snapshot was valid
+      // when signed). Remember the hash so the digest/queue path skips it for
+      // a while instead of re-fetching and re-rejecting it.
+      this.rememberStaleMetadataSnapshot(groupId, snapshot.snapshotHash);
       return;
     }
     const isNewSnapshot = this.shouldApplyMetadataSnapshot(snapshot);
@@ -30482,6 +31234,12 @@ export class ReticulumChatManager extends EventEmitter {
         advertisedFullSnapshotHash,
         'metadata_snapshot_applied'
       );
+      // Deferred-snapshot bookkeeping is owned by
+      // finishMetadataSnapshotProjection: it clears the exact deferred key or
+      // retains it when the advertised full snapshot is still outstanding.
+      // (7.2) A snapshot usually provides the missing channel_create that was
+      // deferring projection; wake the deferred retries for the group now.
+      this.wakeChannelMetadataProjectionRetries(groupId);
       loggerLog(
         `[ReticulumChat] metadata_snapshot_applied group=${groupId} version=${snapshot.version} channels=${snapshot.channels.length} categories=${snapshot.categories.length} peer=${peerHash.slice(0, 16)} stored=${storedAndProjected ? 'yes' : 'no'}`
       );
@@ -31423,6 +32181,44 @@ export class ReticulumChatManager extends EventEmitter {
     }
   }
 
+  private rememberStaleMetadataSnapshot(
+    groupId: number,
+    snapshotHash: string
+  ): void {
+    const now = this.now();
+    const key = `${groupId}:${snapshotHash.toLowerCase()}`;
+    this.staleMetadataSnapshotHashes.set(key, now + 10 * 60_000);
+    if (this.staleMetadataSnapshotHashes.size > 4_096) {
+      for (const [staleKey, expiresAt] of this.staleMetadataSnapshotHashes) {
+        if (expiresAt <= now) this.staleMetadataSnapshotHashes.delete(staleKey);
+      }
+      while (this.staleMetadataSnapshotHashes.size > 4_096) {
+        const oldest = this.staleMetadataSnapshotHashes.keys().next().value as
+          | string
+          | undefined;
+        if (!oldest) break;
+        this.staleMetadataSnapshotHashes.delete(oldest);
+      }
+    }
+  }
+
+  private isStaleMetadataSnapshot(
+    groupId: number,
+    snapshotHash: string
+  ): boolean {
+    const expiresAt = this.staleMetadataSnapshotHashes.get(
+      `${groupId}:${snapshotHash.toLowerCase()}`
+    );
+    if (expiresAt === undefined) return false;
+    if (expiresAt <= this.now()) {
+      this.staleMetadataSnapshotHashes.delete(
+        `${groupId}:${snapshotHash.toLowerCase()}`
+      );
+      return false;
+    }
+    return true;
+  }
+
   private deferMetadataSnapshot(
     peerHash: string,
     snapshot: ReticulumChatMetadataSnapshotRecord,
@@ -31437,6 +32233,15 @@ export class ReticulumChatManager extends EventEmitter {
     );
     const existing = this.deferredMetadataSnapshots.get(key);
     const attempts = existing ? existing.attempts + 1 : 1;
+    // Cap deferral retries: a public offer that cannot be upgraded to a full
+    // snapshot should not retry forever. The next digest hint can start over.
+    if (attempts > 4) {
+      const existingTimer = this.metadataSnapshotRetryTimers.get(key);
+      if (existingTimer) clearTimeout(existingTimer);
+      this.metadataSnapshotRetryTimers.delete(key);
+      this.deferredMetadataSnapshots.delete(key);
+      return;
+    }
     this.deferredMetadataSnapshots.set(key, {
       peerHash: peer,
       snapshot,
@@ -31493,6 +32298,14 @@ export class ReticulumChatManager extends EventEmitter {
     )
       return;
     const normalizedHash = snapshotHash.trim().toLowerCase();
+    // (6.5) An admin re-requesting a full snapshot it already stored forever
+    // wastes both sides. Skip hashes we already have.
+    if (
+      normalizedHash &&
+      this.db.getMetadataSnapshotByHash(groupId, normalizedHash)
+    ) {
+      return;
+    }
     const key = `${peer}:${groupId}:${normalizedHash || 'latest'}`;
     const now = this.now();
     if (this.recentMetadataSnapshotRequests.size > 1_000) {
@@ -39086,9 +39899,12 @@ export class ReticulumChatManager extends EventEmitter {
           offer.groupId,
           snapshot.snapshotHash
         );
-        this.notePeerViolation(
-          offer.sourcePeerHash || '',
-          'metadata_snapshot_non_admin'
+        // Not a violation: the snapshot has a valid signature; the signer is
+        // merely no longer admin. Remember the hash so the digest/queue path
+        // skips it for a while instead of re-fetching and re-rejecting it.
+        this.rememberStaleMetadataSnapshot(
+          offer.groupId,
+          snapshot.snapshotHash
         );
         return;
       }
@@ -40106,6 +40922,17 @@ export class ReticulumChatManager extends EventEmitter {
     ) {
       const peer = offer.sourcePeerHash.trim().toLowerCase();
       const range = normalizeReticulumChatAuthorRange(offer.repairRange);
+      if (
+        reason === 'history_unavailable' &&
+        Number.isInteger(offer.groupId) &&
+        offer.groupId > 0 &&
+        peer
+      ) {
+        // The peer holds no history for this group, so it can never serve any
+        // range for it. Exclude it from candidate selection for ~1 hour and
+        // don't count it toward the denial threshold during that window.
+        this.noteGroupHistoryUnavailable(offer.groupId, peer);
+      }
       if (peer && range?.s) {
         const routeRetryAt = this.noteAuthorGapRouteFailure(
           offer.groupId,
@@ -43668,7 +44495,8 @@ export class ReticulumChatManager extends EventEmitter {
     this.landStateForwardingAppliedTargets.clear();
     this.landStateForwardingSnapshotDirty = true;
     this.scheduleLandStateForwardingSync(0);
-    if (this.hasKnownPublicGroups()) this.schedulePublicActivityRefresh(1_000);
+    if (this.hasKnownDiscoveryGroups())
+      this.schedulePublicActivityRefresh(1_000);
   };
 
   private onBridgeChatMessage = (

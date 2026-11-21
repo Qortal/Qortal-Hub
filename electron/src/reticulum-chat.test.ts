@@ -11,6 +11,8 @@ import {
   buildReticulumChatAuthorTreeSnapshot,
   createReticulumPublicGroupActivityState,
   buildReticulumChatSignedFields,
+  buildReticulumChatReadSyncSignedFields,
+  buildReticulumChatReadSyncCoverageSignedFields,
   buildReticulumChatEventRequestSignedFields,
   buildReticulumChatLinkedAuthorRangeRequestSignedFields,
   buildReticulumChatLinkedEventRequestSignedFields,
@@ -111,6 +113,11 @@ import {
   RETICULUM_RESOURCE_TRANSFER_OVERLAY_THROTTLE_RETRY_MS,
   RETICULUM_RESOURCE_TRANSFER_PULL_THROTTLE_MS,
 } from './reticulum-resource-transfer';
+
+// CI runners are shared and can be far slower than a dev machine. The default
+// `vi.waitFor` poll budget (1000ms) is too tight there for worker-thread hops
+// and filesystem work, which caused intermittent failures. Allow real headroom.
+const WAIT_TIMEOUT = { timeout: 15_000 } as const;
 
 const relayCacheIt = isDisabledRelayCache ? it.skip : it;
 const relayCacheDisabledIt = isDisabledRelayCache ? it : it.skip;
@@ -1637,6 +1644,393 @@ describe('reticulum chat protocol', () => {
     }
   });
 
+  it('per-author coverage does not mark another author later message read', async () => {
+    // Checks the two things that pull in opposite directions across the real send
+    // path — the covered author clears, a different author's later message does
+    // not. The sending device holds the event, so it emits coverage; that coverage
+    // travels on its own `read_cov` wires, because a receipt carrying it cannot
+    // fit the 383-byte Reticulum budget (287 for a bare receipt, 84 per entry).
+    const owner = createDmIdentity();
+    const deviceAHash = 'a4'.padEnd(32, '0');
+    const deviceBHash = 'b5'.padEnd(32, '0');
+    const groupId = 1157;
+    let captured: Extract<ReticulumChatWire, { k: 'read_sync' }> | null = null;
+    const capturedCoverage: Array<
+      Extract<ReticulumChatWire, { k: 'read_cov' }>
+    > = [];
+    const commonMembership = {
+      groupId,
+      isPrivate: false,
+      localAddress: owner.address,
+    };
+    const happyBridge = {
+      on: () => undefined,
+      off: () => undefined,
+    };
+    const deviceA = new ReticulumChatManager({
+      dbPath: tempDbPath(),
+      signLocalFields: createDmSigner(owner),
+      hasGoodOverlayHealth: () => false,
+      getVerifiedReticulumPeers: () => [
+        {
+          destinationHash: deviceBHash,
+          address: owner.address,
+          lastSeen: Date.now(),
+        },
+      ],
+      bridge: {
+        ...happyBridge,
+        getLocalDestinationHash: () => deviceAHash,
+        sendReticulumChatDetailed: async (
+          _target: string,
+          wire: ReticulumChatWire
+        ) => {
+          if (wire.k === 'read_sync') captured = wire;
+          if (wire.k === 'read_cov') capturedCoverage.push(wire);
+          return { ok: true as const };
+        },
+      } as any,
+    });
+    const deviceB = new ReticulumChatManager({
+      dbPath: tempDbPath(),
+      hasGoodOverlayHealth: () => false,
+      getVerifiedReticulumPeers: () => [
+        {
+          destinationHash: deviceAHash,
+          address: owner.address,
+          lastSeen: Date.now(),
+        },
+      ],
+      bridge: {
+        ...happyBridge,
+        getLocalDestinationHash: () => deviceBHash,
+      } as any,
+    });
+    try {
+      deviceA.setLocalGroupMemberships([commonMembership]);
+      deviceB.setLocalGroupMemberships([commonMembership]);
+      const now = Date.now();
+
+      // A's clock runs 30 s fast, and A mentions the owner so the mention badge
+      // is exercised too: a V2 receipt sets no `read_at` on the stored mention
+      // row, so the mention count depends entirely on the per-author check and
+      // would regress silently if that check were skipped.
+      const fromA = signedEvent({
+        eventId: 'v2-read-sync-from-a',
+        groupId,
+        channelId: 'general',
+        authorSeq: 1,
+        timestamp: now + 30_000,
+        mentionAddressHashes: [hashReticulumChatMentionAddress(owner.address)],
+      });
+      // B is correctly clocked and sends one second from now, i.e. below A's
+      // future timestamp but never read by anyone.
+      const fromB = signedEvent({
+        eventId: 'v2-read-sync-from-b',
+        groupId,
+        channelId: 'general',
+        authorStreamId: 'c'.repeat(32),
+        authorSeq: 1,
+        timestamp: now + 1_000,
+      });
+      expect(fromB.authorAddress).not.toBe(fromA.authorAddress);
+
+      // The reading device must hold the event to be able to describe it.
+      expect((deviceA as any).acceptValidatedEvent(fromA, false)).toBe(true);
+      // The other device holds both.
+      expect((deviceB as any).acceptValidatedEvent(fromA, false)).toBe(true);
+      expect((deviceB as any).acceptValidatedEvent(fromB, false)).toBe(true);
+      expect(deviceB.getChatSummaries(owner.address)[0]?.unreadCount).toBe(2);
+      expect(deviceB.getChatSummaries(owner.address)[0]?.mentionCount).toBe(1);
+
+      deviceA.markRead(groupId, 'general', fromA.timestamp, owner.address);
+      await flushQueuedWork();
+      expect(captured).not.toBeNull();
+
+      // The receipt itself must still sign exactly the frozen V1 field set.
+      // Every released Hub rebuilds this object to check the signature, so an
+      // extra field here would make the receipt unusable on any device that has
+      // not upgraded — the read would silently stop propagating to them. This is
+      // the regression the review caught in the first V2 attempt.
+      const receiptFields = buildReticulumChatReadSyncSignedFields({
+        scopeType: 'group',
+        ownerAddress: owner.address,
+        groupId,
+        channelId: 'general',
+        upToTimestamp: captured!.w.u,
+        signedAt: captured!.w.n,
+      });
+      expect(receiptFields.type).toBe('RCHAT_READ_SYNC_V1');
+      expect(Object.keys(receiptFields).sort()).toEqual(
+        [
+          'channelId',
+          'groupId',
+          'ownerAddress',
+          'scopeType',
+          'signedAt',
+          'type',
+          'upToTimestamp',
+        ].sort()
+      );
+      expect(captured!.w).not.toHaveProperty('cov');
+      expect(captured!.w).not.toHaveProperty('cvs');
+      // And it must fit: a receipt carrying coverage never did, and the size
+      // check silently dropped the whole read instead of degrading.
+      expect(wireFitsReticulumChat(captured!)).toBe(true);
+
+      // Coverage rides its own wire, one entry each, and fits that way. The entry
+      // is a compact `address:stream:seq` string rather than an array, and there
+      // is no `upToTimestamp`: together those are what keep a created channel's
+      // 39-character id inside the 383-byte budget.
+      expect(capturedCoverage).toHaveLength(1);
+      expect(capturedCoverage[0].w.v).toEqual([
+        `${fromA.authorAddress}:${fromA.authorStreamId}:1`,
+      ]);
+      expect(capturedCoverage[0].w).not.toHaveProperty('u');
+      expect(wireFitsReticulumChat(capturedCoverage[0])).toBe(true);
+      expect(
+        buildReticulumChatReadSyncCoverageSignedFields({
+          ownerAddress: owner.address,
+          groupId,
+          channelId: 'general',
+          signedAt: captured!.w.n,
+          coverage: [
+            {
+              authorAddress: fromA.authorAddress,
+              authorStreamId: fromA.authorStreamId,
+              coveredSeq: 1,
+            },
+          ],
+        }).type
+      ).toBe('RCHAT_READ_SYNC_COVERAGE_V1');
+
+      // Coverage is delivered first, which is the order the sender uses and the
+      // order that makes the receiver treat per-author rows as authoritative
+      // instead of also applying the channel-wide watermark.
+      for (const coverageWire of capturedCoverage) {
+        deviceB.handleWire(coverageWire as any, deviceAHash);
+      }
+      deviceB.handleWire(captured as any, deviceAHash);
+
+      // A is read, B is not. Under the old channel-wide sender-time boundary the
+      // receipt's future timestamp covered B's message too and this read 0.
+      expect(deviceB.getChatSummaries(owner.address)[0]?.unreadCount).toBe(1);
+      // And the channel-wide watermark must be left untouched: advancing it to
+      // A's future timestamp is what re-created the over-coverage.
+      expect(
+        (deviceB as any).db.getReadWatermark(groupId, 'general', owner.address)
+      ).toBe(0);
+      // The mention in A's message is cleared, and only because the per-author
+      // check ran: a V2 receipt leaves the stored mention row's `read_at` at 0.
+      expect(deviceB.getChatSummaries(owner.address)[0]?.mentionCount).toBe(0);
+
+      // A's own message still renders as read on the receiving device, which is
+      // the #4 case the read receipt exists for.
+      expect(
+        (deviceB as any).db.isEventCoveredByReadState(
+          groupId,
+          'general',
+          owner.address,
+          fromA
+        )
+      ).toBe(true);
+      expect(
+        (deviceB as any).db.isEventCoveredByReadState(
+          groupId,
+          'general',
+          owner.address,
+          fromB
+        )
+      ).toBe(false);
+    } finally {
+      deviceA.close();
+      deviceB.close();
+    }
+  });
+
+  it('replays coverage before the receipt, to one device, and only what moved', async () => {
+    // Two defects shared this path. The coverage was sent with `void` and not
+    // awaited, so a receipt could overtake it — and the receiver decides whether
+    // to apply the receipt's watermark from whether its coverage has arrived. And
+    // it was sent to every device once per device, so with two other devices each
+    // received the same coverage twice. On top of that, every author who had ever
+    // posted was re-sent on every read.
+    const owner = createDmIdentity();
+    const deviceAHash = 'a9'.padEnd(32, '0');
+    const deviceBHash = 'b9'.padEnd(32, '0');
+    const deviceCHash = 'c9'.padEnd(32, '0');
+    const groupId = 1_159;
+    const sent: Array<{ target: string; kind: string }> = [];
+    const deviceA = new ReticulumChatManager({
+      dbPath: tempDbPath(),
+      signLocalFields: createDmSigner(owner),
+      hasGoodOverlayHealth: () => false,
+      getVerifiedReticulumPeers: () => [
+        {
+          destinationHash: deviceBHash,
+          address: owner.address,
+          lastSeen: Date.now(),
+        },
+        {
+          destinationHash: deviceCHash,
+          address: owner.address,
+          lastSeen: Date.now(),
+        },
+      ],
+      bridge: {
+        on: () => undefined,
+        off: () => undefined,
+        getLocalDestinationHash: () => deviceAHash,
+        sendReticulumChatDetailed: async (
+          target: string,
+          wire: ReticulumChatWire
+        ) => {
+          sent.push({ target, kind: wire.k });
+          return { ok: true as const };
+        },
+      } as any,
+    });
+    try {
+      deviceA.setLocalGroupMemberships([
+        { groupId, isPrivate: false, localAddress: owner.address },
+      ]);
+      const first = signedEvent({
+        eventId: 'replay-coverage-one',
+        groupId,
+        authorSeq: 1,
+        timestamp: Date.now() - 2_000,
+      });
+      const second = signedEvent({
+        eventId: 'replay-coverage-two',
+        groupId,
+        authorStreamId: 'e'.repeat(32),
+        authorSeq: 1,
+        timestamp: Date.now() - 1_500,
+      });
+      expect((deviceA as any).acceptValidatedEvent(first, false)).toBe(true);
+      expect((deviceA as any).acceptValidatedEvent(second, false)).toBe(true);
+
+      const coverageTo = (target: string) =>
+        sent.filter((item) => item.target === target && item.kind === 'read_cov');
+
+      deviceA.markRead(groupId, 'general', second.timestamp, owner.address);
+      await flushQueuedWork();
+      // One wire per author, per device: a fresh read has to reach every device.
+      expect(coverageTo(deviceBHash)).toHaveLength(2);
+      expect(coverageTo(deviceCHash)).toHaveLength(2);
+      // And each device's coverage precedes its receipt, so the receiver's
+      // "coverage already here?" test cannot lose the race that re-creates C.
+      for (const target of [deviceBHash, deviceCHash]) {
+        const toTarget = sent.filter((item) => item.target === target);
+        const lastCoverage = toTarget
+          .map((item, index) => (item.kind === 'read_cov' ? index : -1))
+          .reduce((max, index) => Math.max(max, index), -1);
+        const firstReceipt = toTarget.findIndex(
+          (item) => item.kind === 'read_sync'
+        );
+        expect(lastCoverage).toBeGreaterThanOrEqual(0);
+        expect(firstReceipt).toBeGreaterThan(lastCoverage);
+      }
+      sent.length = 0;
+
+      await (deviceA as any).replayReadStatesToOwnDevices();
+      // Nothing moved, so a replay sends no coverage. That is the 25-author case
+      // that used to spend 25 signatures per read and the same again after any
+      // new message.
+      expect(sent.filter((item) => item.kind === 'read_cov')).toHaveLength(0);
+
+      // A new message from the first author moves that one entry only.
+      const third = signedEvent({
+        eventId: 'replay-coverage-three',
+        groupId,
+        authorAddress: first.authorAddress,
+        authorPublicKey: first.authorPublicKey,
+        authorStreamId: first.authorStreamId,
+        authorSeq: 2,
+        timestamp: Date.now() - 500,
+      });
+      expect((deviceA as any).acceptValidatedEvent(third, false)).toBe(true);
+      deviceA.markRead(groupId, 'general', third.timestamp, owner.address);
+      await flushQueuedWork();
+      // Only the author whose seq moved, still once per device.
+      expect(coverageTo(deviceBHash)).toHaveLength(1);
+      expect(coverageTo(deviceCHash)).toHaveLength(1);
+    } finally {
+      deviceA.close();
+    }
+  });
+
+  it('coverage fits the wire budget in a generated 39-character channel', async () => {
+    // ChatGroup names every new channel `ch-` plus a UUID. That is 39 characters
+    // against `general`'s 7, and with the receipt timestamp still on the wire the
+    // single-entry coverage came to 396 bytes — over the 383-byte budget, so
+    // `wireFitsReticulumChat` dropped it and the read silently stopped
+    // propagating outside "general". Every entry is checked here, because this is
+    // the case the whole per-author mechanism has to survive.
+    const owner = createDmIdentity();
+    const deviceAHash = 'a1'.padEnd(32, '0');
+    const deviceBHash = 'b2'.padEnd(32, '0');
+    const groupId = 1_158;
+    const channelId = `ch-${'01234567-89ab-cdef-0123-456789abcdef'}`;
+    expect(channelId).toHaveLength(39);
+    const capturedCoverage: Array<
+      Extract<ReticulumChatWire, { k: 'read_cov' }>
+    > = [];
+    const deviceA = new ReticulumChatManager({
+      dbPath: tempDbPath(),
+      signLocalFields: createDmSigner(owner),
+      hasGoodOverlayHealth: () => false,
+      getVerifiedReticulumPeers: () => [
+        {
+          destinationHash: deviceBHash,
+          address: owner.address,
+          lastSeen: Date.now(),
+        },
+      ],
+      bridge: {
+        on: () => undefined,
+        off: () => undefined,
+        getLocalDestinationHash: () => deviceAHash,
+        sendReticulumChatDetailed: async (
+          _target: string,
+          wire: ReticulumChatWire
+        ) => {
+          if (wire.k === 'read_cov') capturedCoverage.push(wire);
+          return { ok: true as const };
+        },
+      } as any,
+    });
+    try {
+      deviceA.setLocalGroupMemberships([
+        {
+          groupId,
+          isPrivate: false,
+          localAddress: owner.address,
+        },
+      ]);
+      const event = signedEvent({
+        eventId: 'created-channel-coverage',
+        groupId,
+        channelId,
+        authorSeq: 1,
+        timestamp: Date.now() - 1_000,
+      });
+      expect((deviceA as any).acceptValidatedEvent(event, false)).toBe(true);
+
+      deviceA.markRead(groupId, channelId, event.timestamp, owner.address);
+      await flushQueuedWork();
+
+      expect(capturedCoverage).toHaveLength(1);
+      expect(wireFitsReticulumChat(capturedCoverage[0])).toBe(true);
+      expect(capturedCoverage[0].w.c).toBe(channelId);
+      expect(capturedCoverage[0].w.v).toEqual([
+        `${event.authorAddress}:${event.authorStreamId}:1`,
+      ]);
+    } finally {
+      deviceA.close();
+    }
+  });
+
   it('accepts signed own-device call history and rejects tampered outcomes', () => {
     const ownerKeys = nacl.sign.keyPair();
     const peerKeys = nacl.sign.keyPair();
@@ -2967,6 +3361,59 @@ describe('reticulum chat database', () => {
     ).toBeNull();
   });
 
+  it('keeps a refused range discoverable across a reopen instead of excluding it', () => {
+    const dbPath = tempDbPath();
+    const db = new ReticulumChatDatabase(dbPath);
+    dbs.push(db);
+    const groupId = 880;
+    const first = signedEvent({
+      eventId: 'event-refused-range-first',
+      groupId,
+      authorSeq: 1,
+      timestamp: Date.now() - 1_000,
+    });
+    db.insertEvent(first, true);
+    const third = signedEvent({
+      eventId: 'event-refused-range-third',
+      groupId,
+      authorAddress: first.authorAddress,
+      authorStreamId: first.authorStreamId,
+      authorSeq: 3,
+      timestamp: Date.now(),
+    });
+    db.insertEvent(third, true);
+
+    // An explicit provider refusal ("you may not read this") is not evidence
+    // that the sequence was deleted, so the gap must stay eligible for repair
+    // rather than being promoted to a permanent exclusion. A later membership
+    // or admin grant has to be able to recover it.
+    expect(db.getAuthorSequenceGaps(groupId, 10)).toEqual([
+      expect.objectContaining({ fromSeq: 2, toSeq: 2 }),
+    ]);
+
+    db.close();
+    const reopened = new ReticulumChatDatabase(dbPath);
+    dbs.push(reopened);
+
+    // The exclusion was persisted, so the check has to survive a reopen: a
+    // fresh process must still see the gap and still be able to repair it.
+    expect(reopened.getAuthorSequenceGaps(groupId, 10)).toEqual([
+      expect.objectContaining({ fromSeq: 2, toSeq: 2 }),
+    ]);
+
+    // Filling the gap closes it through normal import.
+    const second = signedEvent({
+      eventId: 'event-refused-range-second',
+      groupId,
+      authorAddress: first.authorAddress,
+      authorStreamId: first.authorStreamId,
+      authorSeq: 2,
+      timestamp: Date.now(),
+    });
+    expect(reopened.insertEvent(second, true)).toBe(true);
+    expect(reopened.getAuthorSequenceGaps(groupId, 10)).toEqual([]);
+  });
+
   it('expires peer-unavailable observations before retrying a missing range', () => {
     const db = new ReticulumChatDatabase(tempDbPath());
     dbs.push(db);
@@ -4249,6 +4696,71 @@ describe('reticulum chat database', () => {
     expect(db.getEventExpiresAt(event.eventId)).toBe(timestamp + 1_000);
   });
 
+  it('treats expiryDurationMs 0 as explicit no-expiry overriding channel expiry', () => {
+    const db = new ReticulumChatDatabase(tempDbPath());
+    dbs.push(db);
+    const timestamp = Date.now();
+    db.upsertChannel({
+      groupId: 22,
+      channelId: 'no-expiry-override',
+      name: 'no-expiry-override',
+      position: 2,
+      archived: false,
+      writeMode: 'members' as const,
+      readMode: 'members' as const,
+      expiryDurationMs: 60_000,
+      createdBy: 'Qadmin',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    const event = signedEvent({
+      eventId: 'no-expiry-override-root',
+      groupId: 22,
+      channelId: 'no-expiry-override',
+      authorSeq: 18,
+      timestamp,
+      encryptedPayload: JSON.stringify({
+        messageText: 'never expires',
+        expiryDurationMs: 0,
+      }),
+    });
+
+    expect(db.insertEvent(event, false)).toBe(true);
+    expect(db.getEventExpiresAt(event.eventId)).toBeNull();
+  });
+
+  it('inherits channel expiry when expiryDurationMs is absent from payload', () => {
+    const db = new ReticulumChatDatabase(tempDbPath());
+    dbs.push(db);
+    const timestamp = Date.now();
+    db.upsertChannel({
+      groupId: 23,
+      channelId: 'inherit-channel-expiry',
+      name: 'inherit-channel-expiry',
+      position: 2,
+      archived: false,
+      writeMode: 'members' as const,
+      readMode: 'members' as const,
+      expiryDurationMs: 60_000,
+      createdBy: 'Qadmin',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    const event = signedEvent({
+      eventId: 'inherit-channel-expiry-root',
+      groupId: 23,
+      channelId: 'inherit-channel-expiry',
+      authorSeq: 19,
+      timestamp,
+      encryptedPayload: JSON.stringify({
+        messageText: 'inherits channel',
+      }),
+    });
+
+    expect(db.insertEvent(event, false)).toBe(true);
+    expect(db.getEventExpiresAt(event.eventId)).toBe(timestamp + 60_000);
+  });
+
   it('persists and resumes bounded channel expiry reconciliation', () => {
     const dbPath = tempDbPath();
     const writer = new ReticulumChatDatabase(dbPath);
@@ -5216,6 +5728,130 @@ describe('reticulum chat database', () => {
     expect(db.searchEvents('deleted', { groupIds: [263] })).toEqual([]);
   });
 
+  it('keeps search index upsert/delete round trips working with rowid-keyed statements', () => {
+    const db = new ReticulumChatDatabase(tempDbPath());
+    dbs.push(db);
+    const event = signedEvent({
+      eventId: 'event-fts-rowid',
+      groupId: 63,
+      encryptedPayload: JSON.stringify({
+        messageText: 'fts rowid keyed phrase',
+      }),
+    });
+    db.insertEvent(event, true);
+
+    // Replacing search text goes through the mirror upsert (rowid preserved).
+    expect(db.indexSearchText(event.eventId, 'replacement rowid phrase')).toBe(
+      true
+    );
+    expect(db.searchEvents('original', { groupIds: [63] })).toEqual([]);
+    expect(
+      db.searchEvents('replacement', { groupIds: [63] })[0]?.event.eventId
+    ).toBe(event.eventId);
+
+    // Deleting by keyed rowid removes exactly this event's search entry.
+    expect(db.deleteSearchText(event.eventId)).toBe(true);
+    expect(db.searchEvents('replacement', { groupIds: [63] })).toEqual([]);
+  });
+
+  it('search index survives a reopen (one-time FTS rebuild is idempotent)', () => {
+    const dbPath = tempDbPath();
+    const first = new ReticulumChatDatabase(dbPath);
+    dbs.push(first);
+    const event = signedEvent({
+      eventId: 'event-fts-legacy-rebuild',
+      groupId: 64,
+      encryptedPayload: JSON.stringify({ messageText: 'legacy fts phrase' }),
+    });
+    first.insertEvent(event, true);
+    // The migration guard makes the rebuild idempotent across opens; it must
+    // not throw or lose the stored event on reopen (real SQLite rebuilds the
+    // FTS rows from the mirror; the test mock lacks FTS so we assert storage).
+    first.close();
+
+    const reopened = new ReticulumChatDatabase(dbPath);
+    dbs.push(reopened);
+    expect(reopened.hasEvent(event.eventId)).toBe(true);
+    expect(reopened.getEvent(event.eventId)?.eventId).toBe(event.eventId);
+    reopened.close();
+
+    const reopened2 = new ReticulumChatDatabase(dbPath);
+    dbs.push(reopened2);
+    expect(reopened2.hasEvent(event.eventId)).toBe(true);
+    expect(reopened2.getEvent(event.eventId)?.eventId).toBe(event.eventId);
+  });
+
+  it('indexes brand-new messages without relying on a pre-existing search row', () => {
+    const db = new ReticulumChatDatabase(tempDbPath());
+    dbs.push(db);
+    const event = signedEvent({
+      eventId: 'event-fts-new-message',
+      groupId: 65,
+      encryptedPayload: JSON.stringify({ messageText: 'brand new fts phrase' }),
+    });
+    // A brand-new event has no mirror row before insert, so this exercises the
+    // new-message path skipping the FTS delete (no full-table scan).
+    expect(db.insertEvent(event, true)).toBe(true);
+    expect(db.searchEvents('brand', { groupIds: [65] })[0]?.event.eventId).toBe(
+      event.eventId
+    );
+    const event2 = signedEvent({
+      eventId: 'event-fts-new-message-2',
+      groupId: 65,
+      encryptedPayload: JSON.stringify({ messageText: 'second brand new' }),
+    });
+    expect(db.insertEvent(event2, true)).toBe(true);
+    expect(
+      db.searchEvents('second', { groupIds: [65] })[0]?.event.eventId
+    ).toBe(event2.eventId);
+  });
+
+  it('prunes expired messages and their search rows in one batch per pass', () => {
+    const db = new ReticulumChatDatabase(tempDbPath());
+    dbs.push(db);
+    const now = Date.now();
+    const events = [1, 2, 3].map((seq) =>
+      signedEvent({
+        eventId: `event-fts-expire-${seq}`,
+        groupId: 66,
+        authorSeq: seq,
+        timestamp: now - 5_000,
+        encryptedPayload: JSON.stringify({
+          messageText: `expiring phrase ${seq}`,
+          expiryDurationMs: 60_000,
+        }),
+      })
+    );
+    for (const event of events) {
+      expect(db.insertEvent(event, true)).toBe(true);
+    }
+    expect(db.searchEvents('expiring', { groupIds: [66] })).toHaveLength(3);
+
+    // After expiry, one prune pass removes all expired events and their search
+    // rows (the batch delete path runs once per pass, not once per event).
+    // 5s after insert, expires_at (insert + 60s) is now exceeded.
+    const pruned = db.pruneExpiredMessages(now + 56_000);
+    expect(pruned).toBe(3);
+    expect(db.searchEvents('expiring', { groupIds: [66] })).toEqual([]);
+  });
+
+  it('serves committed events from SQL after in-memory eviction (bounded cache)', () => {
+    const db = new ReticulumChatDatabase(tempDbPath());
+    dbs.push(db);
+    const event = signedEvent({
+      eventId: 'event-cache-evict',
+      groupId: 67,
+      encryptedPayload: JSON.stringify({ messageText: 'cache evict phrase' }),
+    });
+    db.insertEvent(event, true);
+    // Simulate eviction of the in-memory supplement; SQL remains authoritative.
+    (
+      db as unknown as { memoryEvents: Map<string, unknown> }
+    ).memoryEvents.clear();
+    expect(db.getEvent(event.eventId)?.eventId).toBe(event.eventId);
+    expect(db.hasEvent(event.eventId)).toBe(true);
+  });
+
   it('tracks unread mentions by mentioned address', () => {
     const db = new ReticulumChatDatabase(tempDbPath());
     dbs.push(db);
@@ -5289,6 +5925,331 @@ describe('reticulum chat database', () => {
 
     expect(db.getChatSummaries(accountB)[0]?.unreadCount).toBe(0);
     expect(db.getChatSummaries(accountA)[0]?.unreadCount).toBe(1);
+  });
+
+  it('honours another device read that arrives before the history it covers', () => {
+    const db = new ReticulumChatDatabase(tempDbPath());
+    dbs.push(db);
+    const readerAddress = deriveAddressFromPublicKey(
+      base58Encode(nacl.sign.keyPair().publicKey)
+    );
+    const groupId = 66;
+    const readUpTo = Date.now() - 1_000;
+
+    // The other device read up to `readUpTo` while this one had no history at
+    // all. Marking read locally here would be dropped: the clamp has no stored
+    // event to anchor to and the channel is empty.
+    expect(
+      db.applyRemoteReadCoverage(groupId, 'general', readUpTo, readerAddress)
+    ).toBe(true);
+
+    // The covered messages arrive afterwards, sender-stamped below the remote
+    // read. They are already read on the account's other device.
+    const late = signedEvent({
+      eventId: 'remote-coverage-late',
+      groupId,
+      authorSeq: 1,
+      timestamp: readUpTo - 5_000,
+    });
+    expect(db.insertEvent(late, true)).toBe(true);
+    expect(db.getChatSummaries(readerAddress)[0]?.unreadCount).toBe(0);
+
+    // A message outside the coverage is still unread.
+    const newer = signedEvent({
+      eventId: 'remote-coverage-newer',
+      groupId,
+      authorAddress: late.authorAddress,
+      authorStreamId: late.authorStreamId,
+      authorSeq: 2,
+      timestamp: readUpTo + 5_000,
+    });
+    expect(db.insertEvent(newer, true)).toBe(true);
+    expect(db.getChatSummaries(readerAddress)[0]?.unreadCount).toBe(1);
+  });
+
+  it('a remote read does not cover a later message from another author', () => {
+    // Item C. Sender A's clock runs ahead, so their read receipt carries a
+    // timestamp in the future. Sender B is correctly clocked and sends after the
+    // read. Comparing B's timestamp against A's receipt marked B's message read.
+    const db = new ReticulumChatDatabase(tempDbPath());
+    dbs.push(db);
+    const readerAddress = deriveAddressFromPublicKey(
+      base58Encode(nacl.sign.keyPair().publicKey)
+    );
+    const groupId = 9401;
+    const now = Date.now();
+
+    // A sent one message, timestamped 30 s ahead of the reader's clock.
+    const fromA = signedEvent({
+      eventId: 'item-c-from-a',
+      groupId,
+      authorSeq: 1,
+      timestamp: now + 30_000,
+    });
+    expect(db.insertEvent(fromA, true)).toBe(true);
+
+    // The reader read A's message on another device. The receipt carries
+    // per-author coverage: A's stream covered up to seq 1.
+    db.applyRemoteAuthorReadCoverage(
+      groupId,
+      'general',
+      [
+        {
+          authorAddress: fromA.authorAddress,
+          authorStreamId: fromA.authorStreamId,
+          coveredSeq: 1,
+        },
+      ],
+      readerAddress
+    );
+
+    // A's message is read.
+    expect(db.getChatSummaries(readerAddress)[0]?.unreadCount).toBe(0);
+
+    // B, on a correct clock, sends now. Nobody has read it. Under the old
+    // channel-wide sender-time boundary it fell below A's future timestamp and
+    // counted as read.
+    const fromB = signedEvent({
+      eventId: 'item-c-from-b',
+      groupId,
+      authorStreamId: 'b'.repeat(32),
+      authorSeq: 1,
+      timestamp: now + 1_000,
+    });
+    expect(fromB.authorAddress).not.toBe(fromA.authorAddress);
+    expect(db.insertEvent(fromB, true)).toBe(true);
+
+    expect(db.getChatSummaries(readerAddress)[0]?.unreadCount).toBe(1);
+  });
+
+  it('per-author coverage clears only the authors it covers', () => {
+    // The #4 case must keep working: the messages actually read on the other
+    // device stay read, including a fast sender's.
+    const db = new ReticulumChatDatabase(tempDbPath());
+    dbs.push(db);
+    const readerAddress = deriveAddressFromPublicKey(
+      base58Encode(nacl.sign.keyPair().publicKey)
+    );
+    const groupId = 9402;
+    const now = Date.now();
+
+    const first = signedEvent({
+      eventId: 'item-c-two-from-a',
+      groupId,
+      authorSeq: 1,
+      timestamp: now + 30_000,
+    });
+    expect(db.insertEvent(first, true)).toBe(true);
+
+    db.applyRemoteAuthorReadCoverage(
+      groupId,
+      'general',
+      [
+        {
+          authorAddress: first.authorAddress,
+          authorStreamId: first.authorStreamId,
+          coveredSeq: 1,
+        },
+      ],
+      readerAddress
+    );
+
+    expect(db.getChatSummaries(readerAddress)[0]?.unreadCount).toBe(0);
+
+    // A later message from the SAME author, beyond the covered seq, is unread.
+    const later = signedEvent({
+      eventId: 'item-c-two-from-a-2',
+      groupId,
+      authorAddress: first.authorAddress,
+      authorPublicKey: first.authorPublicKey,
+      authorStreamId: first.authorStreamId,
+      authorSeq: 2,
+      timestamp: now + 31_000,
+    });
+    expect(db.insertEvent(later, true)).toBe(true);
+    expect(db.getChatSummaries(readerAddress)[0]?.unreadCount).toBe(1);
+  });
+
+  it('does not treat an unrelated receipt coverage as this receipt own', () => {
+    // `handleReadSync` used to skip a receipt whenever the channel already held
+    // ANY coverage rows. That is a per-channel test, so one device sending
+    // coverage once made every later receipt for the channel a no-op — including
+    // a read from an older Hub that sends no coverage, which no other device would
+    // ever apply. The decision has to name the receipt.
+    const db = new ReticulumChatDatabase(tempDbPath());
+    dbs.push(db);
+    const readerAddress = deriveAddressFromPublicKey(
+      base58Encode(nacl.sign.keyPair().publicKey)
+    );
+    const groupId = 9404;
+    const first = signedEvent({ eventId: 'receipt-scope-a', groupId });
+    expect(db.insertEvent(first, true)).toBe(true);
+
+    expect(
+      db.hasAuthorCoverageFromReceipt(groupId, 'general', readerAddress, 500)
+    ).toBe(false);
+    db.applyRemoteAuthorReadCoverage(
+      groupId,
+      'general',
+      [
+        {
+          authorAddress: first.authorAddress,
+          authorStreamId: first.authorStreamId,
+          coveredSeq: 1,
+        },
+      ],
+      readerAddress,
+      1_000
+    );
+    // The receipt that produced the rows is recognised…
+    expect(
+      db.hasAuthorCoverageFromReceipt(groupId, 'general', readerAddress, 1_000)
+    ).toBe(true);
+    // …and an older one it covers is too, since coverage is monotonic…
+    expect(
+      db.hasAuthorCoverageFromReceipt(groupId, 'general', readerAddress, 500)
+    ).toBe(true);
+    // …but a newer receipt has no coverage of its own here yet.
+    expect(
+      db.hasAuthorCoverageFromReceipt(groupId, 'general', readerAddress, 2_000)
+    ).toBe(false);
+  });
+
+  it('a receipt from another device does not move this device read moment', () => {
+    // `markChannelsRead` records the local arrival position of the read. For a
+    // receipt that describes another device's read, recording it here claims
+    // this device looked now, so the next coverage resend describes messages that
+    // arrived afterwards as read — and peers show a message nobody read as read.
+    const db = new ReticulumChatDatabase(tempDbPath());
+    dbs.push(db);
+    const readerAddress = deriveAddressFromPublicKey(
+      base58Encode(nacl.sign.keyPair().publicKey)
+    );
+    const groupId = 9405;
+    const event = signedEvent({
+      eventId: 'remote-read-moment',
+      groupId,
+      timestamp: Date.now() - 1_000,
+    });
+    expect(db.insertEvent(event, true)).toBe(true);
+
+    db.markRead(groupId, 'general', event.timestamp, readerAddress, {
+      recordReadMoment: false,
+    });
+    expect(
+      db.getReadWatermarkLocalReadAt(groupId, 'general', readerAddress)
+    ).toBe(0);
+
+    // A read this device actually performed still records it.
+    db.markRead(groupId, 'general', event.timestamp, readerAddress);
+    expect(
+      db.getReadWatermarkLocalReadAt(groupId, 'general', readerAddress)
+    ).toBeGreaterThan(0);
+  });
+
+  it('a V1 receipt without per-author coverage still over-covers, by design', () => {
+    // Characterisation of the unupgraded path, not a defect being reintroduced.
+    // A peer that has not upgraded sends RCHAT_READ_SYNC_V1, which carries only
+    // a sender timestamp. There is no per-author data to compare against, so the
+    // channel-wide comparison stays, and a fast sender's timestamp still covers
+    // a correctly-clocked author's later message. V2 is what removes it.
+    const db = new ReticulumChatDatabase(tempDbPath());
+    dbs.push(db);
+    const readerAddress = deriveAddressFromPublicKey(
+      base58Encode(nacl.sign.keyPair().publicKey)
+    );
+    const groupId = 9403;
+    const now = Date.now();
+
+    const fromA = signedEvent({
+      eventId: 'item-c-v1-from-a',
+      groupId,
+      authorSeq: 1,
+      timestamp: now + 30_000,
+    });
+    expect(db.insertEvent(fromA, true)).toBe(true);
+
+    // Exactly what the receiver does for a V1 receipt: the scalar and nothing
+    // else.
+    db.applyRemoteReadCoverage(
+      groupId,
+      'general',
+      fromA.timestamp,
+      readerAddress
+    );
+
+    const fromB = signedEvent({
+      eventId: 'item-c-v1-from-b',
+      groupId,
+      authorStreamId: 'c'.repeat(32),
+      authorSeq: 1,
+      timestamp: now + 1_000,
+    });
+    expect(fromB.authorAddress).not.toBe(fromA.authorAddress);
+    expect(db.insertEvent(fromB, true)).toBe(true);
+
+    // Known residual on the unupgraded path. Asserting 0 keeps the distinction
+    // explicit: the V2 test above is the fix, this one is its blast radius. A
+    // future change that starts honouring V1 receipts per author would flip
+    // this to 1 and should do so deliberately, because ignoring the peer's read
+    // would silently resurrect messages they have already seen.
+    expect(db.getChatSummaries(readerAddress)[0]?.unreadCount).toBe(0);
+  });
+
+  it('a reply and a mention from a correct clock still badge after a fast sender was read', () => {
+    // The unread count already fell back to arrival order when the watermark sat
+    // ahead of this device's clock. The reply and mention counters did not: they
+    // compared sender timestamps against that same watermark, so a
+    // correctly-clocked member's reply or mention stamped below a fast sender's
+    // message counted as unread but produced no badge.
+    const db = new ReticulumChatDatabase(tempDbPath());
+    dbs.push(db);
+    const reader = deriveAddressFromPublicKey(
+      base58Encode(nacl.sign.keyPair().publicKey)
+    );
+    const groupId = 9501;
+    const now = Date.now();
+
+    // The reader's own message is what the reply hangs off; a reply only counts
+    // against a parent the reader wrote.
+    const mine = signedEvent({
+      eventId: 'badge-mine',
+      groupId,
+      authorAddress: reader,
+      authorSeq: 1,
+      timestamp: now - 60_000,
+    });
+    expect(db.insertEvent(mine, true)).toBe(true);
+
+    // A's clock runs 30 s fast and the reader has read up to it, which leaves the
+    // watermark ahead of this device's own clock — the condition under test.
+    const fast = signedEvent({
+      eventId: 'badge-fast',
+      groupId,
+      authorSeq: 1,
+      timestamp: now + 30_000,
+    });
+    expect(db.insertEvent(fast, true)).toBe(true);
+    db.markRead(groupId, 'general', fast.timestamp, reader);
+
+    // B is correctly clocked and both of its timestamps sit below the watermark.
+    const reply = signedEvent({
+      eventId: 'badge-reply',
+      groupId,
+      authorStreamId: 'b'.repeat(32),
+      authorSeq: 1,
+      timestamp: now + 1_000,
+      replyToEventId: mine.eventId,
+      mentionAddressHashes: [hashReticulumChatMentionAddress(reader)],
+    });
+    expect(reply.authorAddress).not.toBe(fast.authorAddress);
+    expect(db.insertEvent(reply, true)).toBe(true);
+
+    const summary = db.getChatSummaries(reader)[0];
+    // The message is unread, so the badges describing it must match.
+    expect(summary?.unreadCount).toBe(1);
+    expect(summary?.replyCount).toBe(1);
+    expect(summary?.mentionCount).toBe(1);
   });
 
   it('reuses unchanged channel summaries and recalculates only the changed channel', () => {
@@ -6728,6 +7689,81 @@ describe('reticulum chat manager', () => {
     manager.close();
   });
 
+  it('delivers an own published event to the UI exactly once and marks its notify file seen', async () => {
+    const bridge = {
+      on: () => undefined,
+      off: () => undefined,
+      fanoutReticulumChatDetailed: async () => ({ ok: true as const }),
+    };
+    const dbPath = tempDbPath();
+    const event = signedEvent({ groupId: 9 });
+    const manager = new ReticulumChatManager({
+      dbPath,
+      bridge: bridge as any,
+      validateGroupMember: async (_groupId, address) =>
+        // Core validates the own author, matching the existing publish test.
+        address === event.authorAddress,
+    });
+    const emitted: any[] = [];
+    manager.on('event', (payload: any) => emitted.push(payload));
+    // Own publish reaches the UI directly (no notify-file round trip needed).
+    const result = await manager.publishEvent(event);
+    expect(result.ok).toBe(true);
+    expect(emitted.length).toBe(1);
+    expect(emitted[0]?.event?.eventId).toBe(event.eventId);
+    // The notify file was written for other managers, but the writer marked it
+    // seen so the 2-second scan (started by subscribing) will not re-emit it.
+    manager.setLocalGroupMemberships([{ groupId: 9 }]);
+    manager.subscribeGroup(9);
+    const notifyDir = path.join(path.dirname(dbPath), 'reticulum-chat-notify');
+    const files = fs.readdirSync(notifyDir).filter((f) => f.endsWith('.json'));
+    expect(files.length).toBeGreaterThan(0);
+    // Wait past the scan interval; no duplicate event is emitted.
+    await new Promise((resolve) => setTimeout(resolve, 2_200));
+    expect(emitted.length).toBe(1);
+    manager.close();
+  });
+
+  it('still reads notify files written by other managers sharing the database', async () => {
+    const bridge = {
+      on: () => undefined,
+      off: () => undefined,
+      getLocalDestinationHash: () => 'a'.repeat(32),
+      fanoutReticulumChatDetailed: async () => ({ ok: true as const }),
+    };
+    const dbPath = tempDbPath();
+    const manager = new ReticulumChatManager({
+      dbPath,
+      bridge: bridge as any,
+      signLocalFields: createReticulumChatTestSigner(),
+      validateGroupMember: async () => true,
+    });
+    manager.setLocalGroupMemberships([{ groupId: 9 }]);
+    manager.subscribeGroup(9);
+    const emitted: any[] = [];
+    manager.on('event', (payload: any) => emitted.push(payload));
+    const event = signedEvent({ groupId: 9, timestamp: 100_000 });
+    // Store the event so the notify-file handler can find it, as a second
+    // manager instance sharing the DB would have done.
+    (manager as any).storeValidatedEvent(event, false, {}, 0);
+    const notifyDir = path.join(path.dirname(dbPath), 'reticulum-chat-notify');
+    fs.mkdirSync(notifyDir, { recursive: true });
+    const fileName = `${event.groupId}-${event.timestamp}-external.json`;
+    fs.writeFileSync(
+      path.join(notifyDir, fileName),
+      JSON.stringify({
+        eventId: event.eventId,
+        groupId: 9,
+        timestamp: event.timestamp,
+      }),
+      'utf8'
+    );
+    const countBefore = emitted.length;
+    await waitForEvent(manager);
+    expect(emitted.length).toBeGreaterThan(countBefore);
+    manager.close();
+  });
+
   it('invalidates a prepared group digest immediately after a stored event', async () => {
     let now = 100_000;
     const manager = new ReticulumChatManager({
@@ -6840,14 +7876,12 @@ describe('reticulum chat manager', () => {
     manager.close();
   });
 
-  it('exchanges bounded public activity directly and excludes admin-only channels', async () => {
+  it('exchanges bounded discovery activity for open and private groups', async () => {
     const providerPeer = 'a'.repeat(32);
     const requesterPeer = 'b'.repeat(32);
     const sent: Array<{ from: string; to: string; wire: ReticulumChatWire }> =
       [];
-    let provider!: ReticulumChatManager;
-    let requester!: ReticulumChatManager;
-    provider = new ReticulumChatManager({
+    const provider = new ReticulumChatManager({
       dbPath: tempDbPath(),
       bridge: {
         on: () => undefined,
@@ -6862,7 +7896,7 @@ describe('reticulum chat manager', () => {
         },
       } as any,
     });
-    requester = new ReticulumChatManager({
+    const requester = new ReticulumChatManager({
       dbPath: tempDbPath(),
       getVerifiedReticulumPeers: () => [
         {
@@ -6884,7 +7918,10 @@ describe('reticulum chat manager', () => {
         },
       } as any,
     });
-    provider.setLocalGroupMemberships([{ groupId: 716, isOpen: true }]);
+    provider.setLocalGroupMemberships([
+      { groupId: 716, isOpen: true },
+      { groupId: 718, isPrivate: true },
+    ]);
     upsertTestChannel(provider, {
       groupId: 716,
       channelId: 'staff',
@@ -6902,6 +7939,14 @@ describe('reticulum chat manager', () => {
       signedEvent({ groupId: 716, channelId: 'staff', timestamp: Date.now() }),
       false
     );
+    (provider as any).acceptValidatedEvent(
+      signedEvent({
+        groupId: 718,
+        channelId: 'general',
+        timestamp: Date.now(),
+      }),
+      false
+    );
     (provider as any).db.upsertPublicGroupActivityCache(
       [
         {
@@ -6916,7 +7961,7 @@ describe('reticulum chat manager', () => {
       200,
       Date.now()
     );
-    requester.setPublicGroupDirectory([716, 717]);
+    requester.setPublicGroupDirectory([716, 717, 718]);
     const scheduled = (requester as any).publicGroupActivityRefreshTimer;
     if (scheduled) clearTimeout(scheduled);
     (requester as any).publicGroupActivityRefreshTimer = null;
@@ -6935,11 +7980,23 @@ describe('reticulum chat manager', () => {
         messages7d: 1,
         activeAuthors7d: 1,
       },
+      {
+        groupId: 718,
+        messages24h: 1,
+        messages7d: 1,
+        activeAuthors7d: 1,
+      },
     ]);
     const response = sent.find(
       (item) => item.wire.k === 'public_activity_top_v1'
     )?.wire as Extract<ReticulumChatWire, { k: 'public_activity_top_v1' }>;
-    expect(response.e.map(([groupId]) => groupId)).toEqual([716]);
+    expect(response.e.map(([groupId]) => groupId)).toEqual([716, 718]);
+    provider.setLocalGroupMemberships([{ groupId: 716, isOpen: true }]);
+    expect(
+      provider
+        .getPublicGroupActivitySummaries()
+        .some((summary) => summary.groupId === 718)
+    ).toBe(false);
     requester.close();
     provider.close();
   });
@@ -6973,7 +8030,9 @@ describe('reticulum chat manager', () => {
       manager.setLocalGroupMemberships(memberships);
       expect((manager as any).membershipInitializationQueue).toHaveLength(54);
 
-      await vi.runAllTimersAsync();
+      for (let index = 0; index < memberships.length; index += 1) {
+        await vi.advanceTimersToNextTimerAsync();
+      }
 
       expect(repair).toHaveBeenCalledTimes(54);
       expect(recentEvents).toHaveBeenCalledTimes(54);
@@ -9722,9 +10781,11 @@ describe('reticulum chat manager', () => {
       },
       inboundPeerHash
     );
-    await flushAsyncWork();
-
-    expect(fanoutReticulumChatDetailed).toHaveBeenCalledTimes(1);
+    // flushAsyncWork only yields microtasks, but the relay fans out via
+    // setImmediate/timer work. Poll instead of asserting on a fixed tick count.
+    await vi.waitFor(() => {
+      expect(fanoutReticulumChatDetailed).toHaveBeenCalledTimes(1);
+    }, WAIT_TIMEOUT);
     expect((relay as any).controlRetryQueue.size).toBe(0);
     relay.close();
   });
@@ -9952,9 +11013,10 @@ describe('reticulum chat manager', () => {
       },
       inboundPeerHash
     );
-    await flushAsyncWork();
-
-    expect(fanoutReticulumChatDetailed).toHaveBeenCalledTimes(1);
+    // Same as above: fanout is queued work, not microtask work.
+    await vi.waitFor(() => {
+      expect(fanoutReticulumChatDetailed).toHaveBeenCalledTimes(1);
+    }, WAIT_TIMEOUT);
     expect((relay as any).controlRetryQueue.size).toBe(0);
     relay.close();
   });
@@ -12708,7 +13770,7 @@ describe('reticulum chat manager', () => {
       false,
       'provider-a'
     );
-    await vi.waitFor(() => expect(accepts).toHaveLength(1));
+    await vi.waitFor(() => expect(accepts).toHaveLength(1), WAIT_TIMEOUT);
     await (manager as any).requestLinkedHistoryPage(
       providerB,
       69,
@@ -12722,7 +13784,7 @@ describe('reticulum chat manager', () => {
 
     releaseFirst();
     await firstRequest;
-    await vi.waitFor(() => expect(accepts).toHaveLength(2));
+    await vi.waitFor(() => expect(accepts).toHaveLength(2), WAIT_TIMEOUT);
     expect(accepts.map((payload) => payload.peerPresenceHash)).toEqual([
       providerA,
       providerB,
@@ -12780,7 +13842,7 @@ describe('reticulum chat manager', () => {
       accepts[0].transferId,
       'resource_request_timeout'
     );
-    await vi.waitFor(() => expect(accepts).toHaveLength(2));
+    await vi.waitFor(() => expect(accepts).toHaveLength(2), WAIT_TIMEOUT);
     expect(accepts.map((payload) => payload.peerPresenceHash)).toEqual([
       providerA,
       providerB,
@@ -15084,10 +16146,12 @@ describe('reticulum chat manager', () => {
     });
 
     intermediate.handleWire(wire, inboundPeer);
-    await vi.waitFor(() =>
-      expect(direct.map(({ peer }) => peer).sort()).toEqual(
-        [sharedNextHop, otherNextHop].sort()
-      )
+    await vi.waitFor(
+      () =>
+        expect(direct.map(({ peer }) => peer).sort()).toEqual(
+          [sharedNextHop, otherNextHop].sort()
+        ),
+      WAIT_TIMEOUT
     );
     expect(direct.every(({ wire: sent }) => sent === wire)).toBe(true);
     expect((intermediate as any).pendingEventPulls.size).toBe(0);
@@ -15164,13 +16228,13 @@ describe('reticulum chat manager', () => {
 
     installRoute();
     intermediate.handleWire(wire, sourcePeer);
-    await vi.waitFor(() => expect(attempts).toBe(1));
+    await vi.waitFor(() => expect(attempts).toBe(1), WAIT_TIMEOUT);
 
     // The failed edge is pruned. Once route discovery restores it, another
     // signed copy can retry forwarding despite local notice deduplication.
     installRoute();
     intermediate.handleWire(wire, '9'.repeat(32));
-    await vi.waitFor(() => expect(attempts).toBe(2));
+    await vi.waitFor(() => expect(attempts).toBe(2), WAIT_TIMEOUT);
 
     intermediate.close();
     source.close();
@@ -15236,8 +16300,9 @@ describe('reticulum chat manager', () => {
     });
 
     intermediate.handleWire(wire, sourcePeer);
-    await vi.waitFor(() =>
-      expect(direct).toContainEqual({ peer: downstreamPeer, wire })
+    await vi.waitFor(
+      () => expect(direct).toContainEqual({ peer: downstreamPeer, wire }),
+      WAIT_TIMEOUT
     );
     expect(direct.some(({ wire: sent }) => sent.k === 'event_req')).toBe(false);
     expect((intermediate as any).pendingEventPulls.size).toBe(1);
@@ -15287,12 +16352,14 @@ describe('reticulum chat manager', () => {
     recipient.subscribeGroup(73);
 
     recipient.handleWire(wire, relayPeer);
-    await vi.waitFor(() =>
-      expect(
-        (recipient as any).pendingEventPulls.has(
-          '73:event-multihop-reverse-request'
-        )
-      ).toBe(true)
+    await vi.waitFor(
+      () =>
+        expect(
+          (recipient as any).pendingEventPulls.has(
+            '73:event-multihop-reverse-request'
+          )
+        ).toBe(true),
+      WAIT_TIMEOUT
     );
     const pending = (recipient as any).pendingEventPulls.get(
       '73:event-multihop-reverse-request'
@@ -15353,7 +16420,7 @@ describe('reticulum chat manager', () => {
 
     intermediate.handleWire(wire, sourcePeer);
     intermediate.handleWire(wire, sourcePeer);
-    await vi.waitFor(() => expect(sends).toEqual([nextHop]));
+    await vi.waitFor(() => expect(sends).toEqual([nextHop]), WAIT_TIMEOUT);
     expect((intermediate as any).controlRetryQueue.size).toBe(1);
     expect([...(intermediate as any).controlRetryQueue.values()][0]).toEqual(
       expect.objectContaining({
@@ -16541,14 +17608,14 @@ describe('reticulum chat manager', () => {
       }),
       'peer-source'
     );
-    await vi.waitFor(() => expect(emitted).toHaveLength(1));
+    await vi.waitFor(() => expect(emitted).toHaveLength(1), WAIT_TIMEOUT);
     expect(emitted[0]).not.toHaveProperty('destinationHash');
 
     manager.handleWire(
       signer.landRouteWire(73, 'late-route', destinationHash, 100_000),
       'peer-source'
     );
-    await vi.waitFor(() => expect(emitted).toHaveLength(2));
+    await vi.waitFor(() => expect(emitted).toHaveLength(2), WAIT_TIMEOUT);
     expect(emitted[1]).toMatchObject({
       sequence: 1,
       destinationHash,
@@ -16613,7 +17680,7 @@ describe('reticulum chat manager', () => {
       true,
       4
     );
-    await vi.waitFor(() => expect(emitted).toHaveLength(1));
+    await vi.waitFor(() => expect(emitted).toHaveLength(1), WAIT_TIMEOUT);
 
     expect(direct.some(({ wire }) => wire.k === 'land_state')).toBe(false);
     manager.close();
@@ -16673,10 +17740,12 @@ describe('reticulum chat manager', () => {
       4
     );
 
-    await vi.waitFor(() =>
-      expect(direct.filter(({ wire }) => wire.k === 'land_state')).toHaveLength(
-        1
-      )
+    await vi.waitFor(
+      () =>
+        expect(
+          direct.filter(({ wire }) => wire.k === 'land_state')
+        ).toHaveLength(1),
+      WAIT_TIMEOUT
     );
     expect(direct.find(({ wire }) => wire.k === 'land_state')?.peer).toBe(
       'peer-b'
@@ -16708,10 +17777,12 @@ describe('reticulum chat manager', () => {
       true,
       4
     );
-    await vi.waitFor(() =>
-      expect(direct.filter(({ wire }) => wire.k === 'land_state')).toHaveLength(
-        1
-      )
+    await vi.waitFor(
+      () =>
+        expect(
+          direct.filter(({ wire }) => wire.k === 'land_state')
+        ).toHaveLength(1),
+      WAIT_TIMEOUT
     );
     expect(direct.find(({ wire }) => wire.k === 'land_state')?.peer).toBe(
       'peer-a'
@@ -16746,7 +17817,9 @@ describe('reticulum chat manager', () => {
     now += 7 * 60_000 + 30_001;
     (manager as any).noteGroupInterestRoute(73, 'peer-c', 'peer-a', 1);
     expect((manager as any).landStateForwardingRevision).toBe(initialRevision);
-    expect((manager as any).landStateForwardingLeaseRefreshTimer).not.toBeNull();
+    expect(
+      (manager as any).landStateForwardingLeaseRefreshTimer
+    ).not.toBeNull();
     manager.close();
   });
 
@@ -16997,8 +18070,9 @@ describe('reticulum chat manager', () => {
     const auth = signer.landAuthWire(73, 'session-relayed', 100_000);
 
     manager.handleWire({ ...auth, o: 'origin-peer', h: 0 }, 'peer-a');
-    await vi.waitFor(() =>
-      expect(validateGroupMember).toHaveBeenCalledTimes(1)
+    await vi.waitFor(
+      () => expect(validateGroupMember).toHaveBeenCalledTimes(1),
+      WAIT_TIMEOUT
     );
     await flushQueuedWork();
     const initialRevision = (manager as any).landStateForwardingRevision;
@@ -17139,7 +18213,7 @@ describe('reticulum chat manager', () => {
 
     await vi.waitFor(() => {
       expect(direct.some(({ wire }) => wire.k === 'land_state')).toBe(true);
-    });
+    }, WAIT_TIMEOUT);
 
     direct.length = 0;
     (manager as any).landStateForwardingSnapshotDirty = true;
@@ -17160,7 +18234,7 @@ describe('reticulum chat manager', () => {
 
     await vi.waitFor(() => {
       expect(direct.some(({ wire }) => wire.k === 'land_state')).toBe(true);
-    });
+    }, WAIT_TIMEOUT);
     manager.close();
   });
 
@@ -17201,7 +18275,10 @@ describe('reticulum chat manager', () => {
     clearTimeout((manager as any).landStateForwardingSyncTimer);
     (manager as any).landStateForwardingSyncTimer = null;
     const oldApply = (manager as any).applyLandStateForwardingSnapshot();
-    await vi.waitFor(() => expect(oldConfigure).toHaveBeenCalledTimes(1));
+    await vi.waitFor(
+      () => expect(oldConfigure).toHaveBeenCalledTimes(1),
+      WAIT_TIMEOUT
+    );
 
     manager.setBridge(newBridge);
     await new Promise((resolve) => setImmediate(resolve));
@@ -17210,7 +18287,10 @@ describe('reticulum chat manager', () => {
     expect(resolveOldSnapshot).not.toBeNull();
     resolveOldSnapshot?.({ ok: true });
     await oldApply;
-    await vi.waitFor(() => expect(newConfigure).toHaveBeenCalledTimes(1));
+    await vi.waitFor(
+      () => expect(newConfigure).toHaveBeenCalledTimes(1),
+      WAIT_TIMEOUT
+    );
 
     manager.close();
   });
@@ -21871,7 +22951,10 @@ describe('reticulum chat manager', () => {
       peerPresenceHash: requesterPeerHash,
       auth: authRequest,
     });
-    await vi.waitFor(() => expect(authorizations).toHaveLength(2));
+    await vi.waitFor(
+      () => expect(authorizations).toHaveLength(2),
+      WAIT_TIMEOUT
+    );
 
     const expectedPayloadHash = nodeCrypto
       .createHash('sha256')
@@ -22132,7 +23215,10 @@ describe('reticulum chat manager', () => {
         requesterPeerHash,
       },
     });
-    await vi.waitFor(() => expect(offeredResources).toHaveLength(1));
+    await vi.waitFor(
+      () => expect(offeredResources).toHaveLength(1),
+      WAIT_TIMEOUT
+    );
 
     expect(rejections).toEqual([]);
     expect(offeredResources).toHaveLength(1);
@@ -22330,7 +23416,10 @@ describe('reticulum chat manager', () => {
         requesterPeerHash: 'a'.repeat(32),
       },
     });
-    await vi.waitFor(() => expect(offeredResources).toHaveLength(1));
+    await vi.waitFor(
+      () => expect(offeredResources).toHaveLength(1),
+      WAIT_TIMEOUT
+    );
 
     expect(
       resourceStore.getManifest(manifest.fileHash)?.metadata?.groupId
@@ -23101,8 +24190,9 @@ describe('reticulum chat manager', () => {
     });
 
     manager.handleWire(findWire, '2'.repeat(32));
-    await vi.waitFor(() =>
-      expect(validateGroupMember).toHaveBeenCalledTimes(1)
+    await vi.waitFor(
+      () => expect(validateGroupMember).toHaveBeenCalledTimes(1),
+      WAIT_TIMEOUT
     );
 
     expect(direct.some((item) => item.wire.k === 'resource_have')).toBe(false);
@@ -23176,8 +24266,9 @@ describe('reticulum chat manager', () => {
     });
 
     manager.handleWire(findWire, '2'.repeat(32));
-    await vi.waitFor(() =>
-      expect(validateGroupMember).toHaveBeenCalledTimes(1)
+    await vi.waitFor(
+      () => expect(validateGroupMember).toHaveBeenCalledTimes(1),
+      WAIT_TIMEOUT
     );
 
     expect(
@@ -31295,7 +32386,7 @@ describe('reticulum chat manager', () => {
         requesterPeerHash,
       },
     });
-    await vi.waitFor(() => expect(sentResources).toHaveLength(1));
+    await vi.waitFor(() => expect(sentResources).toHaveLength(1), WAIT_TIMEOUT);
 
     expect(rejections).toEqual([]);
     const page = JSON.parse(
@@ -36465,8 +37556,9 @@ describe('reticulum chat manager', () => {
     manager.handleWire(badWire, 'peer-notice');
     expect((manager as any).pendingEventPulls.size).toBe(0);
     manager.handleWire(wire, 'peer-notice');
-    await vi.waitFor(() =>
-      expect((manager as any).pendingEventPulls.size).toBe(1)
+    await vi.waitFor(
+      () => expect((manager as any).pendingEventPulls.size).toBe(1),
+      WAIT_TIMEOUT
     );
     manager.close();
   });

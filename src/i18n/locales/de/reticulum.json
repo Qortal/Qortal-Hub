@@ -21,6 +21,16 @@
     "sign_failed": "Reticulum-Chat-Ereignis konnte nicht signiert werden",
     "welcome_failed": "Reticulum-Willkommensnachricht konnte nicht veröffentlicht werden"
   },
+  "context_menu": {
+    "clipboard_permission_denied": "Zwischenablage kann nicht zugegriffen werden",
+    "copy": "Kopieren",
+    "copy_shortcut": "Kopieren\tStrg+C",
+    "cut": "Ausschneiden",
+    "cut_shortcut": "Ausschneiden\tStrg+X",
+    "no_suggestions": "Keine Vorschläge",
+    "paste": "Einfügen",
+    "paste_shortcut": "Einfügen\tStrg+V"
+  },
   "copy_invite_link": "Einladungslink kopieren",
   "discussion": {
     "choose_emoji": "choose emoji",
@@ -118,6 +128,10 @@
     "enter_qortal_land": "Qortal Land betreten",
     "return_to_chat": "Zurück zum Chat"
   },
+  "notification": {
+    "someone": "jemand",
+    "welcome_joined": "{{name}} ist der Gruppe {{groupName}} beigetreten"
+  },
   "onboarding": {
     "find_communities": "Communitys finden",
     "invite_error_invalid": "Das sieht nicht nach einem gültigen Qortal-Gruppeneinladungslink aus.",
@@ -203,15 +217,20 @@
     "nav": {
       "mentions": "Erwähnungen",
       "messages": "Nachrichten",
+      "notifications": "Notifications",
       "text_size": "Textgröße",
       "threads": "Threads"
     },
     "notifications": {
+      "apply_button": "Apply to All Groups",
+      "delivery_ephemeral_tooltip": "Ephemeral notifications are gone forever after the preview disappears.",
+      "delivery_native_tooltip": "Push notifications go into your OS Notification Manager after the preview disappears.",
       "description": "Zeige Reticulum-Q-Chat-Erwähnungen im Benachrichtigungsbereich des Hubs an. Normale ungelesene Nachrichten erzeugen keine Hub-Benachrichtigungen.",
       "mentions": {
         "description": "Benachrichtige mich, wenn mich jemand in einem Kanal erwähnt.",
         "label": "Erwähnungsbenachrichtigungen"
       },
+      "revert_button": "Revert to Defaults",
       "title": "Benachrichtigungen"
     },
     "text_size": {

@@ -2084,7 +2084,7 @@ export const publishQDNResource = async (
     appFeePayment = prepared.payment;
     Object.assign(handleDynamicValues, prepared.dialogValues);
   }
-  if (!!data?.encrypt) {
+  if (data?.encrypt) {
     handleDynamicValues['highlightedText'] = `isEncrypted: ${!!data.encrypt}`;
   }
 

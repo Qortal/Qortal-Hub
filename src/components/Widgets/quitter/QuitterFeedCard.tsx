@@ -26,13 +26,7 @@ export const QuitterFeedCard = ({
   const imageCount = item.images.length;
   const hasMedia = imageCount > 0 || item.hasVideo;
   const isCompact = displayMode === 'compact';
-  const collapsedLineCount = hasMedia
-    ? isCompact
-      ? 2
-      : 3
-    : isCompact
-      ? 3
-      : 4;
+  const collapsedLineCount = hasMedia ? (isCompact ? 2 : 3) : isCompact ? 3 : 4;
   const cardGap = isCompact ? '10px' : '12px';
   const imageHeight =
     imageCount > 1 ? (isCompact ? 118 : 142) : isCompact ? 172 : 204;
@@ -319,7 +313,8 @@ export const QuitterFeedCard = ({
               theme.palette.mode === 'dark'
                 ? `inset 0 1px 0 ${alpha(theme.palette.common.white, 0.045)}`
                 : `inset 0 1px 0 ${alpha(theme.palette.common.white, 0.64)}`,
-            minHeight: imageCount > 0 ? (isCompact ? 88 : 100) : isCompact ? 104 : 120,
+            minHeight:
+              imageCount > 0 ? (isCompact ? 88 : 100) : isCompact ? 104 : 120,
             overflow: 'hidden',
             position: 'relative',
             px: isCompact ? 1.2 : 1.35,

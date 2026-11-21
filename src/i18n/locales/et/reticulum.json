@@ -21,6 +21,16 @@
     "sign_failed": "Reticulumi vestluse sündmust ei õnnestunud allkirjastada",
     "welcome_failed": "Reticulumi tervituse avaldamine ebaõnnestus"
   },
+  "context_menu": {
+    "clipboard_permission_denied": "Lõikepuhvurile puudub juurdepääs",
+    "copy": "Kopeeri",
+    "copy_shortcut": "Kopeeri\tCtrl+C",
+    "cut": "Lõika",
+    "cut_shortcut": "Lõika\tCtrl+X",
+    "no_suggestions": "Soovitusi pole",
+    "paste": "Kleebi",
+    "paste_shortcut": "Kleebi\tCtrl+V"
+  },
   "copy_invite_link": "kopeeri kutselink",
   "discussion": {
     "choose_emoji": "choose emoji",
@@ -118,6 +128,10 @@
     "enter_qortal_land": "Sisene Qortal Landi",
     "return_to_chat": "Tagasi vestlusesse"
   },
+  "notification": {
+    "someone": "keegi",
+    "welcome_joined": "{{name}} liitus grupiga {{groupName}}"
+  },
   "onboarding": {
     "find_communities": "Leia kogukondi",
     "invite_error_invalid": "See ei tundu olevat kehtiv Qortali rühma kutselink.",
@@ -203,15 +217,20 @@
     "nav": {
       "mentions": "Mainimised",
       "messages": "Sõnumid",
+      "notifications": "Notifications",
       "text_size": "Teksti suurus",
       "threads": "Threads"
     },
     "notifications": {
+      "apply_button": "Apply to All Groups",
+      "delivery_ephemeral_tooltip": "Ephemeral notifications are gone forever after the preview disappears.",
+      "delivery_native_tooltip": "Push notifications go into your OS Notification Manager after the preview disappears.",
       "description": "Näita Reticulum Q-Chati mainimisi Hubi teavituspaneelil. Tavalised lugemata sõnumid Hubi teavitusi ei tekita.",
       "mentions": {
         "description": "Teavita mind, kui keegi mind kanalis mainib.",
         "label": "Mainimiste teavitused"
       },
+      "revert_button": "Revert to Defaults",
       "title": "Teavitused"
     },
     "text_size": {

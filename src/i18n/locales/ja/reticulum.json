@@ -21,6 +21,16 @@
     "sign_failed": "Reticulum チャットのイベントに署名できませんでした",
     "welcome_failed": "Reticulum のウェルカム公開に失敗しました"
   },
+  "context_menu": {
+    "clipboard_permission_denied": "クリップボードにアクセスできません",
+    "copy": "コピー",
+    "copy_shortcut": "コピー\tCtrl+C",
+    "cut": "切り取り",
+    "cut_shortcut": "切り取り\tCtrl+X",
+    "no_suggestions": "候補なし",
+    "paste": "貼り付け",
+    "paste_shortcut": "貼り付け\tCtrl+V"
+  },
   "copy_invite_link": "招待リンクをコピー",
   "discussion": {
     "choose_emoji": "choose emoji",
@@ -118,6 +128,10 @@
     "enter_qortal_land": "Qortal Landに入る",
     "return_to_chat": "チャットに戻る"
   },
+  "notification": {
+    "someone": "誰か",
+    "welcome_joined": "{{name}}がグループ{{groupName}}に参加しました"
+  },
   "onboarding": {
     "find_communities": "コミュニティを探す",
     "invite_error_invalid": "これは有効なQortalグループの招待リンクではないようです。",
@@ -203,15 +217,20 @@
     "nav": {
       "mentions": "メンション",
       "messages": "メッセージ",
+      "notifications": "Notifications",
       "text_size": "文字サイズ",
       "threads": "Threads"
     },
     "notifications": {
+      "apply_button": "Apply to All Groups",
+      "delivery_ephemeral_tooltip": "Ephemeral notifications are gone forever after the preview disappears.",
+      "delivery_native_tooltip": "Push notifications go into your OS Notification Manager after the preview disappears.",
       "description": "Reticulum Q-ChatのメンションをHubの通知パネルに表示します。通常の未読メッセージではHubの通知は作成されません。",
       "mentions": {
         "description": "チャンネルで誰かが自分をメンションしたときに知らせます。",
         "label": "メンションの通知"
       },
+      "revert_button": "Revert to Defaults",
       "title": "通知"
     },
     "text_size": {

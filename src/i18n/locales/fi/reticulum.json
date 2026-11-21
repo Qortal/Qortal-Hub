@@ -21,6 +21,16 @@
     "sign_failed": "Reticulum-keskustelutapahtumaa ei voitu allekirjoittaa",
     "welcome_failed": "Reticulum-tervetuloviestin julkaisu epäonnistui"
   },
+  "context_menu": {
+    "clipboard_permission_denied": "Leikepöydän käyttö epäonnistui",
+    "copy": "Kopioi",
+    "copy_shortcut": "Kopioi\tCtrl+C",
+    "cut": "Leikkaa",
+    "cut_shortcut": "Leikkaa\tCtrl+X",
+    "no_suggestions": "Ei ehdotuksia",
+    "paste": "Liitä",
+    "paste_shortcut": "Liitä\tCtrl+V"
+  },
   "copy_invite_link": "kopioi kutsulinkki",
   "discussion": {
     "choose_emoji": "choose emoji",
@@ -118,6 +128,10 @@
     "enter_qortal_land": "Siirry Qortal Landiin",
     "return_to_chat": "Palaa keskusteluun"
   },
+  "notification": {
+    "someone": "joku",
+    "welcome_joined": "{{name}} liittyi ryhmään {{groupName}}"
+  },
   "onboarding": {
     "find_communities": "Etsi yhteisöjä",
     "invite_error_invalid": "Tämä ei näytä kelvolliselta Qortal-ryhmän kutsulinkiltä.",
@@ -203,15 +217,20 @@
     "nav": {
       "mentions": "Maininnat",
       "messages": "Viestit",
+      "notifications": "Notifications",
       "text_size": "Tekstin koko",
       "threads": "Threads"
     },
     "notifications": {
+      "apply_button": "Apply to All Groups",
+      "delivery_ephemeral_tooltip": "Ephemeral notifications are gone forever after the preview disappears.",
+      "delivery_native_tooltip": "Push notifications go into your OS Notification Manager after the preview disappears.",
       "description": "Näytä Reticulum Q-Chatin maininnat Hubin ilmoituspaneelissa. Tavalliset lukemattomat viestit eivät luo Hub-ilmoituksia.",
       "mentions": {
         "description": "Ilmoita minulle, kun joku mainitsee minut kanavalla.",
         "label": "Mainintojen ilmoitukset"
       },
+      "revert_button": "Revert to Defaults",
       "title": "Ilmoitukset"
     },
     "text_size": {

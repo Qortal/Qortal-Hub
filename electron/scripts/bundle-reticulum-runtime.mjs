@@ -10,7 +10,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const runtimeDir = path.resolve(__dirname, '..', 'resources', 'reticulum-runtime');
+const runtimeDir = path.resolve(
+  __dirname,
+  '..',
+  'resources',
+  'reticulum-runtime'
+);
 const venvDir = path.join(runtimeDir, 'venv');
 const RETICULUM_PIP_PACKAGE =
   process.env.QORTAL_RETICULUM_PIP_PACKAGE ??
@@ -18,8 +23,7 @@ const RETICULUM_PIP_PACKAGE =
 const WEBSOCKETS_PIP_PACKAGE = 'websockets==14.2';
 
 const py =
-  process.env.PYTHON ??
-  (process.platform === 'win32' ? 'python' : 'python3');
+  process.env.PYTHON ?? (process.platform === 'win32' ? 'python' : 'python3');
 
 function run(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, {
@@ -43,8 +47,7 @@ const venvPython =
     : path.join(venvDir, 'bin', 'python');
 
 const venvCfg = path.join(venvDir, 'pyvenv.cfg');
-const venvLooksUsable =
-  fs.existsSync(venvCfg) && fs.existsSync(venvPip);
+const venvLooksUsable = fs.existsSync(venvCfg) && fs.existsSync(venvPip);
 
 if (venvLooksUsable) {
   console.log(`Reusing existing venv: ${venvDir}`);
@@ -62,7 +65,9 @@ if (!fs.existsSync(venvPip)) {
   process.exit(1);
 }
 
-console.log(`Installing / upgrading Reticulum from ${RETICULUM_PIP_PACKAGE} + lxmf…`);
+console.log(
+  `Installing / upgrading Reticulum from ${RETICULUM_PIP_PACKAGE} + lxmf…`
+);
 run(venvPip, ['install', '--upgrade', 'pip']);
 run(venvPip, [
   'install',

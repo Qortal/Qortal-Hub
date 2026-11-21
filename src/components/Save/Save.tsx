@@ -501,7 +501,6 @@ export const Save = ({
                     }
                   );
                   setPinnedApps(responseData);
-                  setOldPinnedApps(responseData);
                   setIsUsingImportExportSettings(true);
                 }
               } catch (error) {

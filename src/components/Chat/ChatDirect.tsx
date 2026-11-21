@@ -8,6 +8,7 @@ import {
 } from '../../atoms/global';
 import { ChatList } from './ChatList';
 import Tiptap from './TipTap';
+import { SpellCheckContextMenu } from './SpellCheckContextMenu';
 import './chat.css';
 import { CustomButton } from '../../styles/App-styles';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -991,6 +992,7 @@ export const ChatDirect = ({
     );
     if (latestTimestamp <= 0) return;
     void markReticulumDirectRead(latestTimestamp);
+    window.reticulumChat?.dismissNotifications?.(NaN, selectedDirect.address);
   }, [
     markReticulumDirectRead,
     reticulumDirectEnabled,
@@ -3746,22 +3748,24 @@ export const ChatDirect = ({
             </Box>
           )}
 
-          <Tiptap
-            isFocusedParent={isFocusedParent}
-            setEditorRef={setEditorRef}
-            onEnter={sendMessage}
-            isChat
-            disableEnter={false}
-            setIsFocusedParent={setIsFocusedParent}
-            insertFiles={insertFiles}
-            compactChat={reticulumDirectUiEnabled}
-            collapseFormattingTraySignal={formattingTrayResetKey}
-            placeholder={
-              reticulumDirectUiEnabled
-                ? t('group:dm.send_placeholder')
-                : undefined
-            }
-          />
+          <SpellCheckContextMenu editorRef={editorRef}>
+            <Tiptap
+              isFocusedParent={isFocusedParent}
+              setEditorRef={setEditorRef}
+              onEnter={sendMessage}
+              isChat
+              disableEnter={false}
+              setIsFocusedParent={setIsFocusedParent}
+              insertFiles={insertFiles}
+              compactChat={reticulumDirectUiEnabled}
+              collapseFormattingTraySignal={formattingTrayResetKey}
+              placeholder={
+                reticulumDirectUiEnabled
+                  ? t('group:dm.send_placeholder')
+                  : undefined
+              }
+            />
+          </SpellCheckContextMenu>
           {isCompressingReticulumGif && <ReticulumGifCompressionStatus />}
           {pendingReticulumFiles.length > 0 && (
             <Box

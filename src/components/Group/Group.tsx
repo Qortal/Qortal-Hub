@@ -98,7 +98,6 @@ import {
   memberGroupsAtom,
   memberGroupsLoadedAddressAtom,
   memberGroupsWithReticulumChatAtom,
-  mutedGroupsAtom,
   myGroupsWhereIAmAdminAtom,
   reticulumDirectSummariesAtom,
   reticulumChatSummariesAtom,
@@ -111,10 +110,27 @@ import {
   qortalGroupVoiceCallMinimizedAtom,
   qortalGroupCallPrimaryNamesAtom,
   dmFriendsByAddressAtom,
+  unreadWelcomeEventIdsAtom,
+  globalNotificationFormAtom,
 } from '../../atoms/global';
 import { mergeDirectsWithFriends } from '../../lib/dm/mergeDirectsWithFriends';
 import { validateAddress } from '../../utils/validateAddress';
 import { sortArrayByTimestampAndGroupName } from '../../utils/time';
+import {
+  migrateNotificationSettings,
+  getEffectiveNotificationSettings,
+  getGroupNotificationStore,
+  groupHasUnreadConsideringMute,
+  getWelcomeUnreadCount,
+  isScopeMuted,
+  addWelcomeUnreadEventId,
+  removeWelcomeUnreadEventId,
+  clearWelcomeUnreadForGroup,
+  reconcileWelcomeUnreadForGroup,
+  type GroupNotificationStore,
+} from '../../utils/qChatNotificationSettings';
+import { resolveChannelReadWatermarkFromSummaries } from '../../utils/qChatReadWatermark';
+import { planReticulumNotifications } from './reticulumNotificationPlan';
 import { WalletsAppWrapper } from './WalletsAppWrapper';
 import { useTranslation } from 'react-i18next';
 import { GroupList } from './GroupList';
@@ -134,9 +150,16 @@ import {
   TIME_DAYS_1_IN_MILLISECONDS,
 } from '../../constants/constants';
 import { useWebsocketStatus } from './useWebsocketStatus';
+import { useNotificationSettingsCache } from '../../hooks/useNotificationSettingsCache';
+import { useBumpNewlyJoinedGroups } from '../../hooks/useBumpNewlyJoinedGroups';
 import { DirectsSidebar } from './DirectsSidebar';
 import { GlobalChatWidget } from './GlobalChatWidget';
 import { openQChatTab, QCHAT_INTERNAL_TAB_ID } from '../../utils/openQChatTab';
+import {
+  drainPendingNotificationNav,
+  setNotificationNavHostMounted,
+  type PendingNav,
+} from '../../utils/notificationClickBuffer';
 import { HubOnboardingTour } from '../Onboarding/HubOnboardingTour';
 import { OnboardingQChatPreview } from '../Onboarding/OnboardingQChatPreview';
 import { QORTAL_PROJECT_GROUP_ID } from './findGroupsPinned';
@@ -146,7 +169,6 @@ import {
 } from './reticulumGroupRail';
 import {
   beginReticulumSummaryRefresh,
-  getReticulumMentionBadgeCount,
   scheduleReticulumSummaryRefresh,
 } from './reticulumSummaryRefresh';
 import {
@@ -250,6 +272,7 @@ type ReticulumNotificationSummary = {
 const RETICULUM_BACKGROUND_PROCESSED_EVENT_TTL_MS = 2 * 60 * 60_000;
 const RETICULUM_BACKGROUND_PROCESSED_EVENT_MAX = 10_000;
 const RETICULUM_DIRECT_NAME_RETRY_DELAY_MS = 5 * 60_000;
+const authorNameCache = new Map<string, string>();
 
 const getGroupIdFromGroupLike = (group: unknown): number | null => {
   if (!group || typeof group !== 'object') return null;
@@ -277,12 +300,13 @@ const getReticulumGroupMembershipsFromGroupLikeList = (
   groups: unknown,
   groupsProperties: Record<string, unknown>,
   localAddress: string | undefined,
-  adminGroupIds: ReadonlySet<number>
+  adminGroupIds: ReadonlySet<number>,
+  adminStatusAuthoritative = true
 ): Array<{
   groupId: number;
   isPrivate: boolean;
   isAdmin: boolean;
-  adminStatusAuthoritative: true;
+  adminStatusAuthoritative: boolean;
   joinedAt?: number;
   localAddress?: string;
 }> => {
@@ -324,7 +348,7 @@ const getReticulumGroupMembershipsFromGroupLikeList = (
     groupId,
     isPrivate,
     isAdmin: adminGroupIds.has(groupId),
-    adminStatusAuthoritative: true,
+    adminStatusAuthoritative,
     ...(joinedAt ? { joinedAt } : {}),
     ...(normalizedLocalAddress ? { localAddress: normalizedLocalAddress } : {}),
   }));
@@ -880,6 +904,8 @@ export const Group = ({
   desktopViewMode,
   onOpenSettings,
 }: GroupProps) => {
+  useNotificationSettingsCache();
+  useBumpNewlyJoinedGroups();
   const [desktopSideView, setDesktopSideView] = useState('groups');
   const [chatWidgetClosed, setChatWidgetClosed] = useAtom(chatWidgetClosedAtom);
   const [lastQappViewMode, setLastQappViewMode] = useState('apps');
@@ -893,6 +919,9 @@ export const Group = ({
   const hasInitializedWebsocket = useRef(false);
   const memberGroupsRef = useRef<any[]>([]);
   const memberGroupsLoadedAddressRef = useRef('');
+  const globalNotifForm = useAtomValue(globalNotificationFormAtom);
+  const globalNotifFormRef = useRef(globalNotifForm);
+  globalNotifFormRef.current = globalNotifForm;
   const [directs, setDirects] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [adminsWithNames, setAdminsWithNames] = useState([]);
@@ -929,8 +958,6 @@ export const Group = ({
     isOpenBlockedModalAtom
   );
   const [isLoadingGroupMessage, setIsLoadingGroupMessage] = useState('');
-  const setMutedGroups = useSetAtom(mutedGroupsAtom);
-  const mutedGroups = useAtomValue(mutedGroupsAtom);
   const memberGroupsForReticulum = useAtomValue(memberGroupsAtom);
   // Read when a group's link opens, after the listener was set up. A group
   // joined a moment ago is in this list before the background sends it.
@@ -989,6 +1016,15 @@ export const Group = ({
     groupChatTimestampsAtom
   );
   const setReticulumChatSummaries = useSetAtom(reticulumChatSummariesAtom);
+  const reticulumChatSummaries = useAtomValue(reticulumChatSummariesAtom);
+  const reticulumChatSummariesRef = useRef(reticulumChatSummaries);
+  reticulumChatSummariesRef.current = reticulumChatSummaries;
+  const setUnreadWelcomeEventIds = useSetAtom(unreadWelcomeEventIdsAtom);
+  const unreadWelcomeEventIdsRef = useRef(setUnreadWelcomeEventIds);
+  unreadWelcomeEventIdsRef.current = setUnreadWelcomeEventIds;
+  const unreadWelcomeValue = useAtomValue(unreadWelcomeEventIdsAtom);
+  const unreadWelcomeValueRef = useRef(unreadWelcomeValue);
+  unreadWelcomeValueRef.current = unreadWelcomeValue;
   const [reticulumChatEnabled, setReticulumChatEnabled] = useAtom(
     reticulumChatEnabledAtom
   );
@@ -1453,7 +1489,6 @@ export const Group = ({
           })
           .then((response) => {
             if (!response?.error) {
-              setMutedGroups(response || []);
               res(response);
               return;
             }
@@ -1471,11 +1506,23 @@ export const Group = ({
     } catch (error) {
       console.error(error);
     }
-  }, [setMutedGroups]);
+  }, []);
 
   useEffect(() => {
     getUserSettings();
   }, [getUserSettings]);
+
+  useEffect(() => {
+    if (!myAddress) return;
+    if (memberGroupsLoadedAddress !== myAddress) return;
+    const groupIds = (memberGroupsForReticulum || []).map(
+      (g: any) => g?.groupId
+    );
+    if (!groupIds.length) return;
+    void migrateNotificationSettings(groupIds).catch((error) => {
+      console.error('Failed to migrate notification settings:', error);
+    });
+  }, [myAddress, memberGroupsLoadedAddress, memberGroupsForReticulum]);
 
   const getTimestampEnterChat = useCallback(async () => {
     try {
@@ -1526,13 +1573,14 @@ export const Group = ({
             : latest;
         }, undefined);
         const mentionCount = Math.max(0, Number(summary?.mentionCount) || 0);
+        const syncGroupName = group?.groupName || group?.name || '';
+        if (!syncGroupName) continue;
         executeEvent('q-chat-mention-notification', {
           channelId: String(
             latestMentionedChannel?.channelId || summary?.channelId || 'general'
           ),
           groupId,
-          groupName:
-            group?.groupName || group?.name || `Group ${String(groupId)}`,
+          groupName: syncGroupName,
           mentionCount,
           syncUnreadCount: true,
           timestamp: Number(
@@ -1593,9 +1641,92 @@ export const Group = ({
           {} as Record<string, any>
         );
         setReticulumChatSummaries(next);
+        unreadWelcomeEventIdsRef.current((prev) => {
+          let updated = prev;
+          for (const [groupIdStr, summary] of Object.entries(next)) {
+            const unreadCount = Number((summary as any)?.unreadCount ?? 0);
+            const mentionCount = Number((summary as any)?.mentionCount ?? 0);
+            if (
+              unreadCount === 0 &&
+              mentionCount === 0 &&
+              updated[groupIdStr]
+            ) {
+              updated = clearWelcomeUnreadForGroup(updated, groupIdStr);
+              continue;
+            }
+            // A group can hold no more unread welcome posts than it has unread
+            // messages. The set is otherwise only cleared when a group reaches
+            // zero, so a welcome post read on another device — or read before
+            // this bookkeeping existed — leaves an entry behind and the set
+            // grows past the truth until it erases the group's real unread.
+            updated = reconcileWelcomeUnreadForGroup(
+              updated,
+              groupIdStr,
+              unreadCount + mentionCount
+            );
+          }
+          return updated;
+        });
         syncReticulumMentionNotifications(next);
+        const welcomeMap = unreadWelcomeValueRef.current;
+        let totalBadge = 0;
+        // Subtracted per group, and only for groups that actually count toward
+        // the badge. Summing the whole welcome set and subtracting it once let
+        // ids belonging to an excluded group (muted, or welcome-only-unread)
+        // eat into another group's real unread, and let a stale set drive the
+        // total to zero. `getGroupUnreadCountConsideringMute` applies the same
+        // bound the red dot uses, so the two can never disagree.
+        let totalWelcomeUnreads = 0;
+        for (const [groupIdStr, summary] of Object.entries(next)) {
+          const groupId = Number(groupIdStr);
+          if (!Number.isInteger(groupId) || groupId <= 0) continue;
+          const welcomeUnreadCount = getWelcomeUnreadCount(
+            welcomeMap,
+            groupIdStr
+          );
+          let settings: GroupNotificationStore | null = null;
+          try {
+            settings = await getGroupNotificationStore(groupId);
+            if (
+              !groupHasUnreadConsideringMute(
+                settings,
+                summary,
+                welcomeUnreadCount,
+                globalNotifFormRef.current
+              )
+            ) {
+              continue;
+            }
+          } catch {
+            // Cannot load settings — include the group's counts to be safe
+          }
+          const groupUnread = Math.max(
+            0,
+            Number((summary as any)?.unreadCount) || 0
+          );
+          const groupMention = Math.max(
+            0,
+            Number((summary as any)?.mentionCount) || 0
+          );
+          totalBadge += groupUnread + groupMention;
+          const rawWelcome = Math.max(0, welcomeUnreadCount);
+          if (rawWelcome > 0) {
+            const notifyOnWelcomePosts =
+              settings?.notifyOnWelcomePosts ??
+              globalNotifFormRef.current.notifyOnWelcomePosts ??
+              true;
+            // A set at or above the unread total is ambiguous or stale — it
+            // cannot be told apart from a set that has absorbed already-read
+            // welcome posts — so it is not subtracted, matching
+            // `resolveEffectiveWelcomeUnread`. Erring here shows a badge rather
+            // than hiding one.
+            if (!notifyOnWelcomePosts && rawWelcome < groupUnread) {
+              totalWelcomeUnreads += rawWelcome;
+            }
+          }
+        }
         void window.reticulumChat?.updateMentionBadge?.(
-          getReticulumMentionBadgeCount(next)
+          Math.max(0, totalBadge - totalWelcomeUnreads)
         );
         return true;
       } catch (error) {
@@ -1638,13 +1769,19 @@ export const Group = ({
         memberGroupsForReticulum,
         groupsProperties,
         myAddress,
-        reticulumAdminGroupIds
+        reticulumAdminGroupIds,
+        // The admin list is only authoritative once the membership fetch has
+        // succeeded for this address. Before the first success (or after a
+        // failed fetch), the engine must ask Core instead of trusting an empty
+        // or stale "admin nowhere" list.
+        reticulumAdminGroupsLoadedAddress === myAddress
       ),
     [
       groupsProperties,
       memberGroupsForReticulum,
       myAddress,
       reticulumAdminGroupIds,
+      reticulumAdminGroupsLoadedAddress,
     ]
   );
   const reticulumMembershipsKey = useMemo(
@@ -1871,19 +2008,9 @@ export const Group = ({
   ]);
 
   useEffect(() => {
-    const offSummaryChanged = window.reticulumChat?.onSummaryChanged?.(
-      (payload) => {
-        const groupId = Number(payload?.groupId);
-        if (
-          Number.isInteger(groupId) &&
-          groupId > 0 &&
-          !reticulumSubscribedGroupIdsRef.current.has(groupId)
-        ) {
-          return;
-        }
-        scheduleReticulumChatSummariesRefresh();
-      }
-    );
+    const offSummaryChanged = window.reticulumChat?.onSummaryChanged?.(() => {
+      scheduleReticulumChatSummariesRefresh();
+    });
     const refreshHandler = () => {
       scheduleReticulumChatSummariesRefresh();
     };
@@ -2664,7 +2791,11 @@ export const Group = ({
     (
       event: ReticulumBackgroundEvent,
       groupId: number,
-      mentionedAddresses: string[]
+      groupName: string,
+      mentionedAddresses: string[],
+      isEveryoneOrHere: boolean,
+      messageText: string,
+      senderName: string
     ) => {
       const eventId = String(event?.eventId || '');
       if (
@@ -2673,20 +2804,11 @@ export const Group = ({
         !eventId ||
         !myAddressRef.current ||
         event.authorAddress === myAddressRef.current ||
-        !mentionedAddresses.includes(myAddressRef.current) ||
-        (Array.isArray(mutedGroups) &&
-          mutedGroups.some(
-            (mutedGroupId) => String(mutedGroupId) === String(groupId)
-          ))
+        !mentionedAddresses.includes(myAddressRef.current)
       ) {
         return;
       }
 
-      const group = memberGroupsRef.current?.find(
-        (item: any) => Number(item?.groupId) === groupId
-      );
-      const groupName =
-        group?.groupName || group?.name || `Group ${String(groupId)}`;
       const channelId = String(event.channelId || 'general');
       const timestamp = Number(event.timestamp || Date.now());
 
@@ -2695,16 +2817,56 @@ export const Group = ({
         eventId,
         groupId,
         groupName,
+        isEveryoneOrHere,
+        messageText,
+        senderName,
         timestamp,
       });
     },
-    [mutedGroups]
+    []
+  );
+
+  const recordReticulumMessageNotification = useCallback(
+    (
+      event: ReticulumBackgroundEvent,
+      groupId: number,
+      groupName: string,
+      messageText: string,
+      senderName: string
+    ) => {
+      const eventId = String(event?.eventId || '');
+      if (
+        !eventId ||
+        !myAddressRef.current ||
+        event.authorAddress === myAddressRef.current ||
+        event.eventType !== 'message'
+      ) {
+        return;
+      }
+
+      const channelId = String(event.channelId || 'general');
+      const timestamp = Number(event.timestamp || Date.now());
+
+      executeEvent('q-chat-message-notification', {
+        channelId,
+        eventId,
+        groupId,
+        groupName,
+        messageText,
+        senderName,
+        timestamp,
+      });
+    },
+    []
   );
 
   const processReticulumBackgroundEvent = useCallback(
     async (
       event: ReticulumBackgroundEvent,
-      options: { recordMentionNotification?: boolean } = {}
+      options: {
+        recordMentionNotification?: boolean;
+        skipReplyNotification?: boolean;
+      } = {}
     ) => {
       if (!event?.eventId || !event?.groupId || !event?.eventType) return;
       const alreadyProcessed = hasProcessedReticulumBackgroundEvent(
@@ -2719,9 +2881,151 @@ export const Group = ({
         if (event.targetEventId) {
           await window.reticulumChat?.deleteSearchText?.(event.targetEventId);
           await window.reticulumChat?.deleteMentions?.(event.targetEventId);
+          unreadWelcomeEventIdsRef.current((prev) =>
+            removeWelcomeUnreadEventId(
+              prev,
+              Number(event.groupId),
+              event.targetEventId
+            )
+          );
           noteProcessedReticulumBackgroundEvent(event.eventId);
           scheduleReticulumChatSummariesRefresh();
+          executeEvent('q-chat-delete-notification', {
+            eventId: String(event.targetEventId),
+          });
         }
+        return;
+      }
+
+      if (event.eventType === 'reaction_add') {
+        if (!myAddressRef.current || options.skipReplyNotification) {
+          noteProcessedReticulumBackgroundEvent(event.eventId);
+          scheduleReticulumChatSummariesRefresh();
+          return;
+        }
+        const channelId = String(event.channelId || 'general');
+        const targetEventId = event.targetEventId;
+        if (targetEventId) {
+          try {
+            const parentEvents =
+              await window.reticulumChat?.getMessageWindowAroundEvent?.(
+                Number(event.groupId),
+                channelId,
+                String(targetEventId),
+                { afterLimit: 1, beforeLimit: 0 }
+              );
+            const parentEvent = Array.isArray(parentEvents)
+              ? (parentEvents[0] as any)
+              : null;
+            if (
+              parentEvent?.authorAddress === myAddressRef.current &&
+              event.authorAddress !== myAddressRef.current
+            ) {
+              const effectiveSettings = await getEffectiveNotificationSettings(
+                Number(event.groupId),
+                undefined,
+                channelId,
+                globalNotifFormRef.current
+              ).catch(() => null);
+              let reactionEmoji = '';
+              try {
+                const parsed = JSON.parse(String(event.encryptedPayload || ''));
+                reactionEmoji = String(
+                  parsed?.message ||
+                    parsed?.content ||
+                    parsed?.messageText ||
+                    ''
+                );
+              } catch {
+                reactionEmoji = String(event.encryptedPayload || '');
+              }
+              let rxnGroupName = '';
+              const cachedGroup = memberGroupsRef.current?.find(
+                (item: any) => Number(item?.groupId) === Number(event.groupId)
+              );
+              const cachedRxnName =
+                cachedGroup?.groupName || cachedGroup?.name || '';
+              if (cachedRxnName.trim()) {
+                rxnGroupName = cachedRxnName.trim();
+              } else {
+                try {
+                  const res = await fetch(
+                    `${getBaseApiReact()}/groups/${Number(event.groupId)}`
+                  );
+                  const data = await res.json();
+                  if (data?.groupName) rxnGroupName = data.groupName;
+                } catch {}
+              }
+              if (effectiveSettings?.notifyOnReactions && rxnGroupName) {
+                const rxnGroupStore = await getGroupNotificationStore(
+                  Number(event.groupId)
+                ).catch(() => null);
+                const rxnMuted = rxnGroupStore
+                  ? isScopeMuted(rxnGroupStore, undefined, channelId)
+                  : false;
+                if (!rxnMuted) {
+                  let senderName = event.authorPrimaryName?.trim() || '';
+                  if (!senderName && event.authorAddress) {
+                    const cached = authorNameCache.get(event.authorAddress);
+                    if (cached) {
+                      senderName = cached;
+                    } else {
+                      try {
+                        const nameRes = await fetch(
+                          `${getBaseApiReact()}/names/primary/${event.authorAddress}`
+                        );
+                        const nameData = await nameRes.json();
+                        const resolved = nameData?.name;
+                        if (resolved && typeof resolved === 'string') {
+                          senderName = resolved.trim();
+                          authorNameCache.set(event.authorAddress, senderName);
+                        }
+                      } catch {}
+                    }
+                  }
+                  if (!senderName) senderName = 'Someone';
+                  let parentMessageText = '';
+                  try {
+                    const parentPayload = JSON.parse(
+                      String(parentEvent.encryptedPayload || '')
+                    );
+                    parentMessageText =
+                      reticulumVisibleSearchTextFromPayload(parentPayload);
+                  } catch {
+                    parentMessageText = String(
+                      parentEvent.encryptedPayload || ''
+                    );
+                  }
+                  executeEvent('q-chat-reaction-notification', {
+                    channelId,
+                    eventId: String(targetEventId),
+                    groupId: Number(event.groupId),
+                    groupName: rxnGroupName,
+                    senderName,
+                    reactionEmoji,
+                    messageText: parentMessageText,
+                    timestamp: Number(event.timestamp || Date.now()),
+                  });
+                }
+              }
+            }
+          } catch {
+            // Parent message lookup failed — skip reaction notification
+          }
+        }
+        noteProcessedReticulumBackgroundEvent(event.eventId);
+        scheduleReticulumChatSummariesRefresh();
+        return;
+      }
+
+      if (event.eventType === 'reaction_remove') {
+        if (event.targetEventId) {
+          executeEvent('q-chat-delete-notification', {
+            eventId: String(event.targetEventId),
+          });
+        }
+        noteProcessedReticulumBackgroundEvent(event.eventId);
+        scheduleReticulumChatSummariesRefresh();
         return;
       }
 
@@ -2749,7 +3053,44 @@ export const Group = ({
         payload = event.encryptedPayload || '';
       }
 
+      const isWelcomePost =
+        (payload as any)?.qchatSystem?.type === 'group-welcome';
+
       const text = reticulumVisibleSearchTextFromPayload(payload);
+      let senderName = event.authorPrimaryName?.trim() || '';
+      if (!senderName && event.authorAddress) {
+        const cached = authorNameCache.get(event.authorAddress);
+        if (cached) {
+          senderName = cached;
+        } else {
+          try {
+            const nameRes = await fetch(
+              `${getBaseApiReact()}/names/primary/${event.authorAddress}`
+            );
+            const nameData = await nameRes.json();
+            const resolved = nameData?.name;
+            if (resolved && typeof resolved === 'string') {
+              senderName = resolved.trim();
+              authorNameCache.set(event.authorAddress, senderName);
+            }
+          } catch {}
+        }
+      }
+
+      let groupName = '';
+      const cachedGroup = memberGroupsRef.current?.find(
+        (item: any) => Number(item?.groupId) === groupId
+      );
+      const cachedName = cachedGroup?.groupName || cachedGroup?.name || '';
+      if (cachedName.trim()) {
+        groupName = cachedName.trim();
+      } else {
+        try {
+          const res = await fetch(`${getBaseApiReact()}/groups/${groupId}`);
+          const data = await res.json();
+          if (data?.groupName) groupName = data.groupName;
+        } catch {}
+      }
       const targetEventId =
         event.eventType === 'edit' && event.targetEventId
           ? event.targetEventId
@@ -2760,32 +3101,151 @@ export const Group = ({
         return;
       }
 
-      await window.reticulumChat?.indexSearchText?.(targetEventId, text);
-      const mentionMap = await getReticulumMentionNameMap(groupId);
-      const mentionedAddresses = [
-        ...new Set([
-          ...reticulumMentionedAddressesFromPayload(payload),
-          ...resolveReticulumMentionAddressesFromPayload(payload, mentionMap),
-        ]),
-      ];
-      await window.reticulumChat?.replaceMentions?.(
-        targetEventId,
-        mentionedAddresses
+      // The engine already indexes search text and mentions on insert, so skip
+      // the re-index round trips for a duplicate (already-processed) event. The
+      // mention/reply notification recording below still runs for duplicates.
+      if (!alreadyProcessed) {
+        await window.reticulumChat?.indexSearchText?.(targetEventId, text);
+        const mentionMap = await getReticulumMentionNameMap(groupId);
+        const mentionedAddresses = [
+          ...new Set([
+            ...reticulumMentionedAddressesFromPayload(payload),
+            ...resolveReticulumMentionAddressesFromPayload(payload, mentionMap),
+          ]),
+        ];
+        await window.reticulumChat?.replaceMentions?.(
+          targetEventId,
+          mentionedAddresses
+        );
+      }
+      if (isWelcomePost && event.eventId) {
+        unreadWelcomeEventIdsRef.current((prev) =>
+          addWelcomeUnreadEventId(prev, groupId, event.eventId)
+        );
+      }
+      // Exactly one notification per post, most specific kind wins:
+      // reply > mention > message.
+      //
+      // The decision itself lives in `reticulumNotificationPlan.ts` so it can be
+      // tested. It was inline here and broke three times without any test being
+      // able to reach it: duplicate notifications, then no notification for
+      // plain posts, then a `ReferenceError` from a declaration deleted during a
+      // comment rewrite.
+      const notificationPlan = await planReticulumNotifications(
+        {
+          isMessage: event.eventType === 'message',
+          isFromOther: event.authorAddress !== myAddressRef.current,
+          hasMyAddress: Boolean(myAddressRef.current),
+          replyLookupAllowed: !options.skipReplyNotification,
+          repliedToEventId:
+            (payload as any)?.repliedTo ||
+            (payload as any)?.replyToEventId ||
+            undefined,
+          recordMentionNotification: options.recordMentionNotification === true,
+          isWelcomePost,
+          notifyOnWelcomePosts:
+            (await getGroupNotificationStore(groupId)
+              .then(
+                (store) =>
+                  store?.notifyOnWelcomePosts ??
+                  globalNotifFormRef.current.notifyOnWelcomePosts
+              )
+              .catch(() => globalNotifFormRef.current.notifyOnWelcomePosts)) !==
+            false,
+        },
+        {
+          myAddress: myAddressRef.current || '',
+          lookupReplyParentAuthor: async (repliedToEventId) => {
+            const channelId = String(event.channelId || 'general');
+            const parentEvents =
+              await window.reticulumChat?.getMessageWindowAroundEvent?.(
+                groupId,
+                channelId,
+                repliedToEventId,
+                { afterLimit: 1, beforeLimit: 0 }
+              );
+            const parentEvent = Array.isArray(parentEvents)
+              ? (parentEvents[0] as any)
+              : null;
+            return parentEvent?.authorAddress ?? null;
+          },
+          getNotifyOnReplies: async () => {
+            const channelId = String(event.channelId || 'general');
+            const effectiveSettings = await getEffectiveNotificationSettings(
+              groupId,
+              undefined,
+              channelId,
+              globalNotifFormRef.current
+            ).catch(() => null);
+            return effectiveSettings?.notifyOnReplies === true;
+          },
+          isChannelMuted: async () => {
+            const channelId = String(event.channelId || 'general');
+            const store = await getGroupNotificationStore(groupId).catch(
+              () => null
+            );
+            return store ? isScopeMuted(store, undefined, channelId) : false;
+          },
+          isAuthorizedBroadcast: () =>
+            authorizedReticulumBroadcastApplies(event),
+          isDirectMention: () => event.directMentionAuthorized === true,
+        }
       );
-      if (options.recordMentionNotification === true) {
+
+      const channelId = String(event.channelId || 'general');
+      if (notificationPlan.reply && groupName) {
+        executeEvent('q-chat-reply-notification', {
+          channelId,
+          eventId: String(event.eventId || ''),
+          groupId,
+          groupName,
+          messageText: text,
+          senderName,
+          timestamp: Number(event.timestamp || Date.now()),
+        });
+      }
+
+      if (notificationPlan.mention) {
         const localAddress = myAddressRef.current || '';
-        const authorizedBroadcast = authorizedReticulumBroadcastApplies(event);
-        const directMention = event.directMentionAuthorized === true;
-        const notificationMentionedAddresses =
-          localAddress && (authorizedBroadcast || directMention)
-            ? [localAddress]
-            : [];
         recordReticulumMentionNotification(
           event,
           groupId,
-          notificationMentionedAddresses
+          groupName,
+          [localAddress],
+          notificationPlan.authorizedBroadcast,
+          text,
+          senderName
         );
       }
+
+      if (notificationPlan.welcome) {
+        // The joiner's own display name is carried in the signed payload
+        // (`qchatSystem.joinedName`), so it does not depend on the reader's name
+        // cache being warm — which it is not, for someone they just met.
+        const joinedName =
+          String((payload as any)?.qchatSystem?.joinedName || '').trim() ||
+          senderName;
+        executeEvent('q-chat-welcome-notification', {
+          channelId,
+          eventId: String(event.eventId || ''),
+          groupId,
+          groupName,
+          joinedName,
+          senderName: joinedName,
+          timestamp: Number(event.timestamp || Date.now()),
+        });
+      }
+
+      if (notificationPlan.message) {
+        recordReticulumMessageNotification(
+          event,
+          groupId,
+          groupName,
+          text,
+          senderName
+        );
+      }
+
       noteProcessedReticulumBackgroundEvent(event.eventId);
       scheduleReticulumChatSummariesRefresh();
     },
@@ -2794,6 +3254,7 @@ export const Group = ({
       hasProcessedReticulumBackgroundEvent,
       noteProcessedReticulumBackgroundEvent,
       recordReticulumMentionNotification,
+      recordReticulumMessageNotification,
       scheduleReticulumChatSummariesRefresh,
     ]
   );
@@ -2844,7 +3305,9 @@ export const Group = ({
         if (cancelled || !Array.isArray(history)) continue;
         for (const event of history as ReticulumBackgroundEvent[]) {
           if (cancelled) return;
-          await processReticulumBackgroundEvent(event);
+          await processReticulumBackgroundEvent(event, {
+            skipReplyNotification: true,
+          });
         }
       }
     })();
@@ -3031,9 +3494,19 @@ export const Group = ({
       if (!myAddress) return false;
       const requestedAddress = myAddress;
       try {
-        const response = await fetch(
-          `${getBaseApiReact()}/groups/member/${requestedAddress}?adminOnly=true`
-        );
+        // Bound the fetch so a hanging Core/gateway cannot leave the admin list
+        // permanently non-authoritative; the next periodic retry will succeed.
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10_000);
+        let response: Response;
+        try {
+          response = await fetch(
+            `${getBaseApiReact()}/groups/member/${requestedAddress}?adminOnly=true`,
+            { signal: controller.signal }
+          );
+        } finally {
+          clearTimeout(timeout);
+        }
         if (!response.ok) {
           throw new Error(`Unable to load group admins: ${response.status}`);
         }
@@ -3055,9 +3528,12 @@ export const Group = ({
           '[ReticulumChat] Failed to load admin-group metadata required by membership sync:',
           error
         );
+        // Keep the last good admin list for this address: a transient failure
+        // (restart, syncing, brief unreachability) must not be treated as
+        // "admin nowhere". Do NOT mark the list loaded, so the engine keeps the
+        // admin status non-authoritative and asks Core instead of skipping.
         if (myAddressRef.current === requestedAddress) {
-          setMyGroupsWhereIAmAdmin([]);
-          setReticulumAdminGroupsLoadedAddress(requestedAddress);
+          setReticulumAdminGroupsLoadedAddress('');
         }
         return false;
       }
@@ -3235,6 +3711,10 @@ export const Group = ({
       const findDirect = displayDirects?.find(
         (direct) => direct?.address === directAddress
       );
+      // Dismiss DM notifications for this address
+      if (directAddress) {
+        window.reticulumChat?.dismissNotifications?.(NaN, directAddress);
+      }
       if (findDirect?.address === selectedDirect?.address) {
         openQChatTab();
         isLoadingOpenSectionFromNotification.current = false;
@@ -3382,6 +3862,7 @@ export const Group = ({
     (e) => {
       const { groupId } = e.detail;
       void markReticulumGroupsRead([groupId]);
+      window.reticulumChat?.dismissNotifications?.(Number(groupId));
       window
         .sendMessage('addTimestampEnterChat', {
           timestamp: Date.now(),
@@ -3421,6 +3902,11 @@ export const Group = ({
     if (!ids.length) return;
 
     void markReticulumGroupsRead(ids);
+    (memberGroupsRef.current || []).forEach((g) => {
+      if (g?.groupId != null) {
+        window.reticulumChat?.dismissNotifications?.(Number(g.groupId));
+      }
+    });
 
     window
       .sendMessage('markAllMemberGroupsRead', { groupIds: ids })
@@ -3442,6 +3928,115 @@ export const Group = ({
     }, 200);
   }, [getGroupAnnouncements, getTimestampEnterChat, markReticulumGroupsRead]);
 
+  const handleMarkChannelRead = useCallback(
+    async (e: Event) => {
+      const { groupId, channelId } = (e as CustomEvent).detail;
+      if (
+        !reticulumChatEnabled ||
+        !myAddress ||
+        typeof window.reticulumChat?.markRead !== 'function'
+      ) {
+        return;
+      }
+      const numericGroupId = Number(groupId);
+      if (
+        !Number.isInteger(numericGroupId) ||
+        numericGroupId <= 0 ||
+        !channelId
+      ) {
+        return;
+      }
+      // Anchor to the newest known event, never the local clock: event
+      // timestamps come from the sender, so a wall-clock watermark can sit
+      // ahead of messages from a sender whose clock runs fast and strand them
+      // as permanently unread. See src/utils/qChatReadWatermark.ts.
+      const readWatermark = resolveChannelReadWatermarkFromSummaries(
+        reticulumChatSummariesRef.current,
+        numericGroupId,
+        String(channelId)
+      );
+      if (readWatermark !== null) {
+        try {
+          const result = await window.reticulumChat.markRead(
+            numericGroupId,
+            String(channelId),
+            readWatermark,
+            myAddress
+          );
+          if (result?.success !== true) {
+            throw new Error('Reticulum chat markRead failed');
+          }
+        } catch (error) {
+          console.error(
+            '[ReticulumChat] Failed to mark channel as read:',
+            error
+          );
+        }
+      }
+      window.reticulumChat?.dismissNotifications?.(
+        numericGroupId,
+        String(channelId)
+      );
+      executeEvent('reticulum-chat-summaries-refresh', {});
+    },
+    [myAddress, reticulumChatEnabled]
+  );
+
+  const handleMarkSectionRead = useCallback(
+    async (e: Event) => {
+      const { groupId, channelIds } = (e as CustomEvent).detail;
+      if (
+        !reticulumChatEnabled ||
+        !myAddress ||
+        typeof window.reticulumChat?.markRead !== 'function'
+      ) {
+        return;
+      }
+      const numericGroupId = Number(groupId);
+      if (
+        !Number.isInteger(numericGroupId) ||
+        numericGroupId <= 0 ||
+        !Array.isArray(channelIds) ||
+        channelIds.length === 0
+      ) {
+        return;
+      }
+      for (const channelId of channelIds) {
+        // Same rule as handleMarkChannelRead: never send the local clock as a
+        // read watermark. See src/utils/qChatReadWatermark.ts.
+        const readWatermark = resolveChannelReadWatermarkFromSummaries(
+          reticulumChatSummariesRef.current,
+          numericGroupId,
+          String(channelId)
+        );
+        if (readWatermark !== null) {
+          try {
+            const result = await window.reticulumChat.markRead(
+              numericGroupId,
+              String(channelId),
+              readWatermark,
+              myAddress
+            );
+            if (result?.success !== true) {
+              throw new Error('Reticulum chat markRead failed');
+            }
+          } catch (error) {
+            console.error(
+              '[ReticulumChat] Failed to mark channel as read:',
+              error
+            );
+          }
+        }
+        window.reticulumChat?.dismissNotifications?.(
+          numericGroupId,
+          String(channelId)
+        );
+      }
+      executeEvent('reticulum-chat-summaries-refresh', {});
+    },
+    [myAddress, reticulumChatEnabled]
+  );
+
   useEffect(() => {
     subscribeToEvent('markAsRead', handleMarkAsRead);
 
@@ -3460,6 +4055,22 @@ export const Group = ({
       );
     };
   }, [handleMarkAllMemberGroupsRead]);
+
+  useEffect(() => {
+    subscribeToEvent('markChannelRead', handleMarkChannelRead);
+
+    return () => {
+      unsubscribeFromEvent('markChannelRead', handleMarkChannelRead);
+    };
+  }, [handleMarkChannelRead]);
+
+  useEffect(() => {
+    subscribeToEvent('markSectionRead', handleMarkSectionRead);
+
+    return () => {
+      unsubscribeFromEvent('markSectionRead', handleMarkSectionRead);
+    };
+  }, [handleMarkSectionRead]);
 
   const resetAllStatesAndRefs = useCallback(() => {
     // Reset all useState values to their initial states
@@ -3708,6 +4319,17 @@ export const Group = ({
       const findGroup =
         memberGroupsRef.current?.find(isTheGroup) ??
         memberGroupsAtomRef.current?.find(isTheGroup);
+      // Dismiss only notifications for this channel (not entire group)
+      if (channelId) {
+        const dismissGroupId = Number(groupId || findGroup?.groupId);
+        if (Number.isFinite(dismissGroupId)) {
+          window.reticulumChat?.dismissNotifications?.(
+            dismissGroupId,
+            channelId
+          );
+        }
+      }
+
       if (findGroup && findGroup.groupId === selectedGroup?.groupId) {
         isLoadingOpenSectionFromNotification.current = false;
         setChatMode('groups');
@@ -3768,6 +4390,31 @@ export const Group = ({
       unsubscribeFromEvent('openGroupMessage', openGroupChatFromNotification);
     };
   }, [openGroupChatFromNotification]);
+
+  // Drain any notification click that arrived before Group.tsx mounted
+  // (e.g. clicks from the Home page). Re-dispatch so the subscriber above
+  // can navigate to the target.
+  //
+  // This runs once, on mount, deliberately. Without the empty dependency array
+  // it ran after every render, and because the click handlers in
+  // GeneralNotifications dispatch the event directly *and* buffer it, a click
+  // while Group was already mounted was handled twice: once immediately, then
+  // again when this effect picked up the buffered copy on the next render. That
+  // issued addTimestampEnterChat twice for one click. The buffer exists only to
+  // cover the window before this component mounts, so a single drain on mount is
+  // exactly the intended scope — the direct dispatch covers every later click.
+  useEffect(() => {
+    const pending = drainPendingNotificationNav();
+    if (pending) {
+      executeEvent(pending.eventName, pending.detail);
+    }
+    // Subscribers are live from here on, so clicks are dispatched directly and
+    // must not also be buffered: a buffered copy would outlive this mount and
+    // replay on the next one. Released on unmount so the pre-mount window is
+    // covered again if this component goes away.
+    setNotificationNavHostMounted(true);
+    return () => setNotificationNavHostMounted(false);
+  }, []);
 
   const openGroupAnnouncementFromNotification = useCallback(
     (e) => {

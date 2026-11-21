@@ -25,7 +25,14 @@ import {
   useTheme,
 } from '@mui/material';
 import { useAtomValue } from 'jotai';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { balanceAtom, userInfoAtom } from '../../atoms/global';
 import defaultCharacterSpritesheetUrl from '../../assets/qortalland/default-character-spritesheet.webp';
 import characterSkin1FaceUrl from '../../assets/qortalland/character-skin-1-face.webp';
@@ -238,14 +245,16 @@ type QortalLandCharacterCustomization = {
   clothes: string;
 };
 
-type QortalLandCharacterCustomizationField = keyof QortalLandCharacterCustomization;
+type QortalLandCharacterCustomizationField =
+  keyof QortalLandCharacterCustomization;
 type QortalLandCharacterPreviewFacing = 'front' | 'right' | 'back' | 'left';
 
-const QORTAL_LAND_CHARACTER_CUSTOMIZATION_DEFAULTS: QortalLandCharacterCustomization = {
-  hair: 'default',
-  face: 'default',
-  clothes: 'default',
-};
+const QORTAL_LAND_CHARACTER_CUSTOMIZATION_DEFAULTS: QortalLandCharacterCustomization =
+  {
+    hair: 'default',
+    face: 'default',
+    clothes: 'default',
+  };
 
 const QORTAL_LAND_CHARACTER_CUSTOMIZATION_OPTIONS = {
   hair: [
@@ -268,12 +277,8 @@ const QORTAL_LAND_CHARACTER_CUSTOMIZATION_OPTIONS = {
   ],
 } as const;
 
-const QORTAL_LAND_CHARACTER_PREVIEW_FACINGS: QortalLandCharacterPreviewFacing[] = [
-  'front',
-  'right',
-  'back',
-  'left',
-];
+const QORTAL_LAND_CHARACTER_PREVIEW_FACINGS: QortalLandCharacterPreviewFacing[] =
+  ['front', 'right', 'back', 'left'];
 
 const LAND_SEND_INTERVAL_MS = 200;
 const LAND_AFK_TIMEOUT_MS = 2 * 60 * 1000;
@@ -312,11 +317,36 @@ const QORTAL_LAND_CHARACTER_SKINS: ReadonlyArray<{
     spritesheetUrl: defaultCharacterSpritesheetUrl,
     faceUrl: characterSkin1FaceUrl,
   },
-  { id: 2, label: 'Nova', spritesheetUrl: characterSkin2Url, faceUrl: characterSkin2FaceUrl },
-  { id: 3, label: 'Luna', spritesheetUrl: characterSkin3Url, faceUrl: characterSkin3FaceUrl },
-  { id: 4, label: 'Aqua', spritesheetUrl: characterSkin4Url, faceUrl: characterSkin4FaceUrl },
-  { id: 5, label: 'Amber', spritesheetUrl: characterSkin5Url, faceUrl: characterSkin5FaceUrl },
-  { id: 6, label: 'Frost', spritesheetUrl: characterSkin6Url, faceUrl: characterSkin6FaceUrl },
+  {
+    id: 2,
+    label: 'Nova',
+    spritesheetUrl: characterSkin2Url,
+    faceUrl: characterSkin2FaceUrl,
+  },
+  {
+    id: 3,
+    label: 'Luna',
+    spritesheetUrl: characterSkin3Url,
+    faceUrl: characterSkin3FaceUrl,
+  },
+  {
+    id: 4,
+    label: 'Aqua',
+    spritesheetUrl: characterSkin4Url,
+    faceUrl: characterSkin4FaceUrl,
+  },
+  {
+    id: 5,
+    label: 'Amber',
+    spritesheetUrl: characterSkin5Url,
+    faceUrl: characterSkin5FaceUrl,
+  },
+  {
+    id: 6,
+    label: 'Frost',
+    spritesheetUrl: characterSkin6Url,
+    faceUrl: characterSkin6FaceUrl,
+  },
 ];
 
 const normalizeQortalLandSkinId = (value: unknown): QortalLandSkinId => {
@@ -345,7 +375,8 @@ const LAND_CHARACTER_RENDER_SCALE = 0.56;
 const LAND_CHARACTER_LABEL_OFFSET = 248;
 const LAND_CHARACTER_AVAILABILITY_OFFSET = 42;
 const LAND_CHARACTER_CHAT_BUBBLE_OFFSET = 292;
-const QORTAL_LAND_CHARACTER_CUSTOMIZATION_STORAGE_KEY = 'qortalland.characterCustomization';
+const QORTAL_LAND_CHARACTER_CUSTOMIZATION_STORAGE_KEY =
+  'qortalland.characterCustomization';
 type LandRoomId = 'club' | 'skywalk' | 'mall' | 'park';
 const QORTAL_LAND_DEFAULT_ROOM_ID: LandRoomId = 'club';
 const QORTAL_LAND_SKYWALK_ROOM_ID: LandRoomId = 'skywalk';
@@ -417,10 +448,20 @@ const QORTAL_LAND_ROOM_LAYOUTS: Record<LandRoomId, QortalLandRoomLayout> = {
     },
     transitions: {
       clubToSkywalk: {
-        target: { roomId: QORTAL_LAND_PARK_ROOM_ID, x: 1488, y: 492, direction: 'l' },
+        target: {
+          roomId: QORTAL_LAND_PARK_ROOM_ID,
+          x: 1488,
+          y: 492,
+          direction: 'l',
+        },
       },
       skywalkToClubReturn: {
-        target: { roomId: QORTAL_LAND_DEFAULT_ROOM_ID, x: 1495, y: 374, direction: 'd' },
+        target: {
+          roomId: QORTAL_LAND_DEFAULT_ROOM_ID,
+          x: 1495,
+          y: 374,
+          direction: 'd',
+        },
       },
     },
   },
@@ -457,63 +498,100 @@ const QORTAL_LAND_ROOM_LAYOUTS: Record<LandRoomId, QortalLandRoomLayout> = {
 };
 
 const LAND_WIDTH = QORTAL_LAND_ROOM_LAYOUTS[QORTAL_LAND_DEFAULT_ROOM_ID].width;
-const LAND_HEIGHT = QORTAL_LAND_ROOM_LAYOUTS[QORTAL_LAND_DEFAULT_ROOM_ID].height;
+const LAND_HEIGHT =
+  QORTAL_LAND_ROOM_LAYOUTS[QORTAL_LAND_DEFAULT_ROOM_ID].height;
 const QORTAL_LAND_DEV_PNG_ASSET_KEY_PREFIX = 'qortalland-dev-png';
 const QORTAL_LAND_DEV_PNG_PROPS_STORAGE_KEY = 'qortalland.devPngProps';
-const QORTAL_LAND_DEV_PROCEDURAL_CLUB_SHELL_STORAGE_KEY = 'qortalland.devProceduralClubShell';
-const QORTAL_LAND_DEV_COLLISION_DEBUG_STORAGE_KEY = 'qortalland.devCollisionDebug';
+const QORTAL_LAND_DEV_PROCEDURAL_CLUB_SHELL_STORAGE_KEY =
+  'qortalland.devProceduralClubShell';
+const QORTAL_LAND_DEV_COLLISION_DEBUG_STORAGE_KEY =
+  'qortalland.devCollisionDebug';
 const QORTAL_LAND_DEV_LOOK_STORAGE_KEY = 'qortalland.devLook';
 const QORTAL_LAND_DEV_PNG_PLACEMENT_STORAGE_PREFIX = 'qortalland.devPlacement.';
 const QORTAL_LAND_DEV_ASSETS_CHANGED_EVENT = 'qortalland:devAssetsChanged';
 const QORTAL_LAND_DEVELOPMENT_CLUB_FLOOR_ASSET_ID = 'architecture/club_floor';
 const QORTAL_LAND_DEVELOPMENT_CLUB_FLOOR_PLACEMENT_ID = 'club.floor_png';
-const QORTAL_LAND_DEVELOPMENT_PARK_SKYLINE_ASSET_ID = 'architecture/park_skyline';
+const QORTAL_LAND_DEVELOPMENT_PARK_SKYLINE_ASSET_ID =
+  'architecture/park_skyline';
 const QORTAL_LAND_DEVELOPMENT_PARK_SKYLINE_PLACEMENT_ID = 'park.skyline_png';
 const QORTAL_LAND_DEVELOPMENT_PARK_FLOOR_ASSET_ID = 'architecture/park_floor';
 const QORTAL_LAND_DEVELOPMENT_PARK_FLOOR_PLACEMENT_ID = 'park.floor_png';
-const QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_CLOSED_ASSET_ID = 'architecture/park_portal_closed';
-const QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_OPEN_1_ASSET_ID = 'architecture/park_portal_open_1';
-const QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_OPEN_2_ASSET_ID = 'architecture/park_portal_open_2';
-const QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_OPEN_3_ASSET_ID = 'architecture/park_portal_open_3';
-const QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_OPEN_4_ASSET_ID = 'architecture/park_portal_open_4';
+const QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_CLOSED_ASSET_ID =
+  'architecture/park_portal_closed';
+const QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_OPEN_1_ASSET_ID =
+  'architecture/park_portal_open_1';
+const QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_OPEN_2_ASSET_ID =
+  'architecture/park_portal_open_2';
+const QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_OPEN_3_ASSET_ID =
+  'architecture/park_portal_open_3';
+const QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_OPEN_4_ASSET_ID =
+  'architecture/park_portal_open_4';
 const QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_PLACEMENT_ID = 'park.portal_png';
-const QORTAL_LAND_DEVELOPMENT_BACK_WALL_ASSET_ID = 'architecture/back_wall_main';
-const QORTAL_LAND_DEVELOPMENT_BACK_WALL_PLACEMENT_ID = 'club.back_wall_main_png';
-const QORTAL_LAND_DEVELOPMENT_LEFT_WALL_ASSET_ID = 'architecture/club_wall_left';
+const QORTAL_LAND_DEVELOPMENT_BACK_WALL_ASSET_ID =
+  'architecture/back_wall_main';
+const QORTAL_LAND_DEVELOPMENT_BACK_WALL_PLACEMENT_ID =
+  'club.back_wall_main_png';
+const QORTAL_LAND_DEVELOPMENT_LEFT_WALL_ASSET_ID =
+  'architecture/club_wall_left';
 const QORTAL_LAND_DEVELOPMENT_LEFT_WALL_PLACEMENT_ID = 'club.wall_left_png';
-const QORTAL_LAND_DEVELOPMENT_RIGHT_WALL_ASSET_ID = 'architecture/club_wall_right';
+const QORTAL_LAND_DEVELOPMENT_RIGHT_WALL_ASSET_ID =
+  'architecture/club_wall_right';
 const QORTAL_LAND_DEVELOPMENT_RIGHT_WALL_PLACEMENT_ID = 'club.wall_right_png';
-const QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_CLOSED_ASSET_ID = 'architecture/door_closed';
-const QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_SEMI_OPEN_ASSET_ID = 'architecture/door_semi_open';
-const QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_OPEN_ASSET_ID = 'architecture/door_open';
+const QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_CLOSED_ASSET_ID =
+  'architecture/door_closed';
+const QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_SEMI_OPEN_ASSET_ID =
+  'architecture/door_semi_open';
+const QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_OPEN_ASSET_ID =
+  'architecture/door_open';
 const QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_PLACEMENT_ID = 'club.skywalk_door_png';
 const QORTAL_LAND_DEVELOPMENT_CLUB_BAR_ASSET_ID = 'furniture/bar_counter_long';
-const QORTAL_LAND_DEVELOPMENT_CLUB_BAR_PLACEMENT_ID = 'club.bar_counter_long_wide_png';
-const QORTAL_LAND_DEVELOPMENT_BACK_BAR_ASSET_ID = 'technology/back_bar_unit_long';
-const QORTAL_LAND_DEVELOPMENT_BACK_BAR_PLACEMENT_ID = 'club.back_bar_unit_long_png';
+const QORTAL_LAND_DEVELOPMENT_CLUB_BAR_PLACEMENT_ID =
+  'club.bar_counter_long_wide_png';
+const QORTAL_LAND_DEVELOPMENT_BACK_BAR_ASSET_ID =
+  'technology/back_bar_unit_long';
+const QORTAL_LAND_DEVELOPMENT_BACK_BAR_PLACEMENT_ID =
+  'club.back_bar_unit_long_png';
 const QORTAL_LAND_DEVELOPMENT_DJ_BOOTH_ASSET_ID = 'technology/dj_booth';
 const QORTAL_LAND_DEVELOPMENT_DJ_BOOTH_PLACEMENT_ID = 'club.dj_booth_png';
-const QORTAL_LAND_DEVELOPMENT_SOFA_MODERN_A_TEAL_ASSET_ID = 'furniture/sofa_modern_a_teal';
-const QORTAL_LAND_DEVELOPMENT_SOFA_MODERN_A_PURPLE_ASSET_ID = 'furniture/sofa_modern_a_purple';
-const QORTAL_LAND_DEVELOPMENT_TABLE_ROUND_LOW_ASSET_ID = 'furniture/table_round_low';
-const QORTAL_LAND_DEVELOPMENT_BAR_STOOL_ROUND_ASSET_ID = 'furniture/bar_stool_round';
+const QORTAL_LAND_DEVELOPMENT_SOFA_MODERN_A_TEAL_ASSET_ID =
+  'furniture/sofa_modern_a_teal';
+const QORTAL_LAND_DEVELOPMENT_SOFA_MODERN_A_PURPLE_ASSET_ID =
+  'furniture/sofa_modern_a_purple';
+const QORTAL_LAND_DEVELOPMENT_TABLE_ROUND_LOW_ASSET_ID =
+  'furniture/table_round_low';
+const QORTAL_LAND_DEVELOPMENT_BAR_STOOL_ROUND_ASSET_ID =
+  'furniture/bar_stool_round';
 const QORTAL_LAND_DEVELOPMENT_SPEAKER_LEFT_ASSET_ID = 'technology/speaker_left';
-const QORTAL_LAND_DEVELOPMENT_SPEAKER_RIGHT_ASSET_ID = 'technology/speaker_right';
-const QORTAL_LAND_DEVELOPMENT_PLANTER_RECT_TROPICAL_ASSET_ID = 'decorations/planter_rect_tropical';
-const QORTAL_LAND_DEVELOPMENT_PLANTER_TALL_TROPICAL_ASSET_ID = 'decorations/planter_tall_tropical';
-const QORTAL_LAND_DEVELOPMENT_QORTAL_NEON_LIGHT_ASSET_ID = 'decorations/qortal_neon_light';
-const QORTAL_LAND_DEVELOPMENT_PARK_BENCH_PLANTER_LEFT_ASSET_ID = 'decorations/park_bench_planter_left';
-const QORTAL_LAND_DEVELOPMENT_PARK_TREE_ROUND_LARGE_ASSET_ID = 'decorations/park_tree_round_large';
-const QORTAL_LAND_DEVELOPMENT_PARK_TREE_ROUND_TALL_ASSET_ID = 'decorations/park_tree_round_tall';
-const QORTAL_LAND_DEVELOPMENT_PARK_TREE_PLANTER_LAMP_ASSET_ID = 'decorations/park_tree_planter_lamp';
-const QORTAL_LAND_DEVELOPMENT_PARK_FOUNTAIN_BLUE_ASSET_ID = 'decorations/park_fountain_blue';
-const QORTAL_LAND_DEVELOPMENT_PARK_FOUNTAIN_BLUE_PLACEMENT_ID = 'park.fountain_blue_png';
-const QORTAL_LAND_DEVELOPMENT_PARK_PLANTER_ROW_TREES_ASSET_ID = 'decorations/park_planter_row_trees';
+const QORTAL_LAND_DEVELOPMENT_SPEAKER_RIGHT_ASSET_ID =
+  'technology/speaker_right';
+const QORTAL_LAND_DEVELOPMENT_PLANTER_RECT_TROPICAL_ASSET_ID =
+  'decorations/planter_rect_tropical';
+const QORTAL_LAND_DEVELOPMENT_PLANTER_TALL_TROPICAL_ASSET_ID =
+  'decorations/planter_tall_tropical';
+const QORTAL_LAND_DEVELOPMENT_QORTAL_NEON_LIGHT_ASSET_ID =
+  'decorations/qortal_neon_light';
+const QORTAL_LAND_DEVELOPMENT_PARK_BENCH_PLANTER_LEFT_ASSET_ID =
+  'decorations/park_bench_planter_left';
+const QORTAL_LAND_DEVELOPMENT_PARK_TREE_ROUND_LARGE_ASSET_ID =
+  'decorations/park_tree_round_large';
+const QORTAL_LAND_DEVELOPMENT_PARK_TREE_ROUND_TALL_ASSET_ID =
+  'decorations/park_tree_round_tall';
+const QORTAL_LAND_DEVELOPMENT_PARK_TREE_PLANTER_LAMP_ASSET_ID =
+  'decorations/park_tree_planter_lamp';
+const QORTAL_LAND_DEVELOPMENT_PARK_FOUNTAIN_BLUE_ASSET_ID =
+  'decorations/park_fountain_blue';
+const QORTAL_LAND_DEVELOPMENT_PARK_FOUNTAIN_BLUE_PLACEMENT_ID =
+  'park.fountain_blue_png';
+const QORTAL_LAND_DEVELOPMENT_PARK_PLANTER_ROW_TREES_ASSET_ID =
+  'decorations/park_planter_row_trees';
 const QORTAL_LAND_DEVELOPMENT_PARK_PLANTER_ROW_TREES_PLACEMENT_ID =
   'park.planter_row_trees_png';
-const QORTAL_LAND_DEVELOPMENT_PARK_PLANTER_CORNER_TREES_ASSET_ID = 'decorations/park_planter_corner_trees';
-const QORTAL_LAND_DEVELOPMENT_PARK_BENCH_STRAIGHT_ASSET_ID = 'furniture/park_bench_straight';
-const QORTAL_LAND_DEVELOPMENT_PARK_BENCH_CURVED_ASSET_ID = 'furniture/park_bench_curved';
+const QORTAL_LAND_DEVELOPMENT_PARK_PLANTER_CORNER_TREES_ASSET_ID =
+  'decorations/park_planter_corner_trees';
+const QORTAL_LAND_DEVELOPMENT_PARK_BENCH_STRAIGHT_ASSET_ID =
+  'furniture/park_bench_straight';
+const QORTAL_LAND_DEVELOPMENT_PARK_BENCH_CURVED_ASSET_ID =
+  'furniture/park_bench_curved';
 const QORTAL_LAND_DEVELOPMENT_DANCE_FLOOR_ASSET_ID = 'lighting/dance_floor';
 const QORTAL_LAND_DEVELOPMENT_SOFA_MODERN_A_ASSET_IDS = [
   QORTAL_LAND_DEVELOPMENT_SOFA_MODERN_A_TEAL_ASSET_ID,
@@ -602,13 +680,13 @@ type QortalLandDevelopmentPngPropPlacement = {
 };
 
 type QortalLandDevelopmentPlacementCollision = {
-    shape: 'ellipse' | 'rect';
-    offsetX?: number;
-    offsetY?: number;
-    width: number;
-    height: number;
-    paddingX?: number;
-    paddingY?: number;
+  shape: 'ellipse' | 'rect';
+  offsetX?: number;
+  offsetY?: number;
+  width: number;
+  height: number;
+  paddingX?: number;
+  paddingY?: number;
 };
 
 type QortalLandDevelopmentLookSettings = {
@@ -619,13 +697,14 @@ type QortalLandDevelopmentLookSettings = {
   shadow: number;
 };
 
-const QORTAL_LAND_DEVELOPMENT_LOOK_DEFAULTS: QortalLandDevelopmentLookSettings = {
-  enabled: true,
-  brightness: 1.1,
-  contrast: 1.05,
-  saturation: 1,
-  shadow: 0.1,
-};
+const QORTAL_LAND_DEVELOPMENT_LOOK_DEFAULTS: QortalLandDevelopmentLookSettings =
+  {
+    enabled: true,
+    brightness: 1.1,
+    contrast: 1.05,
+    saturation: 1,
+    shadow: 0.1,
+  };
 
 const qortalLandDevelopmentPngModules = (import.meta as any).glob(
   '../../assets/qortalland/source/**/*.png',
@@ -647,25 +726,25 @@ const qortalLandDevelopmentWebpUrlById = new Map(
   })
 );
 
-const qortalLandDevelopmentPngAssets: QortalLandDevelopmentPngAsset[] = Object.entries(
-  qortalLandDevelopmentPngModules
-).map(([path, url]) => {
-  const id = path
-    .replace(/^.*\/qortalland\/source\//, '')
-    .replace(/\.png$/i, '')
-    .replace(/\\/g, '/');
-  const optimizedUrl = qortalLandDevelopmentWebpUrlById.get(id);
-  const renderScale = optimizedUrl && QORTAL_LAND_OPTIMIZED_ASSET_DIMENSIONS[id]
-    ? qortalLandOptimizedAssetRenderScale(id)
-    : { x: 1, y: 1 };
-  return {
-    id,
-    path,
-    url: optimizedUrl ?? url,
-    renderScaleX: renderScale.x,
-    renderScaleY: renderScale.y,
-  };
-});
+const qortalLandDevelopmentPngAssets: QortalLandDevelopmentPngAsset[] =
+  Object.entries(qortalLandDevelopmentPngModules).map(([path, url]) => {
+    const id = path
+      .replace(/^.*\/qortalland\/source\//, '')
+      .replace(/\.png$/i, '')
+      .replace(/\\/g, '/');
+    const optimizedUrl = qortalLandDevelopmentWebpUrlById.get(id);
+    const renderScale =
+      optimizedUrl && QORTAL_LAND_OPTIMIZED_ASSET_DIMENSIONS[id]
+        ? qortalLandOptimizedAssetRenderScale(id)
+        : { x: 1, y: 1 };
+    return {
+      id,
+      path,
+      url: optimizedUrl ?? url,
+      renderScaleX: renderScale.x,
+      renderScaleY: renderScale.y,
+    };
+  });
 
 const qortalLandDevelopmentPngAssetById = new Map(
   qortalLandDevelopmentPngAssets.map((asset) => [asset.id, asset])
@@ -692,62 +771,242 @@ const qortalLandChatEmojiTextureKey = (emojiKey: string): string =>
   `qortalland-chat-emoji:${emojiKey}`;
 
 const QORTAL_LAND_CHAT_EMOJIS: LandChatEmoji[] = [
-  { key: 'smile', label: 'Smile', fileName: 'smile.gif', shortcuts: [':)', ':smile:'] },
-  { key: 'smiley', label: 'Smiley', fileName: 'smiley.gif', shortcuts: [':D', ':smiley:'] },
-  { key: 'lol', label: 'Laugh', fileName: 'lol.gif', shortcuts: [':))', ':lol:'] },
-  { key: 'rofl', label: 'ROFL', fileName: 'rofl.gif', shortcuts: ['=))', ':rofl:'] },
-  { key: 'wink', label: 'Wink', fileName: 'wink.gif', shortcuts: [';)', ':wink:'] },
-  { key: 'cry', label: 'Cry', fileName: 'cry.gif', shortcuts: [":'(", ':cry:'] },
-  { key: 'bawling', label: 'Bawling', fileName: 'bawling.gif', shortcuts: [":'((", ':bawling:'] },
-  { key: 'grin', label: 'Grin', fileName: 'grin.gif', shortcuts: [':>', ':grin:'] },
-  { key: 'triumph', label: 'Triumph', fileName: 'triumph.gif', shortcuts: ['\\:D/', ':triumph:'] },
-  { key: 'clown', label: 'Clown', fileName: 'joker.gif', shortcuts: [':0)', ':clown:', ':joker:'] },
-  { key: 'love', label: 'Love', fileName: 'kiss.gif', shortcuts: [':X', ':love:'] },
-  { key: 'heart', label: 'Heart', fileName: 'heart.gif', shortcuts: ['<3', ':heart:'] },
-  { key: 'hug', label: 'Hug', fileName: 'hug.gif', shortcuts: ['>:D<', ':hug:'] },
+  {
+    key: 'smile',
+    label: 'Smile',
+    fileName: 'smile.gif',
+    shortcuts: [':)', ':smile:'],
+  },
+  {
+    key: 'smiley',
+    label: 'Smiley',
+    fileName: 'smiley.gif',
+    shortcuts: [':D', ':smiley:'],
+  },
+  {
+    key: 'lol',
+    label: 'Laugh',
+    fileName: 'lol.gif',
+    shortcuts: [':))', ':lol:'],
+  },
+  {
+    key: 'rofl',
+    label: 'ROFL',
+    fileName: 'rofl.gif',
+    shortcuts: ['=))', ':rofl:'],
+  },
+  {
+    key: 'wink',
+    label: 'Wink',
+    fileName: 'wink.gif',
+    shortcuts: [';)', ':wink:'],
+  },
+  {
+    key: 'cry',
+    label: 'Cry',
+    fileName: 'cry.gif',
+    shortcuts: [":'(", ':cry:'],
+  },
+  {
+    key: 'bawling',
+    label: 'Bawling',
+    fileName: 'bawling.gif',
+    shortcuts: [":'((", ':bawling:'],
+  },
+  {
+    key: 'grin',
+    label: 'Grin',
+    fileName: 'grin.gif',
+    shortcuts: [':>', ':grin:'],
+  },
+  {
+    key: 'triumph',
+    label: 'Triumph',
+    fileName: 'triumph.gif',
+    shortcuts: ['\\:D/', ':triumph:'],
+  },
+  {
+    key: 'clown',
+    label: 'Clown',
+    fileName: 'joker.gif',
+    shortcuts: [':0)', ':clown:', ':joker:'],
+  },
+  {
+    key: 'love',
+    label: 'Love',
+    fileName: 'kiss.gif',
+    shortcuts: [':X', ':love:'],
+  },
+  {
+    key: 'heart',
+    label: 'Heart',
+    fileName: 'heart.gif',
+    shortcuts: ['<3', ':heart:'],
+  },
+  {
+    key: 'hug',
+    label: 'Hug',
+    fileName: 'hug.gif',
+    shortcuts: ['>:D<', ':hug:'],
+  },
   {
     key: 'how_interesting',
     label: 'How interesting',
     fileName: 'how_interesting.gif',
     shortcuts: ['8->', ':how interesting:', ':how_interesting:'],
   },
-  { key: 'heartbreak', label: 'Heartbreak', fileName: 'heartbreak.gif', shortcuts: ['</3', ':heartbreak:'] },
-  { key: 'rage', label: 'Rage', fileName: 'rage.gif', shortcuts: ['>_<', ':rage:'] },
-  { key: 'pig', label: 'Pig', fileName: 'pig.gif', shortcuts: [':@)', ':pig:'] },
-  { key: 'kiss', label: 'Kiss', fileName: 'kiss.gif', shortcuts: [':*', ':kiss:'] },
-  { key: 'confused', label: 'Confused', fileName: 'confused.gif', shortcuts: [':/', ':confused:'] },
-  { key: 'confounded', label: 'Confounded', fileName: 'confounded.gif', shortcuts: [':s', ':confounded:'] },
+  {
+    key: 'heartbreak',
+    label: 'Heartbreak',
+    fileName: 'heartbreak.gif',
+    shortcuts: ['</3', ':heartbreak:'],
+  },
+  {
+    key: 'rage',
+    label: 'Rage',
+    fileName: 'rage.gif',
+    shortcuts: ['>_<', ':rage:'],
+  },
+  {
+    key: 'pig',
+    label: 'Pig',
+    fileName: 'pig.gif',
+    shortcuts: [':@)', ':pig:'],
+  },
+  {
+    key: 'kiss',
+    label: 'Kiss',
+    fileName: 'kiss.gif',
+    shortcuts: [':*', ':kiss:'],
+  },
+  {
+    key: 'confused',
+    label: 'Confused',
+    fileName: 'confused.gif',
+    shortcuts: [':/', ':confused:'],
+  },
+  {
+    key: 'confounded',
+    label: 'Confounded',
+    fileName: 'confounded.gif',
+    shortcuts: [':s', ':confounded:'],
+  },
   {
     key: 'get_outta_here',
     label: 'Get outta here',
     fileName: 'get_outta_here.gif',
     shortcuts: [':-J', ':get_outta_here:'],
   },
-  { key: 'loser', label: 'Loser', fileName: 'loser.gif', shortcuts: [':-L', ':loser:', ':looser:'] },
-  { key: 'whistle', label: 'Whistle', fileName: 'whistle.gif', shortcuts: [':-"', ':whistle:'] },
-  { key: 'neutral', label: 'Neutral', fileName: 'neutral.gif', shortcuts: [':|', ':neutral:'] },
-  { key: 'naughty', label: 'Naughty', fileName: 'naughty.gif', shortcuts: ['>:)', ':naughty:'] },
-  { key: 'relaxed', label: 'Relaxed', fileName: 'relaxed.gif', shortcuts: [';;)', ':relaxed:'] },
-  { key: 'i_dunno', label: 'I dunno', fileName: 'i_dunno.gif', shortcuts: [':-??', ':i_dunno:'] },
-  { key: 'pensive', label: 'Pensive', fileName: 'pensive.gif', shortcuts: [':-?', ':pensive:'] },
-  { key: 'money', label: 'Money', fileName: 'money.gif', shortcuts: [':-$', ':money:'] },
-  { key: 'peace', label: 'Peace', fileName: 'peace.gif', shortcuts: [':->-', ':peace:'] },
-  { key: 'tongue', label: 'Tongue', fileName: 'tongue.gif', shortcuts: [':p', ':tongue:'] },
-  { key: 'time_out', label: 'Time out', fileName: 'time_out.gif', shortcuts: [':-T', ':time_out:'] },
-  { key: 'dog', label: 'Dog', fileName: 'dog.gif', shortcuts: [':o3', ':dog:'] },
-  { key: 'angry', label: 'Angry', fileName: 'angry.gif', shortcuts: [':-W', ':angry:'] },
-  { key: 'blush', label: 'Blush', fileName: 'blush.gif', shortcuts: [':3', ':blush:'] },
-  { key: 'sad', label: 'Sad', fileName: 'frowning.gif', shortcuts: [':(', ':sad:'] },
-  { key: 'surprised', label: 'Surprised', fileName: 'open_mouth.gif', shortcuts: [':o', ':surprised:'] },
-  { key: 'cool', label: 'Cool', fileName: 'sunglasses.gif', shortcuts: ['B)', '8-)', ':cool:'] },
+  {
+    key: 'loser',
+    label: 'Loser',
+    fileName: 'loser.gif',
+    shortcuts: [':-L', ':loser:', ':looser:'],
+  },
+  {
+    key: 'whistle',
+    label: 'Whistle',
+    fileName: 'whistle.gif',
+    shortcuts: [':-"', ':whistle:'],
+  },
+  {
+    key: 'neutral',
+    label: 'Neutral',
+    fileName: 'neutral.gif',
+    shortcuts: [':|', ':neutral:'],
+  },
+  {
+    key: 'naughty',
+    label: 'Naughty',
+    fileName: 'naughty.gif',
+    shortcuts: ['>:)', ':naughty:'],
+  },
+  {
+    key: 'relaxed',
+    label: 'Relaxed',
+    fileName: 'relaxed.gif',
+    shortcuts: [';;)', ':relaxed:'],
+  },
+  {
+    key: 'i_dunno',
+    label: 'I dunno',
+    fileName: 'i_dunno.gif',
+    shortcuts: [':-??', ':i_dunno:'],
+  },
+  {
+    key: 'pensive',
+    label: 'Pensive',
+    fileName: 'pensive.gif',
+    shortcuts: [':-?', ':pensive:'],
+  },
+  {
+    key: 'money',
+    label: 'Money',
+    fileName: 'money.gif',
+    shortcuts: [':-$', ':money:'],
+  },
+  {
+    key: 'peace',
+    label: 'Peace',
+    fileName: 'peace.gif',
+    shortcuts: [':->-', ':peace:'],
+  },
+  {
+    key: 'tongue',
+    label: 'Tongue',
+    fileName: 'tongue.gif',
+    shortcuts: [':p', ':tongue:'],
+  },
+  {
+    key: 'time_out',
+    label: 'Time out',
+    fileName: 'time_out.gif',
+    shortcuts: [':-T', ':time_out:'],
+  },
+  {
+    key: 'dog',
+    label: 'Dog',
+    fileName: 'dog.gif',
+    shortcuts: [':o3', ':dog:'],
+  },
+  {
+    key: 'angry',
+    label: 'Angry',
+    fileName: 'angry.gif',
+    shortcuts: [':-W', ':angry:'],
+  },
+  {
+    key: 'blush',
+    label: 'Blush',
+    fileName: 'blush.gif',
+    shortcuts: [':3', ':blush:'],
+  },
+  {
+    key: 'sad',
+    label: 'Sad',
+    fileName: 'frowning.gif',
+    shortcuts: [':(', ':sad:'],
+  },
+  {
+    key: 'surprised',
+    label: 'Surprised',
+    fileName: 'open_mouth.gif',
+    shortcuts: [':o', ':surprised:'],
+  },
+  {
+    key: 'cool',
+    label: 'Cool',
+    fileName: 'sunglasses.gif',
+    shortcuts: ['B)', '8-)', ':cool:'],
+  },
 ];
 
-const QORTAL_LAND_AVAILABLE_CHAT_EMOJIS = QORTAL_LAND_CHAT_EMOJIS.filter((emoji) =>
-  qortalLandChatEmojiUrlByFileName.has(emoji.fileName)
+const QORTAL_LAND_AVAILABLE_CHAT_EMOJIS = QORTAL_LAND_CHAT_EMOJIS.filter(
+  (emoji) => qortalLandChatEmojiUrlByFileName.has(emoji.fileName)
 );
 
-const QORTAL_LAND_CHAT_EMOJI_SHORTCUTS = QORTAL_LAND_CHAT_EMOJIS.flatMap((emoji) =>
-  emoji.shortcuts.map((shortcut) => ({ emoji, shortcut }))
+const QORTAL_LAND_CHAT_EMOJI_SHORTCUTS = QORTAL_LAND_CHAT_EMOJIS.flatMap(
+  (emoji) => emoji.shortcuts.map((shortcut) => ({ emoji, shortcut }))
 ).sort((a, b) => b.shortcut.length - a.shortcut.length);
 
 const splitLandChatEmojiText = (
@@ -760,12 +1019,14 @@ const splitLandChatEmojiText = (
   let index = 0;
 
   while (index < text.length) {
-    const match = QORTAL_LAND_CHAT_EMOJI_SHORTCUTS.find(({ shortcut }) =>
-      lowerText.startsWith(shortcut.toLowerCase(), index) &&
-      (index === 0 || /\s/.test(text[index - 1])) &&
-      (options.requireTrailingWhitespace
-        ? /\s/.test(text[index + shortcut.length] || '')
-        : index + shortcut.length === text.length || /\s/.test(text[index + shortcut.length] || ''))
+    const match = QORTAL_LAND_CHAT_EMOJI_SHORTCUTS.find(
+      ({ shortcut }) =>
+        lowerText.startsWith(shortcut.toLowerCase(), index) &&
+        (index === 0 || /\s/.test(text[index - 1])) &&
+        (options.requireTrailingWhitespace
+          ? /\s/.test(text[index + shortcut.length] || '')
+          : index + shortcut.length === text.length ||
+            /\s/.test(text[index + shortcut.length] || ''))
     );
 
     if (!match) {
@@ -778,7 +1039,11 @@ const splitLandChatEmojiText = (
       parts.push({ type: 'text', text: pendingText });
       pendingText = '';
     }
-    parts.push({ type: 'emoji', emoji: match.emoji, shortcut: text.slice(index, index + match.shortcut.length) });
+    parts.push({
+      type: 'emoji',
+      emoji: match.emoji,
+      shortcut: text.slice(index, index + match.shortcut.length),
+    });
     index += match.shortcut.length;
   }
 
@@ -839,52 +1104,59 @@ const clampQortalLandLookValue = (
   return Math.max(min, Math.min(max, value));
 };
 
-const readQortalLandDevelopmentLookSettings = (): QortalLandDevelopmentLookSettings => {
-  if (typeof window === 'undefined') return { ...QORTAL_LAND_DEVELOPMENT_LOOK_DEFAULTS };
-  try {
-    const raw = window.localStorage.getItem(QORTAL_LAND_DEV_LOOK_STORAGE_KEY);
-    if (!raw) return { ...QORTAL_LAND_DEVELOPMENT_LOOK_DEFAULTS };
-    const parsed = JSON.parse(raw) as Partial<QortalLandDevelopmentLookSettings>;
-    return {
-      enabled:
-        typeof parsed.enabled === 'boolean'
-          ? parsed.enabled
-          : QORTAL_LAND_DEVELOPMENT_LOOK_DEFAULTS.enabled,
-      brightness: clampQortalLandLookValue(
-        Number(parsed.brightness),
-        0.65,
-        1.25,
-        QORTAL_LAND_DEVELOPMENT_LOOK_DEFAULTS.brightness
-      ),
-      contrast: clampQortalLandLookValue(
-        Number(parsed.contrast),
-        0.75,
-        1.55,
-        QORTAL_LAND_DEVELOPMENT_LOOK_DEFAULTS.contrast
-      ),
-      saturation: clampQortalLandLookValue(
-        Number(parsed.saturation),
-        0.75,
-        1.65,
-        QORTAL_LAND_DEVELOPMENT_LOOK_DEFAULTS.saturation
-      ),
-      shadow: clampQortalLandLookValue(
-        Number(parsed.shadow),
-        0,
-        0.5,
-        QORTAL_LAND_DEVELOPMENT_LOOK_DEFAULTS.shadow
-      ),
-    };
-  } catch {
-    return { ...QORTAL_LAND_DEVELOPMENT_LOOK_DEFAULTS };
-  }
-};
+const readQortalLandDevelopmentLookSettings =
+  (): QortalLandDevelopmentLookSettings => {
+    if (typeof window === 'undefined')
+      return { ...QORTAL_LAND_DEVELOPMENT_LOOK_DEFAULTS };
+    try {
+      const raw = window.localStorage.getItem(QORTAL_LAND_DEV_LOOK_STORAGE_KEY);
+      if (!raw) return { ...QORTAL_LAND_DEVELOPMENT_LOOK_DEFAULTS };
+      const parsed = JSON.parse(
+        raw
+      ) as Partial<QortalLandDevelopmentLookSettings>;
+      return {
+        enabled:
+          typeof parsed.enabled === 'boolean'
+            ? parsed.enabled
+            : QORTAL_LAND_DEVELOPMENT_LOOK_DEFAULTS.enabled,
+        brightness: clampQortalLandLookValue(
+          Number(parsed.brightness),
+          0.65,
+          1.25,
+          QORTAL_LAND_DEVELOPMENT_LOOK_DEFAULTS.brightness
+        ),
+        contrast: clampQortalLandLookValue(
+          Number(parsed.contrast),
+          0.75,
+          1.55,
+          QORTAL_LAND_DEVELOPMENT_LOOK_DEFAULTS.contrast
+        ),
+        saturation: clampQortalLandLookValue(
+          Number(parsed.saturation),
+          0.75,
+          1.65,
+          QORTAL_LAND_DEVELOPMENT_LOOK_DEFAULTS.saturation
+        ),
+        shadow: clampQortalLandLookValue(
+          Number(parsed.shadow),
+          0,
+          0.5,
+          QORTAL_LAND_DEVELOPMENT_LOOK_DEFAULTS.shadow
+        ),
+      };
+    } catch {
+      return { ...QORTAL_LAND_DEVELOPMENT_LOOK_DEFAULTS };
+    }
+  };
 
 const writeQortalLandDevelopmentLookSettings = (
   settings: QortalLandDevelopmentLookSettings
 ): void => {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(QORTAL_LAND_DEV_LOOK_STORAGE_KEY, JSON.stringify(settings));
+  window.localStorage.setItem(
+    QORTAL_LAND_DEV_LOOK_STORAGE_KEY,
+    JSON.stringify(settings)
+  );
 };
 
 const qortalLandCharacterCustomizationStorageKey = (address: string): string =>
@@ -914,9 +1186,12 @@ const writeQortalLandCharacterSkin = (
 const readQortalLandCharacterCustomization = (
   address: string
 ): QortalLandCharacterCustomization => {
-  if (typeof window === 'undefined') return { ...QORTAL_LAND_CHARACTER_CUSTOMIZATION_DEFAULTS };
+  if (typeof window === 'undefined')
+    return { ...QORTAL_LAND_CHARACTER_CUSTOMIZATION_DEFAULTS };
   try {
-    const raw = window.localStorage.getItem(qortalLandCharacterCustomizationStorageKey(address));
+    const raw = window.localStorage.getItem(
+      qortalLandCharacterCustomizationStorageKey(address)
+    );
     if (!raw) return { ...QORTAL_LAND_CHARACTER_CUSTOMIZATION_DEFAULTS };
     const parsed = JSON.parse(raw) as Partial<QortalLandCharacterCustomization>;
     const hasOption = (
@@ -976,7 +1251,20 @@ const readQortalLandDevelopmentPngPlacementOverride = (
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     const override: Partial<QortalLandDevelopmentPngPropPlacement> = {};
-    for (const key of ['x', 'y', 'depth', 'depthOffset', 'originX', 'originY', 'scale', 'scaleX', 'scaleY', 'alpha', 'count', 'spacing'] as const) {
+    for (const key of [
+      'x',
+      'y',
+      'depth',
+      'depthOffset',
+      'originX',
+      'originY',
+      'scale',
+      'scaleX',
+      'scaleY',
+      'alpha',
+      'count',
+      'spacing',
+    ] as const) {
       const value = Number(parsed[key]);
       if (Number.isFinite(value)) {
         override[key] = value;
@@ -987,8 +1275,18 @@ const readQortalLandDevelopmentPngPlacementOverride = (
     }
     if (parsed.warp && typeof parsed.warp === 'object') {
       const warpSource = parsed.warp as Record<string, unknown>;
-      const warp: NonNullable<QortalLandDevelopmentPngPropPlacement['warp']> = {};
-      for (const key of ['tlX', 'tlY', 'trX', 'trY', 'brX', 'brY', 'blX', 'blY'] as const) {
+      const warp: NonNullable<QortalLandDevelopmentPngPropPlacement['warp']> =
+        {};
+      for (const key of [
+        'tlX',
+        'tlY',
+        'trX',
+        'trY',
+        'brX',
+        'brY',
+        'blX',
+        'blY',
+      ] as const) {
         const value = Number(warpSource[key]);
         if (Number.isFinite(value)) {
           warp[key] = value;
@@ -1013,7 +1311,9 @@ const writeQortalLandDevelopmentPngPlacementOverride = (
   );
 };
 
-const clearQortalLandDevelopmentPngPlacementOverride = (placementId: string): void => {
+const clearQortalLandDevelopmentPngPlacementOverride = (
+  placementId: string
+): void => {
   if (typeof window === 'undefined') return;
   window.localStorage.removeItem(
     `${QORTAL_LAND_DEV_PNG_PLACEMENT_STORAGE_PREFIX}${placementId}`
@@ -1027,29 +1327,51 @@ const notifyQortalLandDevelopmentAssetsChanged = (): void => {
 
 const shouldShowQortalLandDevelopmentPngProps = (): boolean => {
   if (typeof window === 'undefined') return false;
-  const queryMode = new URLSearchParams(window.location.search).get('qortallandAssets');
-  if (queryMode === 'png' || queryMode === 'props' || queryMode === '1' || queryMode === 'true') {
+  const queryMode = new URLSearchParams(window.location.search).get(
+    'qortallandAssets'
+  );
+  if (
+    queryMode === 'png' ||
+    queryMode === 'props' ||
+    queryMode === '1' ||
+    queryMode === 'true'
+  ) {
     return true;
   }
-  if (queryMode === 'procedural' || queryMode === '0' || queryMode === 'false') {
+  if (
+    queryMode === 'procedural' ||
+    queryMode === '0' ||
+    queryMode === 'false'
+  ) {
     return false;
   }
-  return window.localStorage.getItem(QORTAL_LAND_DEV_PNG_PROPS_STORAGE_KEY) !== '0';
+  return (
+    window.localStorage.getItem(QORTAL_LAND_DEV_PNG_PROPS_STORAGE_KEY) !== '0'
+  );
 };
 
 const shouldShowQortalLandProceduralClubShell = (): boolean => {
   if (typeof window === 'undefined') return false;
-  return window.localStorage.getItem(QORTAL_LAND_DEV_PROCEDURAL_CLUB_SHELL_STORAGE_KEY) === '1';
+  return (
+    window.localStorage.getItem(
+      QORTAL_LAND_DEV_PROCEDURAL_CLUB_SHELL_STORAGE_KEY
+    ) === '1'
+  );
 };
 
 const shouldShowQortalLandCollisionDebug = (): boolean => {
   if (typeof window === 'undefined') return false;
-  return window.localStorage.getItem(QORTAL_LAND_DEV_COLLISION_DEBUG_STORAGE_KEY) === '1';
+  return (
+    window.localStorage.getItem(QORTAL_LAND_DEV_COLLISION_DEBUG_STORAGE_KEY) ===
+    '1'
+  );
 };
 
 const shouldUseDevelopmentClubBarPng = (): boolean =>
   shouldShowQortalLandDevelopmentPngProps() &&
-  qortalLandDevelopmentPngAssetById.has(QORTAL_LAND_DEVELOPMENT_CLUB_BAR_ASSET_ID);
+  qortalLandDevelopmentPngAssetById.has(
+    QORTAL_LAND_DEVELOPMENT_CLUB_BAR_ASSET_ID
+  );
 
 const shouldUseDevelopmentClubSofasPng = (): boolean =>
   shouldShowQortalLandDevelopmentPngProps() &&
@@ -1057,788 +1379,813 @@ const shouldUseDevelopmentClubSofasPng = (): boolean =>
     qortalLandDevelopmentPngAssetById.has(assetId)
   );
 
-const QORTAL_LAND_DEVELOPMENT_CLUB_FLOOR_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement = {
-  id: QORTAL_LAND_DEVELOPMENT_CLUB_FLOOR_PLACEMENT_ID,
-  assetId: QORTAL_LAND_DEVELOPMENT_CLUB_FLOOR_ASSET_ID,
-  roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
-  x: 0,
-  y: 0,
-  depthMode: 'fixed',
-  depth: -95,
-  originX: 0,
-  originY: 0,
-  scale: 1,
-};
-
-const QORTAL_LAND_DEVELOPMENT_PARK_SKYLINE_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement = {
-  id: QORTAL_LAND_DEVELOPMENT_PARK_SKYLINE_PLACEMENT_ID,
-  assetId: QORTAL_LAND_DEVELOPMENT_PARK_SKYLINE_ASSET_ID,
-  roomIds: [QORTAL_LAND_PARK_ROOM_ID],
-  x: 900,
-  y: 282,
-  depthMode: 'fixed',
-  depth: -99,
-  originX: 0.5,
-  originY: 1,
-  scale: 0.98,
-  alpha: 1,
-};
-
-const QORTAL_LAND_DEVELOPMENT_PARK_FLOOR_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement = {
-  id: QORTAL_LAND_DEVELOPMENT_PARK_FLOOR_PLACEMENT_ID,
-  assetId: QORTAL_LAND_DEVELOPMENT_PARK_FLOOR_ASSET_ID,
-  roomIds: [QORTAL_LAND_PARK_ROOM_ID],
-  x: 900,
-  y: 704,
-  depthMode: 'fixed',
-  depth: -95,
-  originX: 0.5,
-  originY: 1,
-  scale: 0.946,
-};
-
-const QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement = {
-  id: QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_PLACEMENT_ID,
-  assetId: QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_CLOSED_ASSET_ID,
-  roomIds: [QORTAL_LAND_PARK_ROOM_ID],
-  x: 551,
-  y: 330,
-  depthMode: 'fixed',
-  depth: 200,
-  originX: 0.5,
-  originY: 1,
-  scale: 0.24,
-  alpha: 1,
-  collisions: [
-    {
-      shape: 'rect',
-      offsetX: -250,
-      offsetY: -92,
-      width: 88,
-      height: 740,
-    },
-    {
-      shape: 'rect',
-      offsetX: 305,
-      offsetY: -92,
-      width: 88,
-      height: 740,
-    },
-  ],
-};
-
-const QORTAL_LAND_DEVELOPMENT_BACK_WALL_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement = {
-  id: QORTAL_LAND_DEVELOPMENT_BACK_WALL_PLACEMENT_ID,
-  assetId: QORTAL_LAND_DEVELOPMENT_BACK_WALL_ASSET_ID,
-  roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
-  x: 901,
-  y: 314,
-  depthMode: 'fixed',
-  depth: -100,
-  originX: 0.5,
-  originY: 1,
-  scale: 0.9,
-};
-
-const QORTAL_LAND_DEVELOPMENT_LEFT_WALL_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement = {
-  id: QORTAL_LAND_DEVELOPMENT_LEFT_WALL_PLACEMENT_ID,
-  assetId: QORTAL_LAND_DEVELOPMENT_LEFT_WALL_ASSET_ID,
-  roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
-  x: 188,
-  y: 116,
-  depthMode: 'fixed',
-  depth: -98,
-  originX: 0.464,
-  originY: 0.105,
-  scale: 1.09,
-};
-
-const QORTAL_LAND_DEVELOPMENT_RIGHT_WALL_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement = {
-  id: QORTAL_LAND_DEVELOPMENT_RIGHT_WALL_PLACEMENT_ID,
-  assetId: QORTAL_LAND_DEVELOPMENT_RIGHT_WALL_ASSET_ID,
-  roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
-  x: 1621,
-  y: 39,
-  depthMode: 'fixed',
-  depth: -98,
-  originX: 0.583,
-  originY: -0.004,
-  scale: 1.09,
-};
-
-const QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement = {
-  id: QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_PLACEMENT_ID,
-  assetId: QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_CLOSED_ASSET_ID,
-  roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
-  x: 1593,
-  y: 362,
-  depthMode: 'fixed',
-  depth: -82,
-  originX: 0.011,
-  originY: 0.382,
-  scale: 0.79,
-  warp: {
-    tlX: 11,
-    tlY: 0,
-    trX: 0,
-    trY: 0,
-    brX: 0,
-    brY: 11,
-    blX: 10,
-    blY: 8,
-  },
-};
-
-const QORTAL_LAND_DEVELOPMENT_CLUB_BAR_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement = {
-  id: QORTAL_LAND_DEVELOPMENT_CLUB_BAR_PLACEMENT_ID,
-  assetId: QORTAL_LAND_DEVELOPMENT_CLUB_BAR_ASSET_ID,
-  roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
-  x: 900,
-  y: 400,
-  depthMode: 'fixed',
-  depth: 370,
-  originX: 0.5,
-  originY: 0.649,
-  scaleX: 0.552,
-  scaleY: 0.379,
-  collision: {
-    shape: 'rect',
-    offsetY: -72,
-    width: 1370,
-    height: 165,
-    paddingY: -7,
-  },
-};
-
-const QORTAL_LAND_DEVELOPMENT_BACK_BAR_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement = {
-  id: QORTAL_LAND_DEVELOPMENT_BACK_BAR_PLACEMENT_ID,
-  assetId: QORTAL_LAND_DEVELOPMENT_BACK_BAR_ASSET_ID,
-  roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
-  x: 900,
-  y: 184,
-  depthMode: 'fixed',
-  depth: 330,
-  originX: 0.5,
-  originY: 0.5,
-  scale: 0.37,
-};
-
-const QORTAL_LAND_DEVELOPMENT_DJ_BOOTH_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement = {
-  id: QORTAL_LAND_DEVELOPMENT_DJ_BOOTH_PLACEMENT_ID,
-  assetId: QORTAL_LAND_DEVELOPMENT_DJ_BOOTH_ASSET_ID,
-  roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
-  x: 901,
-  y: 277,
-  depthMode: 'fixed',
-  depth: 400,
-  originX: 0.512,
-  originY: 0.724,
-  scale: 0.14,
-  contactShadow: {
-    offsetY: 11,
-    width: 220,
-    height: 14,
-    alpha: 0.32,
-    depth: 385,
-  },
-};
-
-const QORTAL_LAND_DEVELOPMENT_SOFA_MODERN_A_DEFAULT_PLACEMENTS: QortalLandDevelopmentPngPropPlacement[] = [
+const QORTAL_LAND_DEVELOPMENT_CLUB_FLOOR_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement =
   {
-    id: 'club.sofa_modern_a_teal_png',
-    assetId: QORTAL_LAND_DEVELOPMENT_SOFA_MODERN_A_TEAL_ASSET_ID,
+    id: QORTAL_LAND_DEVELOPMENT_CLUB_FLOOR_PLACEMENT_ID,
+    assetId: QORTAL_LAND_DEVELOPMENT_CLUB_FLOOR_ASSET_ID,
     roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
-    x: 1340,
-    y: 542,
-    depth: 480,
-    depthMode: 'y-sort',
-    depthOffset: 20,
-    originX: 0.5,
-    originY: 0.9,
-    scale: 0.19,
-    alpha: 1,
-    contactShadow: {
-      offsetY: 6,
-      width: 230,
-      height: 28,
-      alpha: 0.24,
-    },
-    collision: {
-      shape: 'ellipse',
-      offsetY: -10,
-      width: 900,
-      height: 170,
-    },
-  },
-  {
-    id: 'club.sofa_modern_a_purple_png',
-    assetId: QORTAL_LAND_DEVELOPMENT_SOFA_MODERN_A_PURPLE_ASSET_ID,
-    roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
-    x: 405,
-    y: 542,
-    depth: 665,
-    depthMode: 'y-sort',
-    depthOffset: 20,
-    originX: 0.5,
-    originY: 0.9,
-    scale: 0.21,
-    alpha: 1,
-    contactShadow: {
-      offsetY: 6,
-      width: 250,
-      height: 30,
-      alpha: 0.24,
-    },
-    collision: {
-      shape: 'ellipse',
-      offsetY: -10,
-      width: 900,
-      height: 170,
-    },
-  },
-];
-
-const QORTAL_LAND_DEVELOPMENT_TABLE_DEFAULT_PLACEMENTS: QortalLandDevelopmentPngPropPlacement[] = [
-  {
-    id: 'club.table_round_low_left_png',
-    assetId: QORTAL_LAND_DEVELOPMENT_TABLE_ROUND_LOW_ASSET_ID,
-    roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
-    x: 403,
-    y: 581,
-    depth: 685,
-    depthMode: 'y-sort',
-    depthOffset: 20,
-    originX: 0.5,
-    originY: 0.88,
-    scale: 0.14,
-    alpha: 1,
-    contactShadow: {
-      offsetY: 4,
-      width: 136,
-      height: 24,
-      alpha: 0.2,
-    },
-    collision: {
-      shape: 'ellipse',
-      offsetY: -6,
-      width: 760,
-      height: 300,
-    },
-  },
-  {
-    id: 'club.table_round_low_right_png',
-    assetId: QORTAL_LAND_DEVELOPMENT_TABLE_ROUND_LOW_ASSET_ID,
-    roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
-    x: 1336,
-    y: 581,
-    depthMode: 'y-sort',
-    depthOffset: 20,
-    originX: 0.5,
-    originY: 0.88,
-    scale: 0.14,
-    alpha: 1,
-    contactShadow: {
-      offsetY: 4,
-      width: 136,
-      height: 24,
-      alpha: 0.2,
-    },
-    collision: {
-      shape: 'ellipse',
-      offsetY: -6,
-      width: 760,
-      height: 300,
-    },
-  },
-];
-
-const QORTAL_LAND_DEVELOPMENT_BAR_STOOL_GROUP_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement = {
-  id: 'club.bar_stool_round_group_png',
-  assetId: QORTAL_LAND_DEVELOPMENT_BAR_STOOL_ROUND_ASSET_ID,
-  roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
-  x: 900,
-  y: 402,
-  depthMode: 'y-sort',
-  depthOffset: 20,
-  originX: 0.5,
-  originY: 0.863,
-  scale: 0.14,
-  alpha: 1,
-  count: 5,
-  spacing: 118,
-  contactShadow: {
-    offsetY: 4,
-    width: 52,
-    height: 14,
-    alpha: 0.18,
-  },
-  collision: {
-    shape: 'ellipse',
-    offsetY: 10,
-    width: 190,
-    height: 180,
-    paddingX: -7,
-    paddingY: -4,
-  },
-};
-
-const QORTAL_LAND_DEVELOPMENT_SPEAKER_DEFAULT_PLACEMENTS: QortalLandDevelopmentPngPropPlacement[] = [
-  {
-    id: 'club.speaker_left_png',
-    assetId: QORTAL_LAND_DEVELOPMENT_SPEAKER_LEFT_ASSET_ID,
-    roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
-    x: 215,
-    y: 636,
-    depthMode: 'y-sort',
-    depthOffset: 20,
-    originX: 0.5,
-    originY: 0.976,
-    scale: 0.66,
-    alpha: 1,
-    contactShadow: {
-      offsetY: 5,
-      width: 74,
-      height: 18,
-      alpha: 0.22,
-    },
-    collision: {
-      shape: 'ellipse',
-      offsetY: -36,
-      width: 84,
-      height: 92,
-    },
-  },
-  {
-    id: 'club.speaker_right_png',
-    assetId: QORTAL_LAND_DEVELOPMENT_SPEAKER_RIGHT_ASSET_ID,
-    roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
-    x: 1590,
-    y: 636,
-    depthMode: 'y-sort',
-    depthOffset: 20,
-    originX: 0.5,
-    originY: 0.954,
-    scale: 0.66,
-    alpha: 1,
-    contactShadow: {
-      offsetY: 5,
-      width: 74,
-      height: 18,
-      alpha: 0.22,
-    },
-    collision: {
-      shape: 'ellipse',
-      offsetY: -36,
-      width: 84,
-      height: 92,
-    },
-  },
-];
-
-const QORTAL_LAND_DEVELOPMENT_DECORATION_DEFAULT_PLACEMENTS: QortalLandDevelopmentPngPropPlacement[] = [
-  {
-    id: 'club.planter_rect_tropical_png',
-    assetId: QORTAL_LAND_DEVELOPMENT_PLANTER_RECT_TROPICAL_ASSET_ID,
-    roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
-    x: 1407,
-    y: 335,
-    depthMode: 'y-sort',
-    depthOffset: 20,
-    originX: 0.553,
-    originY: 0.847,
-    scale: 0.18,
-    alpha: 1,
-    contactShadow: {
-      offsetY: 5,
-      width: 180,
-      height: 24,
-      alpha: 0.22,
-    },
-    collision: {
-      shape: 'ellipse',
-      offsetY: 18,
-      width: 760,
-      height: 190,
-    },
-  },
-  {
-    id: 'club.planter_tall_tropical_png',
-    assetId: QORTAL_LAND_DEVELOPMENT_PLANTER_TALL_TROPICAL_ASSET_ID,
-    roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
-    x: 409,
-    y: 320,
-    depthMode: 'y-sort',
-    depthOffset: 20,
-    originX: 0.5,
-    originY: 0.915,
-    scale: 0.16,
-    alpha: 1,
-    contactShadow: {
-      offsetY: 5,
-      width: 92,
-      height: 22,
-      alpha: 0.22,
-    },
-    collision: {
-      shape: 'ellipse',
-      offsetY: 12,
-      width: 430,
-      height: 230,
-    },
-  },
-  {
-    id: 'club.qortal_neon_light_png',
-    assetId: QORTAL_LAND_DEVELOPMENT_QORTAL_NEON_LIGHT_ASSET_ID,
-    roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
-    x: 1551,
-    y: 239,
+    x: 0,
+    y: 0,
     depthMode: 'fixed',
-    depth: 335,
-    originX: 0.581,
-    originY: 0.472,
-    scale: 0.17,
-    alpha: 1,
-    warp: {
-      tlX: 250,
-      tlY: 0,
-      trX: -50,
-      trY: 0,
-      brX: 0,
-      brY: 500,
-      blX: 220,
-      blY: 0,
-    },
-  },
-];
+    depth: -95,
+    originX: 0,
+    originY: 0,
+    scale: 1,
+  };
 
-const QORTAL_LAND_DEVELOPMENT_PARK_PROP_DEFAULT_PLACEMENTS: QortalLandDevelopmentPngPropPlacement[] = [
+const QORTAL_LAND_DEVELOPMENT_PARK_SKYLINE_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement =
   {
-    id: 'park.bench_planter_left_png',
-    assetId: QORTAL_LAND_DEVELOPMENT_PARK_BENCH_PLANTER_LEFT_ASSET_ID,
+    id: QORTAL_LAND_DEVELOPMENT_PARK_SKYLINE_PLACEMENT_ID,
+    assetId: QORTAL_LAND_DEVELOPMENT_PARK_SKYLINE_ASSET_ID,
     roomIds: [QORTAL_LAND_PARK_ROOM_ID],
-    x: 310,
-    y: 321,
-    depthMode: 'y-sort',
-    depthOffset: 18,
+    x: 900,
+    y: 282,
+    depthMode: 'fixed',
+    depth: -99,
     originX: 0.5,
-    originY: 0.75,
-    scale: 0.22,
-    angle: 0,
+    originY: 1,
+    scale: 0.98,
     alpha: 1,
-    contactShadow: {
-      offsetY: 10,
-      width: 330,
-      height: 38,
-      alpha: 0.18,
-    },
-    collision: {
-      shape: 'ellipse',
-      offsetY: 20,
-      width: 1260,
-      height: 190,
-    },
-  },
+  };
+
+const QORTAL_LAND_DEVELOPMENT_PARK_FLOOR_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement =
   {
-    id: 'park.bench_straight_png',
-    assetId: QORTAL_LAND_DEVELOPMENT_PARK_BENCH_STRAIGHT_ASSET_ID,
+    id: QORTAL_LAND_DEVELOPMENT_PARK_FLOOR_PLACEMENT_ID,
+    assetId: QORTAL_LAND_DEVELOPMENT_PARK_FLOOR_ASSET_ID,
     roomIds: [QORTAL_LAND_PARK_ROOM_ID],
-    x: 1150,
-    y: 620,
-    depthMode: 'y-sort',
-    depthOffset: 12,
+    x: 900,
+    y: 704,
+    depthMode: 'fixed',
+    depth: -95,
     originX: 0.5,
-    originY: 0.9,
-    scale: 0.18,
-    angle: 0,
-    alpha: 1,
-    contactShadow: {
-      offsetY: 8,
-      width: 260,
-      height: 30,
-      alpha: 0.16,
-    },
-    collision: {
-      shape: 'rect',
-      offsetY: 16,
-      width: 1040,
-      height: 150,
-    },
-  },
+    originY: 1,
+    scale: 0.946,
+  };
+
+const QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement =
   {
-    id: 'park.bench_curved_png',
-    assetId: QORTAL_LAND_DEVELOPMENT_PARK_BENCH_CURVED_ASSET_ID,
+    id: QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_PLACEMENT_ID,
+    assetId: QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_CLOSED_ASSET_ID,
     roomIds: [QORTAL_LAND_PARK_ROOM_ID],
-    x: 1260,
-    y: 388,
-    depthMode: 'y-sort',
-    depthOffset: 12,
-    originX: 0.5,
-    originY: 0.75,
-    scale: 0.22,
-    angle: 0,
-    alpha: 1,
-    contactShadow: {
-      offsetY: 8,
-      width: 270,
-      height: 30,
-      alpha: 0.16,
-    },
-    collisions: [
-      {
-        shape: 'rect',
-        offsetY: 62,
-        width: 860,
-        height: 120,
-      },
-      {
-        shape: 'ellipse',
-        offsetX: -486,
-        offsetY: 48,
-        width: 260,
-        height: 210,
-      },
-      {
-        shape: 'ellipse',
-        offsetX: 486,
-        offsetY: 48,
-        width: 260,
-        height: 210,
-      },
-      {
-        shape: 'rect',
-        offsetY: -6,
-        width: 720,
-        height: 84,
-      },
-    ],
-  },
-  {
-    id: 'park.tree_round_large_png',
-    assetId: QORTAL_LAND_DEVELOPMENT_PARK_TREE_ROUND_LARGE_ASSET_ID,
-    roomIds: [QORTAL_LAND_PARK_ROOM_ID],
-    x: 1520,
-    y: 350,
-    depthMode: 'y-sort',
-    depthOffset: 22,
-    originX: 0.5,
-    originY: 0.85,
-    scale: 0.18,
-    angle: 0,
-    alpha: 1,
-    contactShadow: {
-      offsetY: 10,
-      width: 180,
-      height: 36,
-      alpha: 0.18,
-    },
-    collision: {
-      shape: 'ellipse',
-      offsetY: 18,
-      width: 820,
-      height: 260,
-    },
-  },
-  {
-    id: 'park.tree_round_tall_png',
-    assetId: QORTAL_LAND_DEVELOPMENT_PARK_TREE_ROUND_TALL_ASSET_ID,
-    roomIds: [QORTAL_LAND_PARK_ROOM_ID],
-    x: 1600,
-    y: 500,
-    depthMode: 'y-sort',
-    depthOffset: 22,
-    originX: 0.5,
-    originY: 0.85,
-    scale: 0.18,
-    angle: 0,
-    alpha: 1,
-    contactShadow: {
-      offsetY: 10,
-      width: 150,
-      height: 34,
-      alpha: 0.18,
-    },
-    collision: {
-      shape: 'ellipse',
-      offsetY: 18,
-      width: 600,
-      height: 240,
-    },
-  },
-  {
-    id: 'park.tree_planter_lamp_png',
-    assetId: QORTAL_LAND_DEVELOPMENT_PARK_TREE_PLANTER_LAMP_ASSET_ID,
-    roomIds: [QORTAL_LAND_PARK_ROOM_ID],
-    x: 1520,
-    y: 610,
-    depthMode: 'y-sort',
-    depthOffset: 22,
-    originX: 0.5,
-    originY: 0.85,
-    scale: 0.2,
-    angle: 0,
-    alpha: 1,
-    contactShadow: {
-      offsetY: 10,
-      width: 240,
-      height: 36,
-      alpha: 0.18,
-    },
-    collision: {
-      shape: 'ellipse',
-      offsetY: 18,
-      width: 1000,
-      height: 250,
-    },
-  },
-  {
-    id: QORTAL_LAND_DEVELOPMENT_PARK_FOUNTAIN_BLUE_PLACEMENT_ID,
-    assetId: QORTAL_LAND_DEVELOPMENT_PARK_FOUNTAIN_BLUE_ASSET_ID,
-    roomIds: [QORTAL_LAND_PARK_ROOM_ID],
-    x: 1253,
-    y: 490,
-    depthMode: 'y-sort',
-    depthOffset: 18,
-    originX: 0.5,
-    originY: 0.86,
-    scale: 0.19,
-    angle: 0,
-    alpha: 1,
-    contactShadow: {
-      offsetY: 10,
-      width: 210,
-      height: 34,
-      alpha: 0.16,
-    },
-    collision: {
-      shape: 'ellipse',
-      offsetY: 20,
-      width: 900,
-      height: 270,
-    },
-  },
-  {
-    id: QORTAL_LAND_DEVELOPMENT_PARK_PLANTER_ROW_TREES_PLACEMENT_ID,
-    assetId: QORTAL_LAND_DEVELOPMENT_PARK_PLANTER_ROW_TREES_ASSET_ID,
-    roomIds: [QORTAL_LAND_PARK_ROOM_ID],
-    x: 820,
-    y: 310,
+    x: 551,
+    y: 330,
     depthMode: 'fixed',
     depth: 200,
     originX: 0.5,
-    originY: 0.86,
-    scale: 0.2,
-    angle: 0,
+    originY: 1,
+    scale: 0.24,
     alpha: 1,
+    collisions: [
+      {
+        shape: 'rect',
+        offsetX: -250,
+        offsetY: -92,
+        width: 88,
+        height: 740,
+      },
+      {
+        shape: 'rect',
+        offsetX: 305,
+        offsetY: -92,
+        width: 88,
+        height: 740,
+      },
+    ],
+  };
+
+const QORTAL_LAND_DEVELOPMENT_BACK_WALL_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement =
+  {
+    id: QORTAL_LAND_DEVELOPMENT_BACK_WALL_PLACEMENT_ID,
+    assetId: QORTAL_LAND_DEVELOPMENT_BACK_WALL_ASSET_ID,
+    roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
+    x: 901,
+    y: 314,
+    depthMode: 'fixed',
+    depth: -100,
+    originX: 0.5,
+    originY: 1,
+    scale: 0.9,
+  };
+
+const QORTAL_LAND_DEVELOPMENT_LEFT_WALL_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement =
+  {
+    id: QORTAL_LAND_DEVELOPMENT_LEFT_WALL_PLACEMENT_ID,
+    assetId: QORTAL_LAND_DEVELOPMENT_LEFT_WALL_ASSET_ID,
+    roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
+    x: 188,
+    y: 116,
+    depthMode: 'fixed',
+    depth: -98,
+    originX: 0.464,
+    originY: 0.105,
+    scale: 1.09,
+  };
+
+const QORTAL_LAND_DEVELOPMENT_RIGHT_WALL_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement =
+  {
+    id: QORTAL_LAND_DEVELOPMENT_RIGHT_WALL_PLACEMENT_ID,
+    assetId: QORTAL_LAND_DEVELOPMENT_RIGHT_WALL_ASSET_ID,
+    roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
+    x: 1621,
+    y: 39,
+    depthMode: 'fixed',
+    depth: -98,
+    originX: 0.583,
+    originY: -0.004,
+    scale: 1.09,
+  };
+
+const QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement =
+  {
+    id: QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_PLACEMENT_ID,
+    assetId: QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_CLOSED_ASSET_ID,
+    roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
+    x: 1593,
+    y: 362,
+    depthMode: 'fixed',
+    depth: -82,
+    originX: 0.011,
+    originY: 0.382,
+    scale: 0.79,
+    warp: {
+      tlX: 11,
+      tlY: 0,
+      trX: 0,
+      trY: 0,
+      brX: 0,
+      brY: 11,
+      blX: 10,
+      blY: 8,
+    },
+  };
+
+const QORTAL_LAND_DEVELOPMENT_CLUB_BAR_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement =
+  {
+    id: QORTAL_LAND_DEVELOPMENT_CLUB_BAR_PLACEMENT_ID,
+    assetId: QORTAL_LAND_DEVELOPMENT_CLUB_BAR_ASSET_ID,
+    roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
+    x: 900,
+    y: 400,
+    depthMode: 'fixed',
+    depth: 370,
+    originX: 0.5,
+    originY: 0.649,
+    scaleX: 0.552,
+    scaleY: 0.379,
+    collision: {
+      shape: 'rect',
+      offsetY: -72,
+      width: 1370,
+      height: 165,
+      paddingY: -7,
+    },
+  };
+
+const QORTAL_LAND_DEVELOPMENT_BACK_BAR_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement =
+  {
+    id: QORTAL_LAND_DEVELOPMENT_BACK_BAR_PLACEMENT_ID,
+    assetId: QORTAL_LAND_DEVELOPMENT_BACK_BAR_ASSET_ID,
+    roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
+    x: 900,
+    y: 184,
+    depthMode: 'fixed',
+    depth: 330,
+    originX: 0.5,
+    originY: 0.5,
+    scale: 0.37,
+  };
+
+const QORTAL_LAND_DEVELOPMENT_DJ_BOOTH_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement =
+  {
+    id: QORTAL_LAND_DEVELOPMENT_DJ_BOOTH_PLACEMENT_ID,
+    assetId: QORTAL_LAND_DEVELOPMENT_DJ_BOOTH_ASSET_ID,
+    roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
+    x: 901,
+    y: 277,
+    depthMode: 'fixed',
+    depth: 400,
+    originX: 0.512,
+    originY: 0.724,
+    scale: 0.14,
     contactShadow: {
-      offsetY: 10,
-      width: 280,
-      height: 34,
-      alpha: 0.16,
+      offsetY: 11,
+      width: 220,
+      height: 14,
+      alpha: 0.32,
+      depth: 385,
+    },
+  };
+
+const QORTAL_LAND_DEVELOPMENT_SOFA_MODERN_A_DEFAULT_PLACEMENTS: QortalLandDevelopmentPngPropPlacement[] =
+  [
+    {
+      id: 'club.sofa_modern_a_teal_png',
+      assetId: QORTAL_LAND_DEVELOPMENT_SOFA_MODERN_A_TEAL_ASSET_ID,
+      roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
+      x: 1340,
+      y: 542,
+      depth: 480,
+      depthMode: 'y-sort',
+      depthOffset: 20,
+      originX: 0.5,
+      originY: 0.9,
+      scale: 0.19,
+      alpha: 1,
+      contactShadow: {
+        offsetY: 6,
+        width: 230,
+        height: 28,
+        alpha: 0.24,
+      },
+      collision: {
+        shape: 'ellipse',
+        offsetY: -10,
+        width: 900,
+        height: 170,
+      },
+    },
+    {
+      id: 'club.sofa_modern_a_purple_png',
+      assetId: QORTAL_LAND_DEVELOPMENT_SOFA_MODERN_A_PURPLE_ASSET_ID,
+      roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
+      x: 405,
+      y: 542,
+      depth: 665,
+      depthMode: 'y-sort',
+      depthOffset: 20,
+      originX: 0.5,
+      originY: 0.9,
+      scale: 0.21,
+      alpha: 1,
+      contactShadow: {
+        offsetY: 6,
+        width: 250,
+        height: 30,
+        alpha: 0.24,
+      },
+      collision: {
+        shape: 'ellipse',
+        offsetY: -10,
+        width: 900,
+        height: 170,
+      },
+    },
+  ];
+
+const QORTAL_LAND_DEVELOPMENT_TABLE_DEFAULT_PLACEMENTS: QortalLandDevelopmentPngPropPlacement[] =
+  [
+    {
+      id: 'club.table_round_low_left_png',
+      assetId: QORTAL_LAND_DEVELOPMENT_TABLE_ROUND_LOW_ASSET_ID,
+      roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
+      x: 403,
+      y: 581,
+      depth: 685,
+      depthMode: 'y-sort',
+      depthOffset: 20,
+      originX: 0.5,
+      originY: 0.88,
+      scale: 0.14,
+      alpha: 1,
+      contactShadow: {
+        offsetY: 4,
+        width: 136,
+        height: 24,
+        alpha: 0.2,
+      },
+      collision: {
+        shape: 'ellipse',
+        offsetY: -6,
+        width: 760,
+        height: 300,
+      },
+    },
+    {
+      id: 'club.table_round_low_right_png',
+      assetId: QORTAL_LAND_DEVELOPMENT_TABLE_ROUND_LOW_ASSET_ID,
+      roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
+      x: 1336,
+      y: 581,
+      depthMode: 'y-sort',
+      depthOffset: 20,
+      originX: 0.5,
+      originY: 0.88,
+      scale: 0.14,
+      alpha: 1,
+      contactShadow: {
+        offsetY: 4,
+        width: 136,
+        height: 24,
+        alpha: 0.2,
+      },
+      collision: {
+        shape: 'ellipse',
+        offsetY: -6,
+        width: 760,
+        height: 300,
+      },
+    },
+  ];
+
+const QORTAL_LAND_DEVELOPMENT_BAR_STOOL_GROUP_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement =
+  {
+    id: 'club.bar_stool_round_group_png',
+    assetId: QORTAL_LAND_DEVELOPMENT_BAR_STOOL_ROUND_ASSET_ID,
+    roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
+    x: 900,
+    y: 402,
+    depthMode: 'y-sort',
+    depthOffset: 20,
+    originX: 0.5,
+    originY: 0.863,
+    scale: 0.14,
+    alpha: 1,
+    count: 5,
+    spacing: 118,
+    contactShadow: {
+      offsetY: 4,
+      width: 52,
+      height: 14,
+      alpha: 0.18,
     },
     collision: {
       shape: 'ellipse',
-      offsetY: 18,
-      width: 1120,
-      height: 230,
-    },
-  },
-  {
-    id: 'park.planter_corner_trees_png',
-    assetId: QORTAL_LAND_DEVELOPMENT_PARK_PLANTER_CORNER_TREES_ASSET_ID,
-    roomIds: [QORTAL_LAND_PARK_ROOM_ID],
-    x: 189,
-    y: 597,
-    depthMode: 'y-sort',
-    depthOffset: 22,
-    originX: 0.5,
-    originY: 0.86,
-    scale: 0.38,
-    angle: 0,
-    alpha: 1,
-    contactShadow: {
       offsetY: 10,
-      width: 280,
-      height: 34,
-      alpha: 0.16,
+      width: 190,
+      height: 180,
+      paddingX: -7,
+      paddingY: -4,
     },
-    collisions: [
-      {
+  };
+
+const QORTAL_LAND_DEVELOPMENT_SPEAKER_DEFAULT_PLACEMENTS: QortalLandDevelopmentPngPropPlacement[] =
+  [
+    {
+      id: 'club.speaker_left_png',
+      assetId: QORTAL_LAND_DEVELOPMENT_SPEAKER_LEFT_ASSET_ID,
+      roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
+      x: 215,
+      y: 636,
+      depthMode: 'y-sort',
+      depthOffset: 20,
+      originX: 0.5,
+      originY: 0.976,
+      scale: 0.66,
+      alpha: 1,
+      contactShadow: {
+        offsetY: 5,
+        width: 74,
+        height: 18,
+        alpha: 0.22,
+      },
+      collision: {
         shape: 'ellipse',
-        offsetY: -55,
-        width: 780,
+        offsetY: -36,
+        width: 84,
+        height: 92,
+      },
+    },
+    {
+      id: 'club.speaker_right_png',
+      assetId: QORTAL_LAND_DEVELOPMENT_SPEAKER_RIGHT_ASSET_ID,
+      roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
+      x: 1590,
+      y: 636,
+      depthMode: 'y-sort',
+      depthOffset: 20,
+      originX: 0.5,
+      originY: 0.954,
+      scale: 0.66,
+      alpha: 1,
+      contactShadow: {
+        offsetY: 5,
+        width: 74,
+        height: 18,
+        alpha: 0.22,
+      },
+      collision: {
+        shape: 'ellipse',
+        offsetY: -36,
+        width: 84,
+        height: 92,
+      },
+    },
+  ];
+
+const QORTAL_LAND_DEVELOPMENT_DECORATION_DEFAULT_PLACEMENTS: QortalLandDevelopmentPngPropPlacement[] =
+  [
+    {
+      id: 'club.planter_rect_tropical_png',
+      assetId: QORTAL_LAND_DEVELOPMENT_PLANTER_RECT_TROPICAL_ASSET_ID,
+      roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
+      x: 1407,
+      y: 335,
+      depthMode: 'y-sort',
+      depthOffset: 20,
+      originX: 0.553,
+      originY: 0.847,
+      scale: 0.18,
+      alpha: 1,
+      contactShadow: {
+        offsetY: 5,
+        width: 180,
+        height: 24,
+        alpha: 0.22,
+      },
+      collision: {
+        shape: 'ellipse',
+        offsetY: 18,
+        width: 760,
+        height: 190,
+      },
+    },
+    {
+      id: 'club.planter_tall_tropical_png',
+      assetId: QORTAL_LAND_DEVELOPMENT_PLANTER_TALL_TROPICAL_ASSET_ID,
+      roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
+      x: 409,
+      y: 320,
+      depthMode: 'y-sort',
+      depthOffset: 20,
+      originX: 0.5,
+      originY: 0.915,
+      scale: 0.16,
+      alpha: 1,
+      contactShadow: {
+        offsetY: 5,
+        width: 92,
+        height: 22,
+        alpha: 0.22,
+      },
+      collision: {
+        shape: 'ellipse',
+        offsetY: 12,
+        width: 430,
+        height: 230,
+      },
+    },
+    {
+      id: 'club.qortal_neon_light_png',
+      assetId: QORTAL_LAND_DEVELOPMENT_QORTAL_NEON_LIGHT_ASSET_ID,
+      roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
+      x: 1551,
+      y: 239,
+      depthMode: 'fixed',
+      depth: 335,
+      originX: 0.581,
+      originY: 0.472,
+      scale: 0.17,
+      alpha: 1,
+      warp: {
+        tlX: 250,
+        tlY: 0,
+        trX: -50,
+        trY: 0,
+        brX: 0,
+        brY: 500,
+        blX: 220,
+        blY: 0,
+      },
+    },
+  ];
+
+const QORTAL_LAND_DEVELOPMENT_PARK_PROP_DEFAULT_PLACEMENTS: QortalLandDevelopmentPngPropPlacement[] =
+  [
+    {
+      id: 'park.bench_planter_left_png',
+      assetId: QORTAL_LAND_DEVELOPMENT_PARK_BENCH_PLANTER_LEFT_ASSET_ID,
+      roomIds: [QORTAL_LAND_PARK_ROOM_ID],
+      x: 310,
+      y: 321,
+      depthMode: 'y-sort',
+      depthOffset: 18,
+      originX: 0.5,
+      originY: 0.75,
+      scale: 0.22,
+      angle: 0,
+      alpha: 1,
+      contactShadow: {
+        offsetY: 10,
+        width: 330,
+        height: 38,
+        alpha: 0.18,
+      },
+      collision: {
+        shape: 'ellipse',
+        offsetY: 20,
+        width: 1260,
+        height: 190,
+      },
+    },
+    {
+      id: 'park.bench_straight_png',
+      assetId: QORTAL_LAND_DEVELOPMENT_PARK_BENCH_STRAIGHT_ASSET_ID,
+      roomIds: [QORTAL_LAND_PARK_ROOM_ID],
+      x: 1150,
+      y: 620,
+      depthMode: 'y-sort',
+      depthOffset: 12,
+      originX: 0.5,
+      originY: 0.9,
+      scale: 0.18,
+      angle: 0,
+      alpha: 1,
+      contactShadow: {
+        offsetY: 8,
+        width: 260,
+        height: 30,
+        alpha: 0.16,
+      },
+      collision: {
+        shape: 'rect',
+        offsetY: 16,
+        width: 1040,
+        height: 150,
+      },
+    },
+    {
+      id: 'park.bench_curved_png',
+      assetId: QORTAL_LAND_DEVELOPMENT_PARK_BENCH_CURVED_ASSET_ID,
+      roomIds: [QORTAL_LAND_PARK_ROOM_ID],
+      x: 1260,
+      y: 388,
+      depthMode: 'y-sort',
+      depthOffset: 12,
+      originX: 0.5,
+      originY: 0.75,
+      scale: 0.22,
+      angle: 0,
+      alpha: 1,
+      contactShadow: {
+        offsetY: 8,
+        width: 270,
+        height: 30,
+        alpha: 0.16,
+      },
+      collisions: [
+        {
+          shape: 'rect',
+          offsetY: 62,
+          width: 860,
+          height: 120,
+        },
+        {
+          shape: 'ellipse',
+          offsetX: -486,
+          offsetY: 48,
+          width: 260,
+          height: 210,
+        },
+        {
+          shape: 'ellipse',
+          offsetX: 486,
+          offsetY: 48,
+          width: 260,
+          height: 210,
+        },
+        {
+          shape: 'rect',
+          offsetY: -6,
+          width: 720,
+          height: 84,
+        },
+      ],
+    },
+    {
+      id: 'park.tree_round_large_png',
+      assetId: QORTAL_LAND_DEVELOPMENT_PARK_TREE_ROUND_LARGE_ASSET_ID,
+      roomIds: [QORTAL_LAND_PARK_ROOM_ID],
+      x: 1520,
+      y: 350,
+      depthMode: 'y-sort',
+      depthOffset: 22,
+      originX: 0.5,
+      originY: 0.85,
+      scale: 0.18,
+      angle: 0,
+      alpha: 1,
+      contactShadow: {
+        offsetY: 10,
+        width: 180,
+        height: 36,
+        alpha: 0.18,
+      },
+      collision: {
+        shape: 'ellipse',
+        offsetY: 18,
+        width: 820,
+        height: 260,
+      },
+    },
+    {
+      id: 'park.tree_round_tall_png',
+      assetId: QORTAL_LAND_DEVELOPMENT_PARK_TREE_ROUND_TALL_ASSET_ID,
+      roomIds: [QORTAL_LAND_PARK_ROOM_ID],
+      x: 1600,
+      y: 500,
+      depthMode: 'y-sort',
+      depthOffset: 22,
+      originX: 0.5,
+      originY: 0.85,
+      scale: 0.18,
+      angle: 0,
+      alpha: 1,
+      contactShadow: {
+        offsetY: 10,
+        width: 150,
+        height: 34,
+        alpha: 0.18,
+      },
+      collision: {
+        shape: 'ellipse',
+        offsetY: 18,
+        width: 600,
+        height: 240,
+      },
+    },
+    {
+      id: 'park.tree_planter_lamp_png',
+      assetId: QORTAL_LAND_DEVELOPMENT_PARK_TREE_PLANTER_LAMP_ASSET_ID,
+      roomIds: [QORTAL_LAND_PARK_ROOM_ID],
+      x: 1520,
+      y: 610,
+      depthMode: 'y-sort',
+      depthOffset: 22,
+      originX: 0.5,
+      originY: 0.85,
+      scale: 0.2,
+      angle: 0,
+      alpha: 1,
+      contactShadow: {
+        offsetY: 10,
+        width: 240,
+        height: 36,
+        alpha: 0.18,
+      },
+      collision: {
+        shape: 'ellipse',
+        offsetY: 18,
+        width: 1000,
         height: 250,
       },
-      {
-        shape: 'ellipse',
-        offsetX: -115,
-        offsetY: -350,
-        width: 420,
-        height: 360,
+    },
+    {
+      id: QORTAL_LAND_DEVELOPMENT_PARK_FOUNTAIN_BLUE_PLACEMENT_ID,
+      assetId: QORTAL_LAND_DEVELOPMENT_PARK_FOUNTAIN_BLUE_ASSET_ID,
+      roomIds: [QORTAL_LAND_PARK_ROOM_ID],
+      x: 1253,
+      y: 490,
+      depthMode: 'y-sort',
+      depthOffset: 18,
+      originX: 0.5,
+      originY: 0.86,
+      scale: 0.19,
+      angle: 0,
+      alpha: 1,
+      contactShadow: {
+        offsetY: 10,
+        width: 210,
+        height: 34,
+        alpha: 0.16,
       },
-      {
+      collision: {
         shape: 'ellipse',
-        offsetX: 80,
-        offsetY: -300,
-        width: 360,
-        height: 250,
-      },
-      {
-        shape: 'ellipse',
-        offsetX: 145,
-        offsetY: -130,
-        width: 360,
+        offsetY: 20,
+        width: 900,
         height: 270,
       },
-    ],
-  },
-];
+    },
+    {
+      id: QORTAL_LAND_DEVELOPMENT_PARK_PLANTER_ROW_TREES_PLACEMENT_ID,
+      assetId: QORTAL_LAND_DEVELOPMENT_PARK_PLANTER_ROW_TREES_ASSET_ID,
+      roomIds: [QORTAL_LAND_PARK_ROOM_ID],
+      x: 820,
+      y: 310,
+      depthMode: 'fixed',
+      depth: 200,
+      originX: 0.5,
+      originY: 0.86,
+      scale: 0.2,
+      angle: 0,
+      alpha: 1,
+      contactShadow: {
+        offsetY: 10,
+        width: 280,
+        height: 34,
+        alpha: 0.16,
+      },
+      collision: {
+        shape: 'ellipse',
+        offsetY: 18,
+        width: 1120,
+        height: 230,
+      },
+    },
+    {
+      id: 'park.planter_corner_trees_png',
+      assetId: QORTAL_LAND_DEVELOPMENT_PARK_PLANTER_CORNER_TREES_ASSET_ID,
+      roomIds: [QORTAL_LAND_PARK_ROOM_ID],
+      x: 189,
+      y: 597,
+      depthMode: 'y-sort',
+      depthOffset: 22,
+      originX: 0.5,
+      originY: 0.86,
+      scale: 0.38,
+      angle: 0,
+      alpha: 1,
+      contactShadow: {
+        offsetY: 10,
+        width: 280,
+        height: 34,
+        alpha: 0.16,
+      },
+      collisions: [
+        {
+          shape: 'ellipse',
+          offsetY: -55,
+          width: 780,
+          height: 250,
+        },
+        {
+          shape: 'ellipse',
+          offsetX: -115,
+          offsetY: -350,
+          width: 420,
+          height: 360,
+        },
+        {
+          shape: 'ellipse',
+          offsetX: 80,
+          offsetY: -300,
+          width: 360,
+          height: 250,
+        },
+        {
+          shape: 'ellipse',
+          offsetX: 145,
+          offsetY: -130,
+          width: 360,
+          height: 270,
+        },
+      ],
+    },
+  ];
 
-const QORTAL_LAND_DEVELOPMENT_DANCE_FLOOR_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement = {
-  id: 'club.dance_floor_png',
-  assetId: QORTAL_LAND_DEVELOPMENT_DANCE_FLOOR_ASSET_ID,
-  roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
-  x: 900,
-  y: 537,
-  depthMode: 'fixed',
-  depth: -86,
-  originX: 0.5,
-  originY: 0.5,
-  scale: 0.72,
-  alpha: 1,
-};
+const QORTAL_LAND_DEVELOPMENT_DANCE_FLOOR_DEFAULT_PLACEMENT: QortalLandDevelopmentPngPropPlacement =
+  {
+    id: 'club.dance_floor_png',
+    assetId: QORTAL_LAND_DEVELOPMENT_DANCE_FLOOR_ASSET_ID,
+    roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
+    x: 900,
+    y: 537,
+    depthMode: 'fixed',
+    depth: -86,
+    originX: 0.5,
+    originY: 0.5,
+    scale: 0.72,
+    alpha: 1,
+  };
 
-const getQortalLandDevelopmentClubBarPlacement = (): QortalLandDevelopmentPngPropPlacement => ({
-  ...QORTAL_LAND_DEVELOPMENT_CLUB_BAR_DEFAULT_PLACEMENT,
-  ...readQortalLandDevelopmentPngPlacementOverride(QORTAL_LAND_DEVELOPMENT_CLUB_BAR_PLACEMENT_ID),
-});
+const getQortalLandDevelopmentClubBarPlacement =
+  (): QortalLandDevelopmentPngPropPlacement => ({
+    ...QORTAL_LAND_DEVELOPMENT_CLUB_BAR_DEFAULT_PLACEMENT,
+    ...readQortalLandDevelopmentPngPlacementOverride(
+      QORTAL_LAND_DEVELOPMENT_CLUB_BAR_PLACEMENT_ID
+    ),
+  });
 
-const getQortalLandDevelopmentBackBarPlacement = (): QortalLandDevelopmentPngPropPlacement => ({
-  ...QORTAL_LAND_DEVELOPMENT_BACK_BAR_DEFAULT_PLACEMENT,
-  ...readQortalLandDevelopmentPngPlacementOverride(
-    QORTAL_LAND_DEVELOPMENT_BACK_BAR_PLACEMENT_ID
-  ),
-});
+const getQortalLandDevelopmentBackBarPlacement =
+  (): QortalLandDevelopmentPngPropPlacement => ({
+    ...QORTAL_LAND_DEVELOPMENT_BACK_BAR_DEFAULT_PLACEMENT,
+    ...readQortalLandDevelopmentPngPlacementOverride(
+      QORTAL_LAND_DEVELOPMENT_BACK_BAR_PLACEMENT_ID
+    ),
+  });
 
-const getQortalLandDevelopmentDjBoothPlacement = (): QortalLandDevelopmentPngPropPlacement => ({
-  ...QORTAL_LAND_DEVELOPMENT_DJ_BOOTH_DEFAULT_PLACEMENT,
-  ...readQortalLandDevelopmentPngPlacementOverride(
-    QORTAL_LAND_DEVELOPMENT_DJ_BOOTH_PLACEMENT_ID
-  ),
-});
+const getQortalLandDevelopmentDjBoothPlacement =
+  (): QortalLandDevelopmentPngPropPlacement => ({
+    ...QORTAL_LAND_DEVELOPMENT_DJ_BOOTH_DEFAULT_PLACEMENT,
+    ...readQortalLandDevelopmentPngPlacementOverride(
+      QORTAL_LAND_DEVELOPMENT_DJ_BOOTH_PLACEMENT_ID
+    ),
+  });
 
-const getQortalLandDevelopmentClubDoorPlacement = (): QortalLandDevelopmentPngPropPlacement => ({
-  ...QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_DEFAULT_PLACEMENT,
-  ...readQortalLandDevelopmentPngPlacementOverride(
-    QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_PLACEMENT_ID
-  ),
-});
+const getQortalLandDevelopmentClubDoorPlacement =
+  (): QortalLandDevelopmentPngPropPlacement => ({
+    ...QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_DEFAULT_PLACEMENT,
+    ...readQortalLandDevelopmentPngPlacementOverride(
+      QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_PLACEMENT_ID
+    ),
+  });
 
-const getQortalLandDevelopmentParkPortalPlacement = (): QortalLandDevelopmentPngPropPlacement => ({
-  ...QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_DEFAULT_PLACEMENT,
-  ...readQortalLandDevelopmentPngPlacementOverride(
-    QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_PLACEMENT_ID
-  ),
-});
+const getQortalLandDevelopmentParkPortalPlacement =
+  (): QortalLandDevelopmentPngPropPlacement => ({
+    ...QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_DEFAULT_PLACEMENT,
+    ...readQortalLandDevelopmentPngPlacementOverride(
+      QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_PLACEMENT_ID
+    ),
+  });
 
 const QORTAL_LAND_EDITABLE_DEVELOPMENT_PLACEMENTS = [
   {
@@ -1972,7 +2319,8 @@ const QORTAL_LAND_EDITABLE_DEVELOPMENT_PLACEMENTS = [
   },
   {
     label: 'Club Door',
-    sourceLabel: 'source/architecture/door_closed.png + door_semi_open.png + door_open.png',
+    sourceLabel:
+      'source/architecture/door_closed.png + door_semi_open.png + door_open.png',
     defaultPlacement: QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_DEFAULT_PLACEMENT,
     allowSeparateScale: false,
     allowWarp: true,
@@ -2013,7 +2361,8 @@ const QORTAL_LAND_EDITABLE_DEVELOPMENT_PLACEMENTS = [
   {
     label: 'Sofa Teal',
     sourceLabel: 'source/furniture/sofa_modern_a_teal.png',
-    defaultPlacement: QORTAL_LAND_DEVELOPMENT_SOFA_MODERN_A_DEFAULT_PLACEMENTS[0],
+    defaultPlacement:
+      QORTAL_LAND_DEVELOPMENT_SOFA_MODERN_A_DEFAULT_PLACEMENTS[0],
     allowSeparateScale: false,
     allowWarp: false,
     allowGroupControls: false,
@@ -2021,7 +2370,8 @@ const QORTAL_LAND_EDITABLE_DEVELOPMENT_PLACEMENTS = [
   {
     label: 'Sofa Purple',
     sourceLabel: 'source/furniture/sofa_modern_a_purple.png',
-    defaultPlacement: QORTAL_LAND_DEVELOPMENT_SOFA_MODERN_A_DEFAULT_PLACEMENTS[1],
+    defaultPlacement:
+      QORTAL_LAND_DEVELOPMENT_SOFA_MODERN_A_DEFAULT_PLACEMENTS[1],
     allowSeparateScale: false,
     allowWarp: false,
     allowGroupControls: false,
@@ -2095,7 +2445,10 @@ const QORTAL_LAND_EDITABLE_DEVELOPMENT_PLACEMENTS = [
 type QortalLandEditableDevelopmentPlacement =
   (typeof QORTAL_LAND_EDITABLE_DEVELOPMENT_PLACEMENTS)[number];
 
-const QORTAL_LAND_DEVELOPMENT_DEV_ROOM_OPTIONS: { id: LandRoomId; label: string }[] = [
+const QORTAL_LAND_DEVELOPMENT_DEV_ROOM_OPTIONS: {
+  id: LandRoomId;
+  label: string;
+}[] = [
   { id: QORTAL_LAND_DEFAULT_ROOM_ID, label: 'Disco' },
   { id: QORTAL_LAND_PARK_ROOM_ID, label: 'Park' },
 ];
@@ -2104,17 +2457,22 @@ const qortalLandEditableDevelopmentPlacementIsInRoom = (
   placement: QortalLandEditableDevelopmentPlacement,
   roomId: LandRoomId
 ): boolean => {
-  const roomIds = placement.defaultPlacement.roomIds ?? [QORTAL_LAND_DEFAULT_ROOM_ID];
+  const roomIds = placement.defaultPlacement.roomIds ?? [
+    QORTAL_LAND_DEFAULT_ROOM_ID,
+  ];
   return roomIds.includes(roomId);
 };
 
 const getQortalLandEditableDevelopmentPlacementsForRoom = (
   roomId: LandRoomId
 ): readonly QortalLandEditableDevelopmentPlacement[] => {
-  const placements = QORTAL_LAND_EDITABLE_DEVELOPMENT_PLACEMENTS.filter((placement) =>
-    qortalLandEditableDevelopmentPlacementIsInRoom(placement, roomId)
+  const placements = QORTAL_LAND_EDITABLE_DEVELOPMENT_PLACEMENTS.filter(
+    (placement) =>
+      qortalLandEditableDevelopmentPlacementIsInRoom(placement, roomId)
   );
-  return placements.length > 0 ? placements : QORTAL_LAND_EDITABLE_DEVELOPMENT_PLACEMENTS;
+  return placements.length > 0
+    ? placements
+    : QORTAL_LAND_EDITABLE_DEVELOPMENT_PLACEMENTS;
 };
 
 const getQortalLandEditableDevelopmentPlacement = (
@@ -2142,9 +2500,10 @@ const qortalLandPlacementScaleForAxis = (
   placement: QortalLandDevelopmentPngPropPlacement,
   axis: 'x' | 'y'
 ): number => {
-  const value = axis === 'x'
-    ? placement.scaleX ?? placement.scale ?? 1
-    : placement.scaleY ?? placement.scale ?? 1;
+  const value =
+    axis === 'x'
+      ? (placement.scaleX ?? placement.scale ?? 1)
+      : (placement.scaleY ?? placement.scale ?? 1);
   return Number.isFinite(value) ? value : 1;
 };
 
@@ -2169,10 +2528,17 @@ const qortalLandClubSkywalkDoorHotspot = (
   const scaleY = qortalLandPlacementScaleForAxis(placement, 'y');
   const originX = placement.originX ?? 0.5;
   const originY = placement.originY ?? 0.5;
-  const left = placement.x - originX * QORTAL_LAND_CLUB_SKYWALK_DOOR_SOURCE_WIDTH * scaleX;
-  const right = placement.x + (1 - originX) * QORTAL_LAND_CLUB_SKYWALK_DOOR_SOURCE_WIDTH * scaleX;
-  const top = placement.y - originY * QORTAL_LAND_CLUB_SKYWALK_DOOR_SOURCE_HEIGHT * scaleY;
-  const bottom = placement.y + (1 - originY) * QORTAL_LAND_CLUB_SKYWALK_DOOR_SOURCE_HEIGHT * scaleY;
+  const left =
+    placement.x - originX * QORTAL_LAND_CLUB_SKYWALK_DOOR_SOURCE_WIDTH * scaleX;
+  const right =
+    placement.x +
+    (1 - originX) * QORTAL_LAND_CLUB_SKYWALK_DOOR_SOURCE_WIDTH * scaleX;
+  const top =
+    placement.y -
+    originY * QORTAL_LAND_CLUB_SKYWALK_DOOR_SOURCE_HEIGHT * scaleY;
+  const bottom =
+    placement.y +
+    (1 - originY) * QORTAL_LAND_CLUB_SKYWALK_DOOR_SOURCE_HEIGHT * scaleY;
   const walkY = top + (bottom - top) * 0.78;
   const approach = clampLandPosition(
     QORTAL_LAND_DEFAULT_ROOM_ID,
@@ -2224,10 +2590,15 @@ const qortalLandParkPortalHotspot = (
   const absScaleY = Math.abs(scaleY);
   const originX = placement.originX ?? 0.5;
   const originY = placement.originY ?? 1;
-  const left = placement.x - originX * QORTAL_LAND_PARK_PORTAL_SOURCE_WIDTH * scaleX;
-  const right = placement.x + (1 - originX) * QORTAL_LAND_PARK_PORTAL_SOURCE_WIDTH * scaleX;
-  const top = placement.y - originY * QORTAL_LAND_PARK_PORTAL_SOURCE_HEIGHT * scaleY;
-  const bottom = placement.y + (1 - originY) * QORTAL_LAND_PARK_PORTAL_SOURCE_HEIGHT * scaleY;
+  const left =
+    placement.x - originX * QORTAL_LAND_PARK_PORTAL_SOURCE_WIDTH * scaleX;
+  const right =
+    placement.x + (1 - originX) * QORTAL_LAND_PARK_PORTAL_SOURCE_WIDTH * scaleX;
+  const top =
+    placement.y - originY * QORTAL_LAND_PARK_PORTAL_SOURCE_HEIGHT * scaleY;
+  const bottom =
+    placement.y +
+    (1 - originY) * QORTAL_LAND_PARK_PORTAL_SOURCE_HEIGHT * scaleY;
   const passMinX = left + 248 * absScaleX;
   const passMaxX = left + 502 * absScaleX;
   const passMinY = top + 708 * absScaleY;
@@ -2254,32 +2625,33 @@ const qortalLandParkPortalHotspot = (
   };
 };
 
-const QORTAL_LAND_DEVELOPMENT_PNG_PROP_PLACEMENTS: QortalLandDevelopmentPngPropPlacement[] = [
-  QORTAL_LAND_DEVELOPMENT_CLUB_BAR_DEFAULT_PLACEMENT,
-  QORTAL_LAND_DEVELOPMENT_BACK_BAR_DEFAULT_PLACEMENT,
-  QORTAL_LAND_DEVELOPMENT_DJ_BOOTH_DEFAULT_PLACEMENT,
-  ...QORTAL_LAND_DEVELOPMENT_SOFA_MODERN_A_DEFAULT_PLACEMENTS,
-  ...QORTAL_LAND_DEVELOPMENT_TABLE_DEFAULT_PLACEMENTS,
-  QORTAL_LAND_DEVELOPMENT_BAR_STOOL_GROUP_DEFAULT_PLACEMENT,
-  ...QORTAL_LAND_DEVELOPMENT_SPEAKER_DEFAULT_PLACEMENTS,
-  ...QORTAL_LAND_DEVELOPMENT_DECORATION_DEFAULT_PLACEMENTS,
-  ...QORTAL_LAND_DEVELOPMENT_PARK_PROP_DEFAULT_PLACEMENTS,
-  QORTAL_LAND_DEVELOPMENT_DANCE_FLOOR_DEFAULT_PLACEMENT,
-  // Add transparent PNGs under src/assets/qortalland/source/** and place them here.
-  // Example:
-  // {
-  //   id: 'club.dj_booth_png',
-  //   assetId: 'technology/dj_booth_neon',
-  //   roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
-  //   x: 900,
-  //   y: 374,
-  //   depthMode: 'fixed',
-  //   depth: 370,
-  //   originX: 0.5,
-  //   originY: 1,
-  //   scale: 1,
-  // },
-];
+const QORTAL_LAND_DEVELOPMENT_PNG_PROP_PLACEMENTS: QortalLandDevelopmentPngPropPlacement[] =
+  [
+    QORTAL_LAND_DEVELOPMENT_CLUB_BAR_DEFAULT_PLACEMENT,
+    QORTAL_LAND_DEVELOPMENT_BACK_BAR_DEFAULT_PLACEMENT,
+    QORTAL_LAND_DEVELOPMENT_DJ_BOOTH_DEFAULT_PLACEMENT,
+    ...QORTAL_LAND_DEVELOPMENT_SOFA_MODERN_A_DEFAULT_PLACEMENTS,
+    ...QORTAL_LAND_DEVELOPMENT_TABLE_DEFAULT_PLACEMENTS,
+    QORTAL_LAND_DEVELOPMENT_BAR_STOOL_GROUP_DEFAULT_PLACEMENT,
+    ...QORTAL_LAND_DEVELOPMENT_SPEAKER_DEFAULT_PLACEMENTS,
+    ...QORTAL_LAND_DEVELOPMENT_DECORATION_DEFAULT_PLACEMENTS,
+    ...QORTAL_LAND_DEVELOPMENT_PARK_PROP_DEFAULT_PLACEMENTS,
+    QORTAL_LAND_DEVELOPMENT_DANCE_FLOOR_DEFAULT_PLACEMENT,
+    // Add transparent PNGs under src/assets/qortalland/source/** and place them here.
+    // Example:
+    // {
+    //   id: 'club.dj_booth_png',
+    //   assetId: 'technology/dj_booth_neon',
+    //   roomIds: [QORTAL_LAND_DEFAULT_ROOM_ID],
+    //   x: 900,
+    //   y: 374,
+    //   depthMode: 'fixed',
+    //   depth: 370,
+    //   originX: 0.5,
+    //   originY: 1,
+    //   scale: 1,
+    // },
+  ];
 
 const qortalLandDevelopmentPngAssetsForRoom = (
   roomId: LandRoomId
@@ -2328,7 +2700,10 @@ const createSessionId = (): string => {
   if (typeof cryptoApi?.randomUUID === 'function') {
     return cryptoApi.randomUUID().replace(/-/g, '').slice(0, 24);
   }
-  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 14)}`.slice(0, 24);
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 14)}`.slice(
+    0,
+    24
+  );
 };
 
 const createLandChatMessageId = (): string => {
@@ -2358,16 +2733,24 @@ const parseLandChatCommand = (
   if (yellMatch?.[1]?.trim()) {
     return { text: yellMatch[1].trim(), mode: 'yell' };
   }
-  const emoteMatch = normalized.match(/^\/(cry|laugh|happy|sad|good|bad|hype|love)(?:\s+.*)?$/i);
+  const emoteMatch = normalized.match(
+    /^\/(cry|laugh|happy|sad|good|bad|hype|love)(?:\s+.*)?$/i
+  );
   const emote = emoteMatch?.[1]?.toLowerCase();
   if (emote === 'cry') return { text: 'cries', mode: 'emote' };
   if (emote === 'laugh') return { text: 'laughs', mode: 'emote' };
-  if (emote === 'happy') return { text: 'is happy', mode: 'emote', moodAction: 'sunshine' };
-  if (emote === 'sad') return { text: 'is sad', mode: 'emote', moodAction: 'rain' };
-  if (emote === 'good') return { text: 'is behaving.', mode: 'emote', moodAction: 'angel' };
-  if (emote === 'bad') return { text: 'is feeling naughty.', mode: 'emote', moodAction: 'devil' };
-  if (emote === 'hype') return { text: 'is hyped!', mode: 'emote', moodAction: 'buzz' };
-  if (emote === 'love') return { text: 'says: Lovely!', mode: 'emote', moodAction: 'love' };
+  if (emote === 'happy')
+    return { text: 'is happy', mode: 'emote', moodAction: 'sunshine' };
+  if (emote === 'sad')
+    return { text: 'is sad', mode: 'emote', moodAction: 'rain' };
+  if (emote === 'good')
+    return { text: 'is behaving.', mode: 'emote', moodAction: 'angel' };
+  if (emote === 'bad')
+    return { text: 'is feeling naughty.', mode: 'emote', moodAction: 'devil' };
+  if (emote === 'hype')
+    return { text: 'is hyped!', mode: 'emote', moodAction: 'buzz' };
+  if (emote === 'love')
+    return { text: 'says: Lovely!', mode: 'emote', moodAction: 'love' };
   return { text: normalized, mode: 'say' };
 };
 
@@ -2391,21 +2774,29 @@ const parseQortalLandChatEvent = (
   }
 
   if (decoded.qortalLand !== true) return null;
-  const qortalLandType = typeof decoded.qortalLandType === 'string' ? decoded.qortalLandType : 'chat';
+  const qortalLandType =
+    typeof decoded.qortalLandType === 'string'
+      ? decoded.qortalLandType
+      : 'chat';
   if (qortalLandType !== 'chat') return null;
 
   const text = String(decoded.messageText || decoded.message || '').trim();
   if (!text) return null;
 
-  const session = typeof decoded.sessionId === 'string' ? decoded.sessionId : fallbackSessionId;
+  const session =
+    typeof decoded.sessionId === 'string'
+      ? decoded.sessionId
+      : fallbackSessionId;
   const sequence = Number(decoded.landSequence);
-  const mode = decoded.chatMode === 'yell'
-    ? 'yell'
-    : decoded.chatMode === 'emote'
-      ? 'emote'
-      : 'say';
+  const mode =
+    decoded.chatMode === 'yell'
+      ? 'yell'
+      : decoded.chatMode === 'emote'
+        ? 'emote'
+        : 'say';
   const moodAction =
-    typeof decoded.moodAction === 'string' && isLandSocialActionType(decoded.moodAction)
+    typeof decoded.moodAction === 'string' &&
+    isLandSocialActionType(decoded.moodAction)
       ? decoded.moodAction
       : undefined;
   const timestamp = Number(event.timestamp);
@@ -2426,16 +2817,22 @@ const mergeLandChatTranscriptMessage = (
   messages: LandChatTranscriptMessage[],
   message: LandChatTranscriptMessage
 ): LandChatTranscriptMessage[] => {
-  const withoutDuplicate = messages.filter((existing) => existing.messageId !== message.messageId);
+  const withoutDuplicate = messages.filter(
+    (existing) => existing.messageId !== message.messageId
+  );
   return [...withoutDuplicate, message]
     .sort((a, b) => a.timestamp - b.timestamp || a.sequence - b.sequence)
     .slice(-LAND_CHAT_TRANSCRIPT_LIMIT);
 };
 
-const utf8ByteLength = (value: string): number => new TextEncoder().encode(value).length;
+const utf8ByteLength = (value: string): number =>
+  new TextEncoder().encode(value).length;
 
 const sha256Hex = async (value: string): Promise<string> => {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(value)
+  );
   return Array.from(new Uint8Array(digest))
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');
@@ -2444,7 +2841,9 @@ const sha256Hex = async (value: string): Promise<string> => {
 const isEditableTarget = (target: EventTarget | null): boolean => {
   if (!(target instanceof HTMLElement)) return false;
   const tagName = target.tagName.toLowerCase();
-  return tagName === 'input' || tagName === 'textarea' || target.isContentEditable;
+  return (
+    tagName === 'input' || tagName === 'textarea' || target.isContentEditable
+  );
 };
 
 const addressHue = (address: string): number => {
@@ -2469,7 +2868,10 @@ const displayNameForAddress = (
   return primaryName || shortAddress(address);
 };
 
-const buildDirectVoiceCallChatId = (addressA: string, addressB: string): string => {
+const buildDirectVoiceCallChatId = (
+  addressA: string,
+  addressB: string
+): string => {
   return `direct:${[addressA, addressB].sort().join(':')}`;
 };
 
@@ -2490,7 +2892,9 @@ const normalizeQortBalance = (value: unknown): number => {
   }
   if (value && typeof value === 'object') {
     const record = value as Record<string, unknown>;
-    return normalizeQortBalance(record.balance ?? record.confirmed ?? record.qort ?? record.QORT);
+    return normalizeQortBalance(
+      record.balance ?? record.confirmed ?? record.qort ?? record.QORT
+    );
   }
   return 0;
 };
@@ -2503,7 +2907,11 @@ const formatQortAmount = (value: number): string => {
 };
 
 const clampRemoteVelocity = (velocity: number): number => {
-  return clampNumber(velocity, -LAND_REMOTE_MAX_VELOCITY_PX_PER_MS, LAND_REMOTE_MAX_VELOCITY_PX_PER_MS);
+  return clampNumber(
+    velocity,
+    -LAND_REMOTE_MAX_VELOCITY_PX_PER_MS,
+    LAND_REMOTE_MAX_VELOCITY_PX_PER_MS
+  );
 };
 
 const normalizeLandRoomId = (value: unknown): LandRoomId => {
@@ -2516,7 +2924,9 @@ const normalizeLandRoomId = (value: unknown): LandRoomId => {
 // secondary toolbar in the shipped QortalLand interface.
 const QORTAL_LAND_DEVELOPMENT_TOOLBAR_ENABLED = false;
 
-const initialPositionForAddress = (address: string): { roomId: LandRoomId; x: number; y: number } => {
+const initialPositionForAddress = (
+  address: string
+): { roomId: LandRoomId; x: number; y: number } => {
   const hue = addressHue(address);
   return {
     roomId: QORTAL_LAND_START_ROOM_ID,
@@ -2526,21 +2936,32 @@ const initialPositionForAddress = (address: string): { roomId: LandRoomId; x: nu
 };
 
 const roomLayoutForRoom = (roomId: LandRoomId): QortalLandRoomLayout =>
-  QORTAL_LAND_ROOM_LAYOUTS[roomId] ?? QORTAL_LAND_ROOM_LAYOUTS[QORTAL_LAND_DEFAULT_ROOM_ID];
+  QORTAL_LAND_ROOM_LAYOUTS[roomId] ??
+  QORTAL_LAND_ROOM_LAYOUTS[QORTAL_LAND_DEFAULT_ROOM_ID];
 
-const roomSizeForRoom = (roomId: LandRoomId): { width: number; height: number } => {
+const roomSizeForRoom = (
+  roomId: LandRoomId
+): { width: number; height: number } => {
   const layout = roomLayoutForRoom(roomId);
   return { width: layout.width, height: layout.height };
 };
 
-const roomFloorRange = (roomId: LandRoomId): { top: number; bottom: number } => {
+const roomFloorRange = (
+  roomId: LandRoomId
+): { top: number; bottom: number } => {
   const floor = roomLayoutForRoom(roomId).floor;
   return { top: floor.topY, bottom: floor.bottomY };
 };
 
-const floorBoundsForRoomY = (roomId: LandRoomId, y: number): { minX: number; maxX: number } => {
+const floorBoundsForRoomY = (
+  roomId: LandRoomId,
+  y: number
+): { minX: number; maxX: number } => {
   const floor = roomLayoutForRoom(roomId).floor;
-  const ratio = Math.max(0, Math.min(1, (y - floor.topY) / (floor.bottomY - floor.topY)));
+  const ratio = Math.max(
+    0,
+    Math.min(1, (y - floor.topY) / (floor.bottomY - floor.topY))
+  );
   return {
     minX: floor.back.minX + (floor.front.minX - floor.back.minX) * ratio,
     maxX: floor.back.maxX + (floor.front.maxX - floor.back.maxX) * ratio,
@@ -2553,7 +2974,10 @@ const floorBoundsForY = (y: number): { minX: number; maxX: number } => {
 
 const floorScaleForRoomY = (roomId: LandRoomId, y: number): number => {
   const range = roomFloorRange(roomId);
-  const ratio = Math.max(0, Math.min(1, (y - range.top) / (range.bottom - range.top)));
+  const ratio = Math.max(
+    0,
+    Math.min(1, (y - range.top) / (range.bottom - range.top))
+  );
   return 0.78 + ratio * 0.36;
 };
 
@@ -2628,13 +3052,21 @@ const qortalLandCollisionFootprintsForRoom = (
 
     const scaleX = qortalLandPlacementScaleForAxis(placement, 'x');
     const scaleY = qortalLandPlacementScaleForAxis(placement, 'y');
-    const instanceCount = Math.max(1, Math.min(12, Math.round(placement.count ?? 1)));
+    const instanceCount = Math.max(
+      1,
+      Math.min(12, Math.round(placement.count ?? 1))
+    );
     const spacing = placement.spacing ?? 0;
     const startOffsetX = -((instanceCount - 1) * spacing) / 2;
 
-    for (let instanceIndex = 0; instanceIndex < instanceCount; instanceIndex += 1) {
+    for (
+      let instanceIndex = 0;
+      instanceIndex < instanceCount;
+      instanceIndex += 1
+    ) {
       collisions.forEach((collision) => {
-        const offsetX = (collision.offsetX ?? 0) * (placement.flipX ? -scaleX : scaleX);
+        const offsetX =
+          (collision.offsetX ?? 0) * (placement.flipX ? -scaleX : scaleX);
         const offsetY = (collision.offsetY ?? 0) * scaleY;
         const radiusX = Math.max(2, Math.abs(collision.width * scaleX) / 2);
         const radiusY = Math.max(2, Math.abs(collision.height * scaleY) / 2);
@@ -2658,8 +3090,18 @@ const qortalLandCollisionFootprintsForRoom = (
 const qortalLandExpandedCollisionRadii = (
   footprint: QortalLandCollisionFootprint
 ): { x: number; y: number } => ({
-  x: Math.max(2, footprint.radiusX + QORTAL_LAND_PLAYER_COLLISION_RADIUS_X + footprint.paddingX),
-  y: Math.max(2, footprint.radiusY + QORTAL_LAND_PLAYER_COLLISION_RADIUS_Y + footprint.paddingY),
+  x: Math.max(
+    2,
+    footprint.radiusX +
+      QORTAL_LAND_PLAYER_COLLISION_RADIUS_X +
+      footprint.paddingX
+  ),
+  y: Math.max(
+    2,
+    footprint.radiusY +
+      QORTAL_LAND_PLAYER_COLLISION_RADIUS_Y +
+      footprint.paddingY
+  ),
 });
 
 const qortalLandSmoothStep = (value: number): number => {
@@ -2693,8 +3135,11 @@ const qortalLandDjPedestalElevationForPosition = (
   return QORTAL_LAND_DJ_PEDESTAL_MAX_ELEVATION * Math.min(xFactor, yFactor);
 };
 
-const qortalLandAvatarRenderY = (roomId: LandRoomId, x: number, y: number): number =>
-  y - qortalLandDjPedestalElevationForPosition(roomId, x, y);
+const qortalLandAvatarRenderY = (
+  roomId: LandRoomId,
+  x: number,
+  y: number
+): number => y - qortalLandDjPedestalElevationForPosition(roomId, x, y);
 
 const isQortalLandCollisionBlocked = (
   footprint: QortalLandCollisionFootprint,
@@ -2744,10 +3189,12 @@ const resolveQortalLandPropCollisions = (
         const overlapX = expanded.x - Math.abs(dx);
         const overlapY = expanded.y - Math.abs(dy);
         if (overlapX < overlapY) {
-          const fallback = previousX === footprint.x ? 1 : Math.sign(previousX - footprint.x);
+          const fallback =
+            previousX === footprint.x ? 1 : Math.sign(previousX - footprint.x);
           x += (Math.sign(dx) || fallback || 1) * (overlapX + 0.5);
         } else {
-          const fallback = previousY === footprint.y ? 1 : Math.sign(previousY - footprint.y);
+          const fallback =
+            previousY === footprint.y ? 1 : Math.sign(previousY - footprint.y);
           y += (Math.sign(dy) || fallback || 1) * (overlapY + 0.5);
         }
       } else {
@@ -2756,17 +3203,22 @@ const resolveQortalLandPropCollisions = (
         const distance = Math.hypot(normalizedX, normalizedY);
         const fallbackX = previousX - footprint.x;
         const fallbackY = previousY - footprint.y;
-        const fallbackDistance = Math.hypot(fallbackX / expanded.x, fallbackY / expanded.y);
-        const pushX = distance > 0.0001
-          ? normalizedX / distance
-          : fallbackDistance > 0.0001
-            ? (fallbackX / expanded.x) / fallbackDistance
-            : 0;
-        const pushY = distance > 0.0001
-          ? normalizedY / distance
-          : fallbackDistance > 0.0001
-            ? (fallbackY / expanded.y) / fallbackDistance
-            : 1;
+        const fallbackDistance = Math.hypot(
+          fallbackX / expanded.x,
+          fallbackY / expanded.y
+        );
+        const pushX =
+          distance > 0.0001
+            ? normalizedX / distance
+            : fallbackDistance > 0.0001
+              ? fallbackX / expanded.x / fallbackDistance
+              : 0;
+        const pushY =
+          distance > 0.0001
+            ? normalizedY / distance
+            : fallbackDistance > 0.0001
+              ? fallbackY / expanded.y / fallbackDistance
+              : 1;
         x = footprint.x + pushX * (expanded.x + 0.5);
         y = footprint.y + pushY * (expanded.y + 0.5);
       }
@@ -2777,16 +3229,23 @@ const resolveQortalLandPropCollisions = (
   }
 
   const xOnly = clampLandPosition(roomId, nextX, previousY);
-  if (!isQortalLandPositionBlockedByProps(roomId, xOnly.x, xOnly.y)) return xOnly;
+  if (!isQortalLandPositionBlockedByProps(roomId, xOnly.x, xOnly.y))
+    return xOnly;
   const yOnly = clampLandPosition(roomId, previousX, nextY);
-  if (!isQortalLandPositionBlockedByProps(roomId, yOnly.x, yOnly.y)) return yOnly;
+  if (!isQortalLandPositionBlockedByProps(roomId, yOnly.x, yOnly.y))
+    return yOnly;
   return clampLandPosition(roomId, previousX, previousY);
 };
 
-const isNearClubDjBooth = (roomId: LandRoomId, x: number, y: number): boolean => {
+const isNearClubDjBooth = (
+  roomId: LandRoomId,
+  x: number,
+  y: number
+): boolean => {
   if (roomId !== QORTAL_LAND_DEFAULT_ROOM_ID) return false;
   if (qortalLandDjPedestalElevationForPosition(roomId, x, y) < 12) return false;
-  const hotspot = roomLayoutForRoom(QORTAL_LAND_DEFAULT_ROOM_ID).interactions?.djBooth;
+  const hotspot = roomLayoutForRoom(QORTAL_LAND_DEFAULT_ROOM_ID).interactions
+    ?.djBooth;
   if (!hotspot) return false;
   const weightedX = (x - hotspot.x) * hotspot.weightedXScale;
   const weightedY = y - hotspot.y;
@@ -2817,24 +3276,36 @@ export function QortalLand({
   const chatInputRef = useRef<HTMLInputElement | null>(null);
   const chatPanelRef = useRef<HTMLDivElement | null>(null);
   const chatMessagesViewportRef = useRef<HTMLDivElement | null>(null);
-  const chatPanelDefaultSizeRef = useRef<{ width: number; height: number } | null>(null);
+  const chatPanelDefaultSizeRef = useRef<{
+    width: number;
+    height: number;
+  } | null>(null);
   const chatPanelGeometryRef = useRef<LandChatPanelGeometry | null>(null);
   const chatPanelInteractionRef = useRef<LandChatPanelInteraction | null>(null);
-  const landActionAnimationsRef = useRef<Map<string, LandActionAnimation>>(new Map());
+  const landActionAnimationsRef = useRef<Map<string, LandActionAnimation>>(
+    new Map()
+  );
   const landCallPresenceRef = useRef<Map<string, LandCallPresence>>(new Map());
   const landGamePresenceRef = useRef<Map<string, LandGamePresence>>(new Map());
   const proximitySpeakingAddressesRef = useRef<Set<string>>(new Set());
   const proximityVoicePanelRequestRef = useRef(0);
   const landCallPeerPublicKeysRef = useRef<Map<string, string>>(new Map());
-  const landCallPeersRef = useRef<Map<string, {
-    peerAddress: string;
-    chatId: string;
-    sourceSessionId: string;
-    targetSessionId: string;
-    targetDestinationHash: string;
-  }>>(new Map());
+  const landCallPeersRef = useRef<
+    Map<
+      string,
+      {
+        peerAddress: string;
+        chatId: string;
+        sourceSessionId: string;
+        targetSessionId: string;
+        targetDestinationHash: string;
+      }
+    >
+  >(new Map());
   const pendingLandCallTargetRef = useRef<LandActionTarget | null>(null);
-  const landCallListenersRef = useRef<Set<(event: string, payload: unknown) => void>>(new Set());
+  const landCallListenersRef = useRef<
+    Set<(event: string, payload: unknown) => void>
+  >(new Set());
   const activeLandCallIdRef = useRef<string | null>(null);
   const lastAnnouncedLandCallRef = useRef<{
     callId: string;
@@ -2876,33 +3347,48 @@ export function QortalLand({
   const [landGameRoomId, setLandGameRoomId] = useState<LandRoomId>(
     QORTAL_LAND_START_ROOM_ID
   );
-  const [loadingRoomAssets, setLoadingRoomAssets] = useState<LandRoomId | null>(null);
+  const [loadingRoomAssets, setLoadingRoomAssets] = useState<LandRoomId | null>(
+    null
+  );
   const [isLandAfk, setIsLandAfk] = useState(false);
   const [isLandDnd, setIsLandDnd] = useState(false);
-  const [proximityVoicePanelRequest, setProximityVoicePanelRequest] = useState(0);
-  const [proximityVoicePanelTarget, setProximityVoicePanelTarget] = useState('');
+  const [proximityVoicePanelRequest, setProximityVoicePanelRequest] =
+    useState(0);
+  const [proximityVoicePanelTarget, setProximityVoicePanelTarget] =
+    useState('');
   const [chatText, setChatText] = useState('');
   const [isSendingChat, setIsSendingChat] = useState(false);
   const [chatError, setChatError] = useState('');
-  const [landChatMessages, setLandChatMessages] = useState<LandChatTranscriptMessage[]>([]);
+  const [landChatMessages, setLandChatMessages] = useState<
+    LandChatTranscriptMessage[]
+  >([]);
   const [isChatFocused, setIsChatFocused] = useState(false);
   const [isChatDimmed, setIsChatDimmed] = useState(true);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
   const [activeChatTab, setActiveChatTab] = useState<LandChatTab>('local');
   const [chatPanelGeometry, setChatPanelGeometry] =
     useState<LandChatPanelGeometry | null>(null);
-  const [lastChatActivityAt, setLastChatActivityAt] = useState(() => Date.now());
+  const [lastChatActivityAt, setLastChatActivityAt] = useState(() =>
+    Date.now()
+  );
   const [, setPrimaryNameLookupVersion] = useState(0);
-  const [actionTarget, setActionTarget] = useState<LandActionTarget | null>(null);
-  const [sendingSocialAction, setSendingSocialAction] = useState<LandSocialActionType | null>(null);
+  const [actionTarget, setActionTarget] = useState<LandActionTarget | null>(
+    null
+  );
+  const [sendingSocialAction, setSendingSocialAction] =
+    useState<LandSocialActionType | null>(null);
   const [socialActionError, setSocialActionError] = useState('');
   const [socialActionCooldownUntil, setSocialActionCooldownUntil] = useState(0);
   const [showGamePicker, setShowGamePicker] = useState(false);
-  const [sendQortTarget, setSendQortTarget] = useState<LandActionTarget | null>(null);
+  const [sendQortTarget, setSendQortTarget] = useState<LandActionTarget | null>(
+    null
+  );
   const [sendQortAmount, setSendQortAmount] = useState('1');
   const [sendQortError, setSendQortError] = useState('');
   const [isSendingQort, setIsSendingQort] = useState(false);
-  const [activeLandCallPeerAddress, setActiveLandCallPeerAddress] = useState<string | null>(null);
+  const [activeLandCallPeerAddress, setActiveLandCallPeerAddress] = useState<
+    string | null
+  >(null);
   const [landCallPresenceVersion, setLandCallPresenceVersion] = useState(0);
   const [landGamePresenceVersion, setLandGamePresenceVersion] = useState(0);
   const [landAvailabilityVersion, setLandAvailabilityVersion] = useState(0);
@@ -2967,8 +3453,8 @@ export function QortalLand({
       ).defaultPlacement
     )
   );
-  const [proceduralClubShellEnabled, setProceduralClubShellEnabled] = useState(() =>
-    shouldShowQortalLandProceduralClubShell()
+  const [proceduralClubShellEnabled, setProceduralClubShellEnabled] = useState(
+    () => shouldShowQortalLandProceduralClubShell()
   );
   const [collisionDebugEnabled, setCollisionDebugEnabled] = useState(() =>
     shouldShowQortalLandCollisionDebug()
@@ -3093,12 +3579,7 @@ export function QortalLand({
 
   useEffect(() => {
     publishLandPresenceSnapshot();
-  }, [
-    isLandAfk,
-    isLandDnd,
-    landGameRoomId,
-    publishLandPresenceSnapshot,
-  ]);
+  }, [isLandAfk, isLandDnd, landGameRoomId, publishLandPresenceSnapshot]);
 
   useEffect(() => {
     isActiveRef.current = isActive;
@@ -3135,17 +3616,10 @@ export function QortalLand({
     return () => {
       window.cancelAnimationFrame(resizeFrame);
     };
-  }, [
-    isActive,
-    publishLandPresenceSnapshot,
-    setLocalLandAvailability,
-  ]);
+  }, [isActive, publishLandPresenceSnapshot, setLocalLandAvailability]);
 
   useEffect(() => {
-    const shouldSuspend = shouldSuspendQortalLandPresence(
-      isActive,
-      isLandAfk
-    );
+    const shouldSuspend = shouldSuspendQortalLandPresence(isActive, isLandAfk);
     if (!shouldSuspend) {
       if (landPresenceSuspendedRef.current) {
         lastSentRef.current = { ...lastSentRef.current, sentAt: 0 };
@@ -3213,8 +3687,14 @@ export function QortalLand({
     let frame = 0;
     const clampMenuToViewport = () => {
       const inset = 12;
-      const maxLeft = Math.max(inset, container.clientWidth - menu.offsetWidth - inset);
-      const maxTop = Math.max(inset, container.clientHeight - menu.offsetHeight - inset);
+      const maxLeft = Math.max(
+        inset,
+        container.clientWidth - menu.offsetWidth - inset
+      );
+      const maxTop = Math.max(
+        inset,
+        container.clientHeight - menu.offsetHeight - inset
+      );
       const left = clampNumber(actionTarget.anchorX, inset, maxLeft);
       const top = clampNumber(actionTarget.anchorY, inset, maxTop);
       setActionTarget((current) => {
@@ -3239,13 +3719,21 @@ export function QortalLand({
       resizeObserver.disconnect();
       window.removeEventListener('resize', scheduleClamp);
     };
-  }, [actionTarget?.anchorX, actionTarget?.anchorY, actionTarget?.key, showGamePicker]);
+  }, [
+    actionTarget?.anchorX,
+    actionTarget?.anchorY,
+    actionTarget?.key,
+    showGamePicker,
+  ]);
 
-  useEffect(() => () => {
-    if (landActionCooldownTimerRef.current !== null) {
-      window.clearTimeout(landActionCooldownTimerRef.current);
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      if (landActionCooldownTimerRef.current !== null) {
+        window.clearTimeout(landActionCooldownTimerRef.current);
+      }
+    },
+    []
+  );
 
   const emitLandCallEvent = useCallback((event: string, payload: unknown) => {
     for (const listener of landCallListenersRef.current) {
@@ -3255,10 +3743,16 @@ export function QortalLand({
 
   const sendLandCallSignal = useCallback(
     async (payload: Record<string, unknown>) => {
-      const result = await window.reticulumChat?.sendLandCall?.(groupId, payload);
+      const result = await window.reticulumChat?.sendLandCall?.(
+        groupId,
+        payload
+      );
       return result?.success === true
         ? { success: true }
-        : { success: false, error: result?.error || 'QortalLand call signal failed' };
+        : {
+            success: false,
+            error: result?.error || 'QortalLand call signal failed',
+          };
     },
     [groupId]
   );
@@ -3266,156 +3760,163 @@ export function QortalLand({
   const clearLandCallPresence = useCallback((addresses: string[]) => {
     let changed = false;
     for (const address of addresses) {
-      if (address && landCallPresenceRef.current.delete(address)) changed = true;
+      if (address && landCallPresenceRef.current.delete(address))
+        changed = true;
     }
     if (changed) setLandCallPresenceVersion((value) => value + 1);
   }, []);
 
-  const landCallApi = useMemo<VoiceCallApi>(() => ({
-    initiate: async (
-      targetAddress,
-      chatId,
-      localAddress,
-      signature,
-      publicKey,
-      callId,
-      timestamp
-    ) => {
-      const selected = pendingLandCallTargetRef.current;
-      pendingLandCallTargetRef.current = null;
-      if (
-        !selected ||
-        selected.authorAddress !== targetAddress ||
-        !selected.destinationHash
-      ) {
-        return { success: false, error: 'The selected QortalLand session is no longer available' };
-      }
-      const peer = {
-        peerAddress: targetAddress,
+  const landCallApi = useMemo<VoiceCallApi>(
+    () => ({
+      initiate: async (
+        targetAddress,
         chatId,
-        sourceSessionId: sessionId,
-        targetSessionId: selected.sessionId,
-        targetDestinationHash: selected.destinationHash,
-      };
-      landCallPeersRef.current.set(callId, peer);
-      activeLandCallIdRef.current = callId;
-      setActiveLandCallPeerAddress(targetAddress);
-      const result = await sendLandCallSignal({
-        callType: 'request',
-        callId,
-        fromAddress: localAddress,
-        toAddress: targetAddress,
-        chatId,
-        fromPublicKey: publicKey,
+        localAddress,
         signature,
-        roomId: currentRoomRef.current,
-        sourceSessionId: peer.sourceSessionId,
-        targetSessionId: peer.targetSessionId,
-        targetDestinationHash: peer.targetDestinationHash,
-        timestamp,
-      });
-      return result.success ? { success: true, callId } : result;
-    },
-    accept: async (callId, signature, publicKey, timestamp) => {
-      const peer = landCallPeersRef.current.get(callId);
-      if (!peer) return { success: false, error: 'Unknown QortalLand call' };
-      activeLandCallIdRef.current = callId;
-      setActiveLandCallPeerAddress(peer.peerAddress);
-      return sendLandCallSignal({
-        callType: 'accept',
+        publicKey,
         callId,
-        fromAddress: myAddress,
-        toAddress: peer.peerAddress,
-        chatId: peer.chatId,
-        fromPublicKey: publicKey,
-        signature,
-        roomId: currentRoomRef.current,
-        sourceSessionId: peer.sourceSessionId,
-        targetSessionId: peer.targetSessionId,
-        targetDestinationHash: peer.targetDestinationHash,
-        timestamp,
-      });
-    },
-    reject: async (callId, reason, signature, publicKey, timestamp) => {
-      const peer = landCallPeersRef.current.get(callId);
-      if (!peer) {
-        return { success: false, error: 'Unknown QortalLand call' };
-      }
-      const result = await sendLandCallSignal({
-        callType: 'reject',
-        callId,
-        fromAddress: myAddress,
-        toAddress: peer.peerAddress,
-        chatId: peer.chatId,
-        fromPublicKey: publicKey,
-        signature,
-        reason: reason || 'rejected',
-        roomId: currentRoomRef.current,
-        sourceSessionId: peer.sourceSessionId,
-        targetSessionId: peer.targetSessionId,
-        targetDestinationHash: peer.targetDestinationHash,
-        timestamp: timestamp ?? Date.now(),
-      });
-      if (!result.success) return result;
-      landCallPeersRef.current.delete(callId);
-      if (lastAnnouncedLandCallRef.current?.callId === callId) {
-        lastAnnouncedLandCallRef.current = null;
-      }
-      if (activeLandCallIdRef.current === callId) {
-        activeLandCallIdRef.current = null;
-        setActiveLandCallPeerAddress(null);
-      }
-      return result;
-    },
-    hangup: async (callId, signature, publicKey, timestamp) => {
-      const announced = lastAnnouncedLandCallRef.current;
-      const peer = landCallPeersRef.current.get(callId);
-      if (!peer) {
-        // The endpoint route may already have been cleared by another call
-        // event. We can still remove our stale group-visible markers and let
-        // the idle effect publish `ended` from the retained announcement.
-        if (announced?.callId === callId) {
-          clearLandCallPresence([myAddress, announced.peerAddress]);
+        timestamp
+      ) => {
+        const selected = pendingLandCallTargetRef.current;
+        pendingLandCallTargetRef.current = null;
+        if (
+          !selected ||
+          selected.authorAddress !== targetAddress ||
+          !selected.destinationHash
+        ) {
+          return {
+            success: false,
+            error: 'The selected QortalLand session is no longer available',
+          };
         }
-        return { success: true };
-      }
-      // The shared voice hook intentionally holds `ended` for 1.5 seconds
-      // before moving to `idle`. Remove the local group-visible markers now,
-      // while retaining lastAnnouncedLandCallRef for the idle effect to send
-      // the matching group-wide `ended` event.
-      clearLandCallPresence([myAddress, peer.peerAddress]);
-      const result = await sendLandCallSignal({
-        callType: 'hangup',
-        callId,
-        fromAddress: myAddress,
-        toAddress: peer.peerAddress,
-        chatId: peer.chatId,
-        fromPublicKey: publicKey,
-        signature,
-        roomId: currentRoomRef.current,
-        sourceSessionId: peer.sourceSessionId,
-        targetSessionId: peer.targetSessionId,
-        targetDestinationHash: peer.targetDestinationHash,
-        timestamp,
-      });
-      landCallPeersRef.current.delete(callId);
-      // Keep the last group-visible status until callState reaches idle. The
-      // idle effect below owns the matching `ended` broadcast and local icon
-      // cleanup; clearing this record here leaves the status alive until TTL.
-      if (activeLandCallIdRef.current === callId) {
-        activeLandCallIdRef.current = null;
-        setActiveLandCallPeerAddress(null);
-      }
-      return result;
-    },
-    setLocalAddresses: async () => ({ success: true }),
-    onEvent: (cb) => {
-      landCallListenersRef.current.add(cb);
-      return () => {
-        landCallListenersRef.current.delete(cb);
-      };
-    },
-  }), [clearLandCallPresence, myAddress, sendLandCallSignal, sessionId]);
+        const peer = {
+          peerAddress: targetAddress,
+          chatId,
+          sourceSessionId: sessionId,
+          targetSessionId: selected.sessionId,
+          targetDestinationHash: selected.destinationHash,
+        };
+        landCallPeersRef.current.set(callId, peer);
+        activeLandCallIdRef.current = callId;
+        setActiveLandCallPeerAddress(targetAddress);
+        const result = await sendLandCallSignal({
+          callType: 'request',
+          callId,
+          fromAddress: localAddress,
+          toAddress: targetAddress,
+          chatId,
+          fromPublicKey: publicKey,
+          signature,
+          roomId: currentRoomRef.current,
+          sourceSessionId: peer.sourceSessionId,
+          targetSessionId: peer.targetSessionId,
+          targetDestinationHash: peer.targetDestinationHash,
+          timestamp,
+        });
+        return result.success ? { success: true, callId } : result;
+      },
+      accept: async (callId, signature, publicKey, timestamp) => {
+        const peer = landCallPeersRef.current.get(callId);
+        if (!peer) return { success: false, error: 'Unknown QortalLand call' };
+        activeLandCallIdRef.current = callId;
+        setActiveLandCallPeerAddress(peer.peerAddress);
+        return sendLandCallSignal({
+          callType: 'accept',
+          callId,
+          fromAddress: myAddress,
+          toAddress: peer.peerAddress,
+          chatId: peer.chatId,
+          fromPublicKey: publicKey,
+          signature,
+          roomId: currentRoomRef.current,
+          sourceSessionId: peer.sourceSessionId,
+          targetSessionId: peer.targetSessionId,
+          targetDestinationHash: peer.targetDestinationHash,
+          timestamp,
+        });
+      },
+      reject: async (callId, reason, signature, publicKey, timestamp) => {
+        const peer = landCallPeersRef.current.get(callId);
+        if (!peer) {
+          return { success: false, error: 'Unknown QortalLand call' };
+        }
+        const result = await sendLandCallSignal({
+          callType: 'reject',
+          callId,
+          fromAddress: myAddress,
+          toAddress: peer.peerAddress,
+          chatId: peer.chatId,
+          fromPublicKey: publicKey,
+          signature,
+          reason: reason || 'rejected',
+          roomId: currentRoomRef.current,
+          sourceSessionId: peer.sourceSessionId,
+          targetSessionId: peer.targetSessionId,
+          targetDestinationHash: peer.targetDestinationHash,
+          timestamp: timestamp ?? Date.now(),
+        });
+        if (!result.success) return result;
+        landCallPeersRef.current.delete(callId);
+        if (lastAnnouncedLandCallRef.current?.callId === callId) {
+          lastAnnouncedLandCallRef.current = null;
+        }
+        if (activeLandCallIdRef.current === callId) {
+          activeLandCallIdRef.current = null;
+          setActiveLandCallPeerAddress(null);
+        }
+        return result;
+      },
+      hangup: async (callId, signature, publicKey, timestamp) => {
+        const announced = lastAnnouncedLandCallRef.current;
+        const peer = landCallPeersRef.current.get(callId);
+        if (!peer) {
+          // The endpoint route may already have been cleared by another call
+          // event. We can still remove our stale group-visible markers and let
+          // the idle effect publish `ended` from the retained announcement.
+          if (announced?.callId === callId) {
+            clearLandCallPresence([myAddress, announced.peerAddress]);
+          }
+          return { success: true };
+        }
+        // The shared voice hook intentionally holds `ended` for 1.5 seconds
+        // before moving to `idle`. Remove the local group-visible markers now,
+        // while retaining lastAnnouncedLandCallRef for the idle effect to send
+        // the matching group-wide `ended` event.
+        clearLandCallPresence([myAddress, peer.peerAddress]);
+        const result = await sendLandCallSignal({
+          callType: 'hangup',
+          callId,
+          fromAddress: myAddress,
+          toAddress: peer.peerAddress,
+          chatId: peer.chatId,
+          fromPublicKey: publicKey,
+          signature,
+          roomId: currentRoomRef.current,
+          sourceSessionId: peer.sourceSessionId,
+          targetSessionId: peer.targetSessionId,
+          targetDestinationHash: peer.targetDestinationHash,
+          timestamp,
+        });
+        landCallPeersRef.current.delete(callId);
+        // Keep the last group-visible status until callState reaches idle. The
+        // idle effect below owns the matching `ended` broadcast and local icon
+        // cleanup; clearing this record here leaves the status alive until TTL.
+        if (activeLandCallIdRef.current === callId) {
+          activeLandCallIdRef.current = null;
+          setActiveLandCallPeerAddress(null);
+        }
+        return result;
+      },
+      setLocalAddresses: async () => ({ success: true }),
+      onEvent: (cb) => {
+        landCallListenersRef.current.add(cb);
+        return () => {
+          landCallListenersRef.current.delete(cb);
+        };
+      },
+    }),
+    [clearLandCallPresence, myAddress, sendLandCallSignal, sessionId]
+  );
 
   const landVoiceCall = useVoiceCall({
     callApi: landCallApi,
@@ -3423,7 +3924,8 @@ export function QortalLand({
     enableDirectVoiceWebRtc: true,
     skipSystemReadiness: true,
     skipDirectFriendValidation: true,
-    getPeerPublicKey: (address) => landCallPeerPublicKeysRef.current.get(address),
+    getPeerPublicKey: (address) =>
+      landCallPeerPublicKeysRef.current.get(address),
     getPeerDestinationHash: (address) => {
       const callId = activeLandCallIdRef.current;
       const peer = callId ? landCallPeersRef.current.get(callId) : null;
@@ -3439,59 +3941,68 @@ export function QortalLand({
     landVoiceCallStateRef.current = landVoiceCall.callState;
   }, [landVoiceCall.callState]);
 
-  const touchLandCallPresence = useCallback((
-    address: string,
-    peerAddress: string,
-    callId: string,
-    roomId: LandRoomId,
-    ttlMs = LAND_CALL_STATUS_TTL_MS
-  ) => {
-    const normalized = address.trim();
-    if (!normalized || !callId) return;
-    landCallPresenceRef.current.set(normalized, {
-      callId,
-      peerAddress,
-      roomId,
-      expiresAt: Date.now() + ttlMs,
-    });
-    setLandCallPresenceVersion((value) => value + 1);
-  }, []);
+  const touchLandCallPresence = useCallback(
+    (
+      address: string,
+      peerAddress: string,
+      callId: string,
+      roomId: LandRoomId,
+      ttlMs = LAND_CALL_STATUS_TTL_MS
+    ) => {
+      const normalized = address.trim();
+      if (!normalized || !callId) return;
+      landCallPresenceRef.current.set(normalized, {
+        callId,
+        peerAddress,
+        roomId,
+        expiresAt: Date.now() + ttlMs,
+      });
+      setLandCallPresenceVersion((value) => value + 1);
+    },
+    []
+  );
 
   const isAddressInLandCall = useCallback((address: string): boolean => {
     const presence = landCallPresenceRef.current.get(address);
     return Boolean(presence && presence.expiresAt > Date.now());
   }, []);
 
-  const touchLandGamePresence = useCallback((
-    address: string,
-    peerAddress: string,
-    matchId: string,
-    roomId: LandRoomId,
-    ttlMs = LAND_CALL_STATUS_TTL_MS
-  ) => {
-    const normalized = address.trim();
-    if (!normalized || !matchId) return;
-    landGamePresenceRef.current.set(normalized, {
-      matchId,
-      peerAddress,
-      roomId,
-      expiresAt: Date.now() + ttlMs,
-    });
-    setLandGamePresenceVersion((value) => value + 1);
-  }, []);
+  const touchLandGamePresence = useCallback(
+    (
+      address: string,
+      peerAddress: string,
+      matchId: string,
+      roomId: LandRoomId,
+      ttlMs = LAND_CALL_STATUS_TTL_MS
+    ) => {
+      const normalized = address.trim();
+      if (!normalized || !matchId) return;
+      landGamePresenceRef.current.set(normalized, {
+        matchId,
+        peerAddress,
+        roomId,
+        expiresAt: Date.now() + ttlMs,
+      });
+      setLandGamePresenceVersion((value) => value + 1);
+    },
+    []
+  );
 
-  const clearLandGamePresence = useCallback((addresses: string[], matchId?: string) => {
-    let changed = false;
-    for (const address of addresses) {
-      if (!address) continue;
-      const presence = landGamePresenceRef.current.get(address);
-      if (presence && (!matchId || presence.matchId === matchId)) {
-        landGamePresenceRef.current.delete(address);
-        changed = true;
+  const clearLandGamePresence = useCallback(
+    (addresses: string[], matchId?: string) => {
+      let changed = false;
+      for (const address of addresses) {
+        if (!address) continue;
+        const presence = landGamePresenceRef.current.get(address);
+        if (presence && (!matchId || presence.matchId === matchId)) {
+          landGamePresenceRef.current.delete(address);
+          changed = true;
+        }
       }
-    }
-    if (changed) setLandGamePresenceVersion((value) => value + 1);
-  }, []);
+      if (changed) setLandGamePresenceVersion((value) => value + 1);
+    },
+    []
+  );
 
   const isAddressInLandGame = useCallback((address: string): boolean => {
     const presence = landGamePresenceRef.current.get(address);
@@ -3554,9 +4065,12 @@ export function QortalLand({
 
   const rotateCharacterPreview = useCallback((step: -1 | 1) => {
     setCharacterPreviewFacing((facing) => {
-      const currentIndex = QORTAL_LAND_CHARACTER_PREVIEW_FACINGS.indexOf(facing);
+      const currentIndex =
+        QORTAL_LAND_CHARACTER_PREVIEW_FACINGS.indexOf(facing);
       const nextIndex =
-        (Math.max(0, currentIndex) + step + QORTAL_LAND_CHARACTER_PREVIEW_FACINGS.length) %
+        (Math.max(0, currentIndex) +
+          step +
+          QORTAL_LAND_CHARACTER_PREVIEW_FACINGS.length) %
         QORTAL_LAND_CHARACTER_PREVIEW_FACINGS.length;
       return QORTAL_LAND_CHARACTER_PREVIEW_FACINGS[nextIndex];
     });
@@ -3583,12 +4097,16 @@ export function QortalLand({
     [selectedDevRoomId]
   );
 
-  const selectedDevPlacementMeta = getQortalLandEditableDevelopmentPlacement(selectedDevPlacementId);
+  const selectedDevPlacementMeta = getQortalLandEditableDevelopmentPlacement(
+    selectedDevPlacementId
+  );
 
   const selectDevelopmentPlacement = useCallback((placementId: string) => {
     const meta = getQortalLandEditableDevelopmentPlacement(placementId);
     setSelectedDevPlacementId(meta.defaultPlacement.id);
-    setSelectedDevPlacement(getQortalLandDevelopmentPlacement(meta.defaultPlacement));
+    setSelectedDevPlacement(
+      getQortalLandDevelopmentPlacement(meta.defaultPlacement)
+    );
   }, []);
 
   const selectDevelopmentRoom = useCallback(
@@ -3598,7 +4116,8 @@ export function QortalLand({
       )
         ? roomId
         : QORTAL_LAND_DEFAULT_ROOM_ID;
-      const nextPlacements = getQortalLandEditableDevelopmentPlacementsForRoom(nextRoomId);
+      const nextPlacements =
+        getQortalLandEditableDevelopmentPlacementsForRoom(nextRoomId);
       setSelectedDevRoomId(nextRoomId);
       const firstPlacement = nextPlacements[0];
       if (firstPlacement) {
@@ -3653,12 +4172,14 @@ export function QortalLand({
         [field]: numericValue,
       };
       if (field === 'scaleX' || field === 'scaleY') {
-        next.scaleX = field === 'scaleX'
-          ? numericValue
-          : selectedDevPlacement.scaleX ?? selectedDevPlacement.scale ?? 1;
-        next.scaleY = field === 'scaleY'
-          ? numericValue
-          : selectedDevPlacement.scaleY ?? selectedDevPlacement.scale ?? 1;
+        next.scaleX =
+          field === 'scaleX'
+            ? numericValue
+            : (selectedDevPlacement.scaleX ?? selectedDevPlacement.scale ?? 1);
+        next.scaleY =
+          field === 'scaleY'
+            ? numericValue
+            : (selectedDevPlacement.scaleY ?? selectedDevPlacement.scale ?? 1);
         delete next.scale;
       }
       if (field === 'scale') {
@@ -3685,7 +4206,11 @@ export function QortalLand({
         setDevPngPropsEnabled(true);
       }
     },
-    [devPngPropsEnabled, selectedDevPlacement, writeSelectedDevelopmentPlacement]
+    [
+      devPngPropsEnabled,
+      selectedDevPlacement,
+      writeSelectedDevelopmentPlacement,
+    ]
   );
 
   const updateSelectedDevelopmentWarp = useCallback(
@@ -3709,7 +4234,9 @@ export function QortalLand({
   );
 
   const resetSelectedDevelopmentPlacement = useCallback(() => {
-    const meta = getQortalLandEditableDevelopmentPlacement(selectedDevPlacementId);
+    const meta = getQortalLandEditableDevelopmentPlacement(
+      selectedDevPlacementId
+    );
     clearQortalLandDevelopmentPngPlacementOverride(meta.defaultPlacement.id);
     setSelectedDevPlacement({ ...meta.defaultPlacement });
     notifyQortalLandDevelopmentAssetsChanged();
@@ -3717,9 +4244,14 @@ export function QortalLand({
 
   const setProceduralClubShellVisible = useCallback((enabled: boolean) => {
     if (enabled) {
-      window.localStorage.setItem(QORTAL_LAND_DEV_PROCEDURAL_CLUB_SHELL_STORAGE_KEY, '1');
+      window.localStorage.setItem(
+        QORTAL_LAND_DEV_PROCEDURAL_CLUB_SHELL_STORAGE_KEY,
+        '1'
+      );
     } else {
-      window.localStorage.removeItem(QORTAL_LAND_DEV_PROCEDURAL_CLUB_SHELL_STORAGE_KEY);
+      window.localStorage.removeItem(
+        QORTAL_LAND_DEV_PROCEDURAL_CLUB_SHELL_STORAGE_KEY
+      );
     }
     setProceduralClubShellEnabled(enabled);
     notifyQortalLandDevelopmentAssetsChanged();
@@ -3727,9 +4259,14 @@ export function QortalLand({
 
   const setCollisionDebugVisible = useCallback((enabled: boolean) => {
     if (enabled) {
-      window.localStorage.setItem(QORTAL_LAND_DEV_COLLISION_DEBUG_STORAGE_KEY, '1');
+      window.localStorage.setItem(
+        QORTAL_LAND_DEV_COLLISION_DEBUG_STORAGE_KEY,
+        '1'
+      );
     } else {
-      window.localStorage.removeItem(QORTAL_LAND_DEV_COLLISION_DEBUG_STORAGE_KEY);
+      window.localStorage.removeItem(
+        QORTAL_LAND_DEV_COLLISION_DEBUG_STORAGE_KEY
+      );
     }
     setCollisionDebugEnabled(enabled);
     notifyQortalLandDevelopmentAssetsChanged();
@@ -3796,12 +4333,14 @@ export function QortalLand({
         [field]: numericValue,
       };
       if (field === 'scaleX' || field === 'scaleY') {
-        next.scaleX = field === 'scaleX'
-          ? numericValue
-          : devClubBarPlacement.scaleX ?? devClubBarPlacement.scale ?? 1;
-        next.scaleY = field === 'scaleY'
-          ? numericValue
-          : devClubBarPlacement.scaleY ?? devClubBarPlacement.scale ?? 1;
+        next.scaleX =
+          field === 'scaleX'
+            ? numericValue
+            : (devClubBarPlacement.scaleX ?? devClubBarPlacement.scale ?? 1);
+        next.scaleY =
+          field === 'scaleY'
+            ? numericValue
+            : (devClubBarPlacement.scaleY ?? devClubBarPlacement.scale ?? 1);
         delete next.scale;
       }
       setDevClubBarPlacement(next);
@@ -3815,7 +4354,10 @@ export function QortalLand({
           originY: next.originY,
           scaleX: next.scaleX,
           scaleY: next.scaleY,
-          scale: next.scaleX === undefined && next.scaleY === undefined ? next.scale : undefined,
+          scale:
+            next.scaleX === undefined && next.scaleY === undefined
+              ? next.scale
+              : undefined,
         }
       );
       if (!devPngPropsEnabled) {
@@ -3929,7 +4471,9 @@ export function QortalLand({
       });
     if (missingAddresses.length === 0) return;
 
-    missingAddresses.forEach((address) => pendingPrimaryNameLookupsRef.current.add(address));
+    missingAddresses.forEach((address) =>
+      pendingPrimaryNameLookupsRef.current.add(address)
+    );
     if (primaryNameLookupTimerRef.current !== null) return;
 
     primaryNameLookupTimerRef.current = window.setTimeout(() => {
@@ -3941,7 +4485,10 @@ export function QortalLand({
       void getPrimaryNamesForAddresses(batch)
         .then((primaryNames) => {
           batch.forEach((address) => {
-            primaryNameCacheRef.current.set(address, primaryNames[address]?.trim() || '');
+            primaryNameCacheRef.current.set(
+              address,
+              primaryNames[address]?.trim() || ''
+            );
           });
           setPrimaryNameLookupVersion((version) => version + 1);
         })
@@ -3955,15 +4502,21 @@ export function QortalLand({
     return displayNameForAddress(playerAddress, primaryNameCacheRef.current);
   }, []);
 
-  const handleLandGamePlayerSeen = useCallback((playerAddress: string) => {
-    queuePrimaryNameLookups([playerAddress]);
-  }, [queuePrimaryNameLookups]);
+  const handleLandGamePlayerSeen = useCallback(
+    (playerAddress: string) => {
+      queuePrimaryNameLookups([playerAddress]);
+    },
+    [queuePrimaryNameLookups]
+  );
 
-  const getProximityPosition = useCallback(() => ({
-    roomId: localStateRef.current.roomId,
-    x: localStateRef.current.x,
-    y: localStateRef.current.y,
-  }), []);
+  const getProximityPosition = useCallback(
+    () => ({
+      roomId: localStateRef.current.roomId,
+      x: localStateRef.current.x,
+      y: localStateRef.current.y,
+    }),
+    []
+  );
 
   const proximityVoice = useQortalLandProximityVoice({
     address: myAddress,
@@ -3994,7 +4547,9 @@ export function QortalLand({
 
   useEffect(() => {
     const speaking = new Set(
-      proximityVoice.peers.filter((peer) => peer.speaking).map((peer) => peer.address)
+      proximityVoice.peers
+        .filter((peer) => peer.speaking)
+        .map((peer) => peer.address)
     );
     if (proximityVoice.transmitting) speaking.add(myAddress);
     proximitySpeakingAddressesRef.current = speaking;
@@ -4053,11 +4608,16 @@ export function QortalLand({
     setLastChatActivityAt(Date.now());
   }, []);
 
-  const appendLandChatMessage = useCallback((message: LandChatTranscriptMessage) => {
-    queuePrimaryNameLookups([message.authorAddress]);
-    setLandChatMessages((messages) => mergeLandChatTranscriptMessage(messages, message));
-    wakeLandChatPanel();
-  }, [queuePrimaryNameLookups, wakeLandChatPanel]);
+  const appendLandChatMessage = useCallback(
+    (message: LandChatTranscriptMessage) => {
+      queuePrimaryNameLookups([message.authorAddress]);
+      setLandChatMessages((messages) =>
+        mergeLandChatTranscriptMessage(messages, message)
+      );
+      wakeLandChatPanel();
+    },
+    [queuePrimaryNameLookups, wakeLandChatPanel]
+  );
 
   const focusLandChatInput = useCallback(() => {
     recordLandActivity();
@@ -4075,26 +4635,30 @@ export function QortalLand({
     chatInputRef.current?.blur();
   }, []);
 
-  const insertLandChatEmojiShortcut = useCallback((shortcut: string) => {
-    recordLandActivity();
-    setChatText((current) => {
-      const input = chatInputRef.current;
-      const start = input?.selectionStart ?? current.length;
-      const end = input?.selectionEnd ?? start;
-      const before = current.slice(0, start);
-      const after = current.slice(end);
-      const insertedShortcut = `${shortcut} `;
-      const leadingSpace = before.length > 0 && !/\s$/.test(before) ? ' ' : '';
-      const trailingSpace = after.length > 0 && !/^\s/.test(after) ? ' ' : '';
-      return `${before}${leadingSpace}${insertedShortcut}${trailingSpace}${after}`.slice(
-        0,
-        LAND_CHAT_MAX_INPUT_CHARS
-      );
-    });
-    if (chatError) setChatError('');
-    setIsEmojiPickerOpen(false);
-    focusLandChatInput();
-  }, [chatError, focusLandChatInput, recordLandActivity]);
+  const insertLandChatEmojiShortcut = useCallback(
+    (shortcut: string) => {
+      recordLandActivity();
+      setChatText((current) => {
+        const input = chatInputRef.current;
+        const start = input?.selectionStart ?? current.length;
+        const end = input?.selectionEnd ?? start;
+        const before = current.slice(0, start);
+        const after = current.slice(end);
+        const insertedShortcut = `${shortcut} `;
+        const leadingSpace =
+          before.length > 0 && !/\s$/.test(before) ? ' ' : '';
+        const trailingSpace = after.length > 0 && !/^\s/.test(after) ? ' ' : '';
+        return `${before}${leadingSpace}${insertedShortcut}${trailingSpace}${after}`.slice(
+          0,
+          LAND_CHAT_MAX_INPUT_CHARS
+        );
+      });
+      if (chatError) setChatError('');
+      setIsEmojiPickerOpen(false);
+      focusLandChatInput();
+    },
+    [chatError, focusLandChatInput, recordLandActivity]
+  );
 
   useEffect(() => {
     queuePrimaryNameLookups([myAddress]);
@@ -4121,91 +4685,92 @@ export function QortalLand({
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [actionTarget]);
 
-  const publishLandEventPayload = useCallback(async (payload: Record<string, unknown>) => {
-    const timestamp = Date.now();
-    const eventId = createLandChatMessageId();
-    const authorSequence = await window.reticulumChat?.reserveAuthorSequence?.(
-      groupId,
-      myAddress
-    );
-    if (
-      !authorSequence ||
-      !/^[0-9a-f]{32}$/.test(authorSequence.authorStreamId) ||
-      !Number.isInteger(authorSequence.authorSeq) ||
-      authorSequence.authorSeq <= 0
-    ) {
-      throw new Error('Unable to reserve QortalLand chat event sequence');
-    }
-    let sequenceCommitted = false;
-    try {
-      const encryptedPayload = JSON.stringify({
-        ...payload,
-        qortalLand: true,
-        sessionId,
-        version: 1,
-      });
-      const payloadHash = await sha256Hex(encryptedPayload);
-      const baseFields = {
-        eventId,
-        groupId,
-        channelId: QORTAL_LAND_CHANNEL_ID,
-        authorStreamId: authorSequence.authorStreamId,
-        authorSeq: authorSequence.authorSeq,
-        timestamp,
-        eventType: 'message',
-        targetEventId: null,
-        replyToEventId: null,
-        encryptedPayload,
-        payloadHash,
-        mentionAddressHashes: [],
-      };
-      const signed = await window.sendMessage?.(
-        'signReticulumChatEvent',
-        baseFields,
-        10000
-      ) as
-        | {
-            authorAddress?: string;
-            authorPublicKey?: string;
-            signature?: string;
-            error?: string;
+  const publishLandEventPayload = useCallback(
+    async (payload: Record<string, unknown>) => {
+      const timestamp = Date.now();
+      const eventId = createLandChatMessageId();
+      const authorSequence =
+        await window.reticulumChat?.reserveAuthorSequence?.(groupId, myAddress);
+      if (
+        !authorSequence ||
+        !/^[0-9a-f]{32}$/.test(authorSequence.authorStreamId) ||
+        !Number.isInteger(authorSequence.authorSeq) ||
+        authorSequence.authorSeq <= 0
+      ) {
+        throw new Error('Unable to reserve QortalLand chat event sequence');
+      }
+      let sequenceCommitted = false;
+      try {
+        const encryptedPayload = JSON.stringify({
+          ...payload,
+          qortalLand: true,
+          sessionId,
+          version: 1,
+        });
+        const payloadHash = await sha256Hex(encryptedPayload);
+        const baseFields = {
+          eventId,
+          groupId,
+          channelId: QORTAL_LAND_CHANNEL_ID,
+          authorStreamId: authorSequence.authorStreamId,
+          authorSeq: authorSequence.authorSeq,
+          timestamp,
+          eventType: 'message',
+          targetEventId: null,
+          replyToEventId: null,
+          encryptedPayload,
+          payloadHash,
+          mentionAddressHashes: [],
+        };
+        const signed = (await window.sendMessage?.(
+          'signReticulumChatEvent',
+          baseFields,
+          10000
+        )) as
+          | {
+              authorAddress?: string;
+              authorPublicKey?: string;
+              signature?: string;
+              error?: string;
+            }
+          | undefined;
+        if (!signed || signed.error) {
+          throw new Error(signed?.error || 'Unable to sign QortalLand event');
+        }
+        if (signed.authorAddress !== myAddress) {
+          throw new Error('Signed QortalLand author mismatch');
+        }
+        const result = await window.reticulumChat?.publishEvent?.({
+          ...baseFields,
+          authorAddress: signed.authorAddress,
+          authorPublicKey: signed.authorPublicKey,
+          signature: signed.signature,
+        });
+        if (!result?.success) {
+          throw new Error(result?.error || 'QortalLand event send failed');
+        }
+        sequenceCommitted = true;
+        return { eventId, timestamp };
+      } finally {
+        if (!sequenceCommitted) {
+          try {
+            await window.reticulumChat?.releaseAuthorSequence?.(
+              groupId,
+              myAddress,
+              authorSequence.authorStreamId,
+              authorSequence.authorSeq
+            );
+          } catch (releaseError) {
+            console.warn(
+              'Unable to release QortalLand chat event sequence',
+              releaseError
+            );
           }
-        | undefined;
-      if (!signed || signed.error) {
-        throw new Error(signed?.error || 'Unable to sign QortalLand event');
-      }
-      if (signed.authorAddress !== myAddress) {
-        throw new Error('Signed QortalLand author mismatch');
-      }
-      const result = await window.reticulumChat?.publishEvent?.({
-        ...baseFields,
-        authorAddress: signed.authorAddress,
-        authorPublicKey: signed.authorPublicKey,
-        signature: signed.signature,
-      });
-      if (!result?.success) {
-        throw new Error(result?.error || 'QortalLand event send failed');
-      }
-      sequenceCommitted = true;
-      return { eventId, timestamp };
-    } finally {
-      if (!sequenceCommitted) {
-        try {
-          await window.reticulumChat?.releaseAuthorSequence?.(
-            groupId,
-            myAddress,
-            authorSequence.authorStreamId,
-            authorSequence.authorSeq
-          );
-        } catch (releaseError) {
-          console.warn(
-            'Unable to release QortalLand chat event sequence',
-            releaseError
-          );
         }
       }
-    }
-  }, [groupId, myAddress, sessionId]);
+    },
+    [groupId, myAddress, sessionId]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -4234,13 +4799,10 @@ export function QortalLand({
   const latestLandChatMessageId =
     landChatMessages[landChatMessages.length - 1]?.messageId || '';
 
-  const commitChatPanelGeometry = useCallback(
-    (next: LandChatPanelGeometry) => {
-      chatPanelGeometryRef.current = next;
-      setChatPanelGeometry(next);
-    },
-    []
-  );
+  const commitChatPanelGeometry = useCallback((next: LandChatPanelGeometry) => {
+    chatPanelGeometryRef.current = next;
+    setChatPanelGeometry(next);
+  }, []);
 
   const beginChatPanelInteraction = useCallback(
     (
@@ -4306,15 +4868,26 @@ export function QortalLand({
       if (interaction.mode === 'drag') {
         next = {
           ...start,
-          x: clampNumber(start.x + dx, 0, Math.max(0, bounds.width - start.width)),
-          y: clampNumber(start.y + dy, 0, Math.max(0, bounds.height - start.height)),
+          x: clampNumber(
+            start.x + dx,
+            0,
+            Math.max(0, bounds.width - start.width)
+          ),
+          y: clampNumber(
+            start.y + dy,
+            0,
+            Math.max(0, bounds.height - start.height)
+          ),
         };
       } else {
         const availableWidth = Math.max(0, bounds.width - start.x);
         const width = clampNumber(
           start.width + dx,
           Math.min(minWidth, availableWidth),
-          Math.max(Math.min(minWidth, availableWidth), Math.min(maxWidth, availableWidth))
+          Math.max(
+            Math.min(minWidth, availableWidth),
+            Math.min(maxWidth, availableWidth)
+          )
         );
         if (interaction.mode === 'resize-top-right') {
           const fixedBottom = start.y + start.height;
@@ -4322,7 +4895,10 @@ export function QortalLand({
           const height = clampNumber(
             start.height - dy,
             Math.min(minHeight, availableHeight),
-            Math.max(Math.min(minHeight, availableHeight), Math.min(maxHeight, availableHeight))
+            Math.max(
+              Math.min(minHeight, availableHeight),
+              Math.min(maxHeight, availableHeight)
+            )
           );
           next = {
             x: start.x,
@@ -4335,7 +4911,10 @@ export function QortalLand({
           const height = clampNumber(
             start.height + dy,
             Math.min(minHeight, availableHeight),
-            Math.max(Math.min(minHeight, availableHeight), Math.min(maxHeight, availableHeight))
+            Math.max(
+              Math.min(minHeight, availableHeight),
+              Math.min(maxHeight, availableHeight)
+            )
           );
           next = {
             x: start.x,
@@ -4410,23 +4989,54 @@ export function QortalLand({
 
   useEffect(() => {
     const pressedKeys = movementKeysRef.current;
-    const normalizeMovementKey = (key: string): string => key.trim().toLowerCase();
+    const normalizeMovementKey = (key: string): string =>
+      key.trim().toLowerCase();
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!isActiveRef.current) return;
       if (isEditableTarget(event.target)) return;
       if (landGameActiveRef.current) {
         const blocked = normalizeMovementKey(event.key);
-        if (['arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'a', 'd', 'w', 's'].includes(blocked)) {
+        if (
+          [
+            'arrowleft',
+            'arrowright',
+            'arrowup',
+            'arrowdown',
+            'a',
+            'd',
+            'w',
+            's',
+          ].includes(blocked)
+        ) {
           event.preventDefault();
         }
         return;
       }
       const key = normalizeMovementKey(event.key);
-      if (key === 'e' && isNearClubDjBooth(localStateRef.current.roomId, localStateRef.current.x, localStateRef.current.y)) {
+      if (
+        key === 'e' &&
+        isNearClubDjBooth(
+          localStateRef.current.roomId,
+          localStateRef.current.x,
+          localStateRef.current.y
+        )
+      ) {
         event.preventDefault();
         return;
       }
-      if (!['arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'a', 'd', 'w', 's'].includes(key)) return;
+      if (
+        ![
+          'arrowleft',
+          'arrowright',
+          'arrowup',
+          'arrowdown',
+          'a',
+          'd',
+          'w',
+          's',
+        ].includes(key)
+      )
+        return;
       pressedKeys.add(key);
       event.preventDefault();
     };
@@ -4449,29 +5059,37 @@ export function QortalLand({
     };
   }, []);
 
-  const addLandActionAnimation = useCallback((animation: Omit<LandActionAnimation, 'createdAt' | 'expiresAt'> & { timestamp?: number }) => {
-    const now = Date.now();
-    const packetTimestamp = Number(animation.timestamp);
-    const createdAt = Number.isFinite(packetTimestamp)
-      ? Math.min(now, packetTimestamp)
-      : now;
-    if (createdAt <= now - LAND_ACTION_ANIMATION_TTL_MS) return;
-    const existingForTarget = [...landActionAnimationsRef.current.values()]
-      .filter((item) => (
-        item.toAddress === animation.toAddress &&
-        item.targetSessionId === animation.targetSessionId
-      ))
-      .sort((left, right) => left.createdAt - right.createdAt);
-    while (existingForTarget.length >= LAND_ACTIONS_PER_AVATAR_MAX) {
-      const oldest = existingForTarget.shift();
-      if (oldest) landActionAnimationsRef.current.delete(oldest.actionId);
-    }
-    landActionAnimationsRef.current.set(animation.actionId, {
-      ...animation,
-      createdAt,
-      expiresAt: createdAt + LAND_ACTION_ANIMATION_TTL_MS,
-    });
-  }, []);
+  const addLandActionAnimation = useCallback(
+    (
+      animation: Omit<LandActionAnimation, 'createdAt' | 'expiresAt'> & {
+        timestamp?: number;
+      }
+    ) => {
+      const now = Date.now();
+      const packetTimestamp = Number(animation.timestamp);
+      const createdAt = Number.isFinite(packetTimestamp)
+        ? Math.min(now, packetTimestamp)
+        : now;
+      if (createdAt <= now - LAND_ACTION_ANIMATION_TTL_MS) return;
+      const existingForTarget = [...landActionAnimationsRef.current.values()]
+        .filter(
+          (item) =>
+            item.toAddress === animation.toAddress &&
+            item.targetSessionId === animation.targetSessionId
+        )
+        .sort((left, right) => left.createdAt - right.createdAt);
+      while (existingForTarget.length >= LAND_ACTIONS_PER_AVATAR_MAX) {
+        const oldest = existingForTarget.shift();
+        if (oldest) landActionAnimationsRef.current.delete(oldest.actionId);
+      }
+      landActionAnimationsRef.current.set(animation.actionId, {
+        ...animation,
+        createdAt,
+        expiresAt: createdAt + LAND_ACTION_ANIMATION_TTL_MS,
+      });
+    },
+    []
+  );
 
   const sendLandChat = useCallback(async () => {
     if (isSendingChat || reticulumReady !== true) return;
@@ -4537,7 +5155,9 @@ export function QortalLand({
         chatInputRef.current?.focus();
       }, 0);
     } catch (error) {
-      setChatError(error instanceof Error ? error.message : 'QortalLand chat send failed');
+      setChatError(
+        error instanceof Error ? error.message : 'QortalLand chat send failed'
+      );
     } finally {
       setIsSendingChat(false);
     }
@@ -4584,77 +5204,83 @@ export function QortalLand({
     setLocalLandAvailability,
   ]);
 
-  const sendSocialAction = useCallback(async (actionType: LandSocialActionType) => {
-    const target = actionTarget
-      ? resolveCurrentLandActionTarget(actionTarget)
-      : null;
-    const now = Date.now();
-    if (
-      !target ||
-      reticulumReady !== true ||
-      sendingSocialAction ||
-      socialActionCooldownUntil > now
-    ) return;
-    recordLandActivity();
-    setSendingSocialAction(actionType);
-    setSocialActionError('');
-    const actionId = createLandChatMessageId();
-    const actionSequence = landActionSequenceRef.current + 1;
-    landActionSequenceRef.current = actionSequence;
-    try {
-      const result = await window.reticulumChat?.sendLandAction?.(groupId, {
-        actionId,
-        actionType,
-        fromAddress: myAddress,
-        sourceSessionId: sessionId,
-        sequence: actionSequence,
-        toAddress: target.authorAddress,
-        targetSessionId: target.sessionId,
-        roomId: target.roomId,
-      });
-      if (!result?.success) {
-        throw new Error(result?.error || 'The effect could not be sent');
+  const sendSocialAction = useCallback(
+    async (actionType: LandSocialActionType) => {
+      const target = actionTarget
+        ? resolveCurrentLandActionTarget(actionTarget)
+        : null;
+      const now = Date.now();
+      if (
+        !target ||
+        reticulumReady !== true ||
+        sendingSocialAction ||
+        socialActionCooldownUntil > now
+      )
+        return;
+      recordLandActivity();
+      setSendingSocialAction(actionType);
+      setSocialActionError('');
+      const actionId = createLandChatMessageId();
+      const actionSequence = landActionSequenceRef.current + 1;
+      landActionSequenceRef.current = actionSequence;
+      try {
+        const result = await window.reticulumChat?.sendLandAction?.(groupId, {
+          actionId,
+          actionType,
+          fromAddress: myAddress,
+          sourceSessionId: sessionId,
+          sequence: actionSequence,
+          toAddress: target.authorAddress,
+          targetSessionId: target.sessionId,
+          roomId: target.roomId,
+        });
+        if (!result?.success) {
+          throw new Error(result?.error || 'The effect could not be sent');
+        }
+        addLandActionAnimation({
+          actionId,
+          type: actionType,
+          fromAddress: myAddress,
+          sourceSessionId: sessionId,
+          sequence: actionSequence,
+          toAddress: target.authorAddress,
+          targetSessionId: target.sessionId,
+          amount: 0,
+          roomId: target.roomId,
+        });
+        const cooldownUntil = Date.now() + LAND_SOCIAL_ACTION_COOLDOWN_MS;
+        setSocialActionCooldownUntil(cooldownUntil);
+        if (landActionCooldownTimerRef.current !== null) {
+          window.clearTimeout(landActionCooldownTimerRef.current);
+        }
+        landActionCooldownTimerRef.current = window.setTimeout(() => {
+          landActionCooldownTimerRef.current = null;
+          setSocialActionCooldownUntil(0);
+        }, LAND_SOCIAL_ACTION_COOLDOWN_MS);
+        setActionTarget(null);
+      } catch (error) {
+        setSocialActionError(
+          error instanceof Error
+            ? error.message
+            : 'The effect could not be sent'
+        );
+      } finally {
+        setSendingSocialAction(null);
       }
-      addLandActionAnimation({
-        actionId,
-        type: actionType,
-        fromAddress: myAddress,
-        sourceSessionId: sessionId,
-        sequence: actionSequence,
-        toAddress: target.authorAddress,
-        targetSessionId: target.sessionId,
-        amount: 0,
-        roomId: target.roomId,
-      });
-      const cooldownUntil = Date.now() + LAND_SOCIAL_ACTION_COOLDOWN_MS;
-      setSocialActionCooldownUntil(cooldownUntil);
-      if (landActionCooldownTimerRef.current !== null) {
-        window.clearTimeout(landActionCooldownTimerRef.current);
-      }
-      landActionCooldownTimerRef.current = window.setTimeout(() => {
-        landActionCooldownTimerRef.current = null;
-        setSocialActionCooldownUntil(0);
-      }, LAND_SOCIAL_ACTION_COOLDOWN_MS);
-      setActionTarget(null);
-    } catch (error) {
-      setSocialActionError(
-        error instanceof Error ? error.message : 'The effect could not be sent'
-      );
-    } finally {
-      setSendingSocialAction(null);
-    }
-  }, [
-    addLandActionAnimation,
-    actionTarget,
-    groupId,
-    myAddress,
-    reticulumReady,
-    recordLandActivity,
-    resolveCurrentLandActionTarget,
-    sendingSocialAction,
-    sessionId,
-    socialActionCooldownUntil,
-  ]);
+    },
+    [
+      addLandActionAnimation,
+      actionTarget,
+      groupId,
+      myAddress,
+      reticulumReady,
+      recordLandActivity,
+      resolveCurrentLandActionTarget,
+      sendingSocialAction,
+      sessionId,
+      socialActionCooldownUntil,
+    ]
+  );
 
   const openSendQortDialog = useCallback((target: LandActionTarget) => {
     setActionTarget(null);
@@ -4683,12 +5309,16 @@ export function QortalLand({
     setIsSendingQort(true);
     setSendQortError('');
     try {
-      const paymentResult = await window.sendMessage?.('sendCoin', {
-        amount,
-        receiver: sendQortTarget.authorAddress,
-        password: null,
-        skipConfirmPassword: true,
-      }, 120000) as { payload?: unknown; error?: string } | undefined;
+      const paymentResult = (await window.sendMessage?.(
+        'sendCoin',
+        {
+          amount,
+          receiver: sendQortTarget.authorAddress,
+          password: null,
+          skipConfirmPassword: true,
+        },
+        120000
+      )) as { payload?: unknown; error?: string } | undefined;
       if (!paymentResult || paymentResult.error) {
         throw new Error(paymentResult?.error || 'QORT payment failed');
       }
@@ -4698,9 +5328,8 @@ export function QortalLand({
       landActionSequenceRef.current = actionSequence;
       let actionResult: { success: boolean; error?: string } | null = null;
       try {
-        actionResult = await window.reticulumChat?.sendLandAction?.(
-          groupId,
-          {
+        actionResult =
+          (await window.reticulumChat?.sendLandAction?.(groupId, {
             actionId,
             actionType: 'qort_received',
             fromAddress: myAddress,
@@ -4710,13 +5339,15 @@ export function QortalLand({
             targetSessionId: sendQortTarget.sessionId,
             amount,
             roomId: sendQortTarget.roomId,
-          }
-        ) ?? null;
+          })) ?? null;
       } catch (error) {
         console.warn('Failed to send QortalLand QORT action:', error);
       }
       if (actionResult && actionResult.success !== true) {
-        console.warn('Failed to send QortalLand QORT action:', actionResult.error);
+        console.warn(
+          'Failed to send QortalLand QORT action:',
+          actionResult.error
+        );
       }
       addLandActionAnimation({
         actionId,
@@ -4732,7 +5363,9 @@ export function QortalLand({
       setSendQortTarget(null);
       setSendQortAmount('1');
     } catch (error) {
-      setSendQortError(error instanceof Error ? error.message : 'QORT payment failed');
+      setSendQortError(
+        error instanceof Error ? error.message : 'QORT payment failed'
+      );
     } finally {
       setIsSendingQort(false);
     }
@@ -4777,10 +5410,17 @@ export function QortalLand({
   useEffect(() => {
     if (!Number.isInteger(groupId) || groupId <= 0 || !myAddress) return;
     void window.reticulumChat?.subscribeGroup?.(groupId);
-    void window.reticulumChat?.subscribeChannel?.(groupId, QORTAL_LAND_CHANNEL_ID);
+    void window.reticulumChat?.subscribeChannel?.(
+      groupId,
+      QORTAL_LAND_CHANNEL_ID
+    );
     const unsubscribe = window.reticulumChat?.onLandState?.((payload) => {
       if (payload.groupId !== groupId) return;
-      if (payload.authorAddress === myAddress && payload.sessionId === sessionId) return;
+      if (
+        payload.authorAddress === myAddress &&
+        payload.sessionId === sessionId
+      )
+        return;
       queuePrimaryNameLookups([payload.authorAddress]);
       const key = `${payload.authorAddress}:${payload.sessionId}`;
       const existing = remotePlayersRef.current.get(key);
@@ -4812,38 +5452,52 @@ export function QortalLand({
       }
       const sentAt = finiteNumber(payload.timestamp) ?? now;
       const roomChanged = Boolean(existing && existing.roomId !== roomId);
-      const fromX = roomChanged ? payload.x : existing?.displayX ?? existing?.x ?? payload.x;
-      const fromY = roomChanged ? payload.y : existing?.displayY ?? existing?.y ?? payload.y;
+      const fromX = roomChanged
+        ? payload.x
+        : (existing?.displayX ?? existing?.x ?? payload.x);
+      const fromY = roomChanged
+        ? payload.y
+        : (existing?.displayY ?? existing?.y ?? payload.y);
       const stateGapMs = existing
         ? clampNumber(
-            sentAt > existing.sentAt ? sentAt - existing.sentAt : now - existing.receivedAt,
+            sentAt > existing.sentAt
+              ? sentAt - existing.sentAt
+              : now - existing.receivedAt,
             LAND_SEND_INTERVAL_MS,
             5000
           )
         : LAND_SEND_INTERVAL_MS;
       const velocitySourceMs = Math.max(stateGapMs, 1);
-      const velocityX = existing && !roomChanged
-        ? clampRemoteVelocity((payload.x - existing.x) / velocitySourceMs)
-        : 0;
-      const velocityY = existing && !roomChanged
-        ? clampRemoteVelocity((payload.y - existing.y) / velocitySourceMs)
-        : 0;
+      const velocityX =
+        existing && !roomChanged
+          ? clampRemoteVelocity((payload.x - existing.x) / velocitySourceMs)
+          : 0;
+      const velocityY =
+        existing && !roomChanged
+          ? clampRemoteVelocity((payload.y - existing.y) / velocitySourceMs)
+          : 0;
       const observedTimelineOffsetMs = now - sentAt;
-      const timelineOffsetMs = roomChanged || !existing
-        ? observedTimelineOffsetMs
-        : observedTimelineOffsetMs < existing.timelineOffsetMs
-          ? Math.max(
-              observedTimelineOffsetMs,
-              existing.timelineOffsetMs - LAND_REMOTE_TIMELINE_CATCH_UP_MS
-            )
-          : existing.timelineOffsetMs;
-      const fromTimelineAt = roomChanged || !existing
-        ? now
-        : now - LAND_REMOTE_INTERPOLATION_BUFFER_MS;
+      const timelineOffsetMs =
+        roomChanged || !existing
+          ? observedTimelineOffsetMs
+          : observedTimelineOffsetMs < existing.timelineOffsetMs
+            ? Math.max(
+                observedTimelineOffsetMs,
+                existing.timelineOffsetMs - LAND_REMOTE_TIMELINE_CATCH_UP_MS
+              )
+            : existing.timelineOffsetMs;
+      const fromTimelineAt =
+        roomChanged || !existing
+          ? now
+          : now - LAND_REMOTE_INTERPOLATION_BUFFER_MS;
       const mappedTimelineAt = sentAt + timelineOffsetMs;
-      const timelineAt = roomChanged || !existing
-        ? now
-        : Math.max(fromTimelineAt + LAND_REMOTE_RECONCILE_MS, mappedTimelineAt);
+      const timelineAt =
+        roomChanged || !existing
+          ? now
+          : Math.max(
+              fromTimelineAt + LAND_REMOTE_RECONCILE_MS,
+              mappedTimelineAt
+            );
       const afk = payload.afk === true;
       const dnd = payload.dnd === true;
       const voiceEnabled = payload.voiceEnabled === true;
@@ -4899,7 +5553,10 @@ export function QortalLand({
     });
     return () => {
       unsubscribe?.();
-      void window.reticulumChat?.unsubscribeChannel?.(groupId, QORTAL_LAND_CHANNEL_ID);
+      void window.reticulumChat?.unsubscribeChannel?.(
+        groupId,
+        QORTAL_LAND_CHANNEL_ID
+      );
       void window.reticulumChat?.sendLandState?.(groupId, myAddress, {
         sessionId,
         sequence: sequenceRef.current + 1,
@@ -4937,12 +5594,15 @@ export function QortalLand({
         .filter((event) => event.channelId === QORTAL_LAND_CHANNEL_ID)
         .filter((event) => event.eventType === 'message')
         .map((event) => parseQortalLandChatEvent(event, ''))
-        .filter((message): message is LandChatTranscriptMessage => Boolean(message));
+        .filter((message): message is LandChatTranscriptMessage =>
+          Boolean(message)
+        );
       if (!messages.length) return;
       queuePrimaryNameLookups(messages.map((message) => message.authorAddress));
       setLandChatMessages((current) =>
         messages.reduce(
-          (nextMessages, message) => mergeLandChatTranscriptMessage(nextMessages, message),
+          (nextMessages, message) =>
+            mergeLandChatTranscriptMessage(nextMessages, message),
           current
         )
       );
@@ -5026,20 +5686,37 @@ export function QortalLand({
     return () => {
       unsubscribe?.();
     };
-  }, [addLandActionAnimation, appendLandChatMessage, groupId, myAddress, queuePrimaryNameLookups]);
+  }, [
+    addLandActionAnimation,
+    appendLandChatMessage,
+    groupId,
+    myAddress,
+    queuePrimaryNameLookups,
+  ]);
 
   useEffect(() => {
     if (!Number.isInteger(groupId) || groupId <= 0 || !myAddress) return;
     const unsubscribe = window.reticulumChat?.onLandAction?.((payload) => {
       if (payload.groupId !== groupId) return;
-      const actionType = typeof payload.actionType === 'string' ? payload.actionType : '';
-      if (actionType !== 'qort_received' && !isLandSocialActionType(actionType)) return;
-      const actionId = typeof payload.actionId === 'string' ? payload.actionId : '';
-      const fromAddress = typeof payload.fromAddress === 'string' ? payload.fromAddress : '';
-      const sourceSessionId = typeof payload.sourceSessionId === 'string' ? payload.sourceSessionId : '';
+      const actionType =
+        typeof payload.actionType === 'string' ? payload.actionType : '';
+      if (actionType !== 'qort_received' && !isLandSocialActionType(actionType))
+        return;
+      const actionId =
+        typeof payload.actionId === 'string' ? payload.actionId : '';
+      const fromAddress =
+        typeof payload.fromAddress === 'string' ? payload.fromAddress : '';
+      const sourceSessionId =
+        typeof payload.sourceSessionId === 'string'
+          ? payload.sourceSessionId
+          : '';
       const actionSequence = finiteNumber(payload.sequence);
-      const toAddress = typeof payload.toAddress === 'string' ? payload.toAddress : '';
-      const targetSessionId = typeof payload.targetSessionId === 'string' ? payload.targetSessionId : '';
+      const toAddress =
+        typeof payload.toAddress === 'string' ? payload.toAddress : '';
+      const targetSessionId =
+        typeof payload.targetSessionId === 'string'
+          ? payload.targetSessionId
+          : '';
       const amount = finiteNumber(payload.amount);
       if (
         !actionId ||
@@ -5051,7 +5728,8 @@ export function QortalLand({
         !targetSessionId ||
         amount === null ||
         (actionType === 'qort_received' ? amount <= 0 : amount !== 0)
-      ) return;
+      )
+        return;
       if (landActionAnimationsRef.current.has(actionId)) return;
       queuePrimaryNameLookups([fromAddress, toAddress]);
       addLandActionAnimation({
@@ -5079,14 +5757,21 @@ export function QortalLand({
     if (!Number.isInteger(groupId) || groupId <= 0 || !myAddress) return;
     const unsubscribe = window.reticulumChat?.onLandCall?.((payload) => {
       if (payload.groupId !== groupId) return;
-      const callType = typeof payload.callType === 'string' ? payload.callType : '';
+      const callType =
+        typeof payload.callType === 'string' ? payload.callType : '';
       const callId = typeof payload.callId === 'string' ? payload.callId : '';
-      const fromAddress = typeof payload.fromAddress === 'string' ? payload.fromAddress : '';
-      const toAddress = typeof payload.toAddress === 'string' ? payload.toAddress : '';
+      const fromAddress =
+        typeof payload.fromAddress === 'string' ? payload.fromAddress : '';
+      const toAddress =
+        typeof payload.toAddress === 'string' ? payload.toAddress : '';
       const sourceSessionId =
-        typeof payload.sourceSessionId === 'string' ? payload.sourceSessionId : '';
+        typeof payload.sourceSessionId === 'string'
+          ? payload.sourceSessionId
+          : '';
       const targetSessionId =
-        typeof payload.targetSessionId === 'string' ? payload.targetSessionId : '';
+        typeof payload.targetSessionId === 'string'
+          ? payload.targetSessionId
+          : '';
       const sourceDestinationHash =
         typeof payload.sourceDestinationHash === 'string'
           ? payload.sourceDestinationHash
@@ -5099,16 +5784,25 @@ export function QortalLand({
             : '';
       const roomId = normalizeLandRoomId(payload.roomId);
       if (!callId || !fromAddress || !toAddress) return;
-      const interactiveCall = ['request', 'accept', 'reject', 'hangup'].includes(callType);
+      const interactiveCall = [
+        'request',
+        'accept',
+        'reject',
+        'hangup',
+      ].includes(callType);
       if (
         interactiveCall &&
         (!sourceSessionId ||
           !targetSessionId ||
           !sourceDestinationHash ||
           targetSessionId !== sessionId)
-      ) return;
+      )
+        return;
       if (payload.fromPublicKey) {
-        landCallPeerPublicKeysRef.current.set(fromAddress, payload.fromPublicKey);
+        landCallPeerPublicKeysRef.current.set(
+          fromAddress,
+          payload.fromPublicKey
+        );
       }
 
       if (callType === 'game_status') {
@@ -5190,7 +5884,10 @@ export function QortalLand({
       if (callType === 'reject') {
         clearLandCallPresence([fromAddress, toAddress]);
         if (toAddress === myAddress) {
-          emitLandCallEvent('call:rejected', { callId, reason: payload.reason || 'rejected' });
+          emitLandCallEvent('call:rejected', {
+            callId,
+            reason: payload.reason || 'rejected',
+          });
         }
         landCallPeersRef.current.delete(callId);
         if (lastAnnouncedLandCallRef.current?.callId === callId) {
@@ -5244,13 +5941,17 @@ export function QortalLand({
   ]);
 
   useEffect(() => {
-    if (reticulumReady !== true || !Number.isInteger(groupId) || groupId <= 0 || !myAddress) return;
+    if (
+      reticulumReady !== true ||
+      !Number.isInteger(groupId) ||
+      groupId <= 0 ||
+      !myAddress
+    )
+      return;
     const interval = window.setInterval(() => {
       const now = Date.now();
       const current = localStateRef.current;
-      if (
-        shouldSuspendQortalLandPresence(isActiveRef.current, current.afk)
-      ) {
+      if (shouldSuspendQortalLandPresence(isActiveRef.current, current.afk)) {
         return;
       }
       const previous = lastSentRef.current;
@@ -5296,7 +5997,12 @@ export function QortalLand({
     const peer = callId ? landCallPeersRef.current.get(callId) : null;
     if (!callActive || !callId || !peer) return;
     const sendStatus = () => {
-      touchLandCallPresence(myAddress, peer.peerAddress, callId, currentRoomRef.current);
+      touchLandCallPresence(
+        myAddress,
+        peer.peerAddress,
+        callId,
+        currentRoomRef.current
+      );
       void sendLandCallSignal({
         callType: 'status',
         callId,
@@ -5308,7 +6014,10 @@ export function QortalLand({
       });
     };
     sendStatus();
-    const interval = window.setInterval(sendStatus, LAND_CALL_STATUS_INTERVAL_MS);
+    const interval = window.setInterval(
+      sendStatus,
+      LAND_CALL_STATUS_INTERVAL_MS
+    );
     return () => {
       window.clearInterval(interval);
     };
@@ -5362,7 +6071,12 @@ export function QortalLand({
   useEffect(() => {
     if (landVoiceCall.callState !== 'idle') return;
     const callId = activeLandCallIdRef.current;
-    if (!callId && landCallPeersRef.current.size === 0 && !activeLandCallPeerAddress) return;
+    if (
+      !callId &&
+      landCallPeersRef.current.size === 0 &&
+      !activeLandCallPeerAddress
+    )
+      return;
     const peer = callId ? landCallPeersRef.current.get(callId) : null;
     if (peer && myAddress) {
       clearLandCallPresence([myAddress, peer.peerAddress]);
@@ -5407,7 +6121,10 @@ export function QortalLand({
       });
     };
     sendStatus();
-    const interval = window.setInterval(sendStatus, LAND_CALL_STATUS_INTERVAL_MS);
+    const interval = window.setInterval(
+      sendStatus,
+      LAND_CALL_STATUS_INTERVAL_MS
+    );
 
     return () => {
       window.clearInterval(interval);
@@ -5443,7 +6160,11 @@ export function QortalLand({
     void import('phaser').then((Phaser) => {
       if (destroyed || !containerRef.current) return;
       const localHue = addressHue(myAddress);
-      const localColor = Phaser.Display.Color.HSLToColor(localHue / 360, 0.62, 0.58).color;
+      const localColor = Phaser.Display.Color.HSLToColor(
+        localHue / 360,
+        0.62,
+        0.58
+      ).color;
       const remoteHueBase = (localHue + 145) % 360;
 
       class QortalLandScene extends Phaser.Scene {
@@ -5453,34 +6174,53 @@ export function QortalLand({
         private remotes = new Map<string, any>();
         private remoteLabels = new Map<string, any>();
         private remoteAvailabilityLabels = new Map<string, any>();
-        private chatBubbles = new Map<string, {
-          container: any;
-          background: any;
-          contentItems: any[];
-          signature: string;
-          width: number;
-          height: number;
-          lineCount: number;
-          popStarted: boolean;
-        }>();
-        private actionAnimations = new Map<string, {
-          container: any;
-          aura: any;
-          particles: any[];
-          symbol: any;
-          text: any;
-        }>();
-        private callIndicators = new Map<string, { container: any; badge: any; phone: any }>();
-        private gameIndicators = new Map<string, { container: any; badge: any; gamepad: any }>();
-        private proximityVoiceIndicators = new Map<string, {
-          container: any;
-          glyph: any;
-          tooltip: any;
-          tooltipBackground: any;
-          tooltipTitle: any;
-        }>();
-        private pendingRoomTransition: QortalLandRoomTransitionTarget | null = null;
-        private roomAssetLoadCallbacks = new Map<LandRoomId, Array<() => void>>();
+        private chatBubbles = new Map<
+          string,
+          {
+            container: any;
+            background: any;
+            contentItems: any[];
+            signature: string;
+            width: number;
+            height: number;
+            lineCount: number;
+            popStarted: boolean;
+          }
+        >();
+        private actionAnimations = new Map<
+          string,
+          {
+            container: any;
+            aura: any;
+            particles: any[];
+            symbol: any;
+            text: any;
+          }
+        >();
+        private callIndicators = new Map<
+          string,
+          { container: any; badge: any; phone: any }
+        >();
+        private gameIndicators = new Map<
+          string,
+          { container: any; badge: any; gamepad: any }
+        >();
+        private proximityVoiceIndicators = new Map<
+          string,
+          {
+            container: any;
+            glyph: any;
+            tooltip: any;
+            tooltipBackground: any;
+            tooltipTitle: any;
+          }
+        >();
+        private pendingRoomTransition: QortalLandRoomTransitionTarget | null =
+          null;
+        private roomAssetLoadCallbacks = new Map<
+          LandRoomId,
+          Array<() => void>
+        >();
         private background?: any;
         private lightSweep?: any;
         private foreground?: any;
@@ -5488,7 +6228,11 @@ export function QortalLand({
         private parkFountainAmbient?: any;
         private parkPortalAmbient?: any;
         private parkFireflies?: any;
-        private interactionPrompt?: { container: any; background: any; text: any };
+        private interactionPrompt?: {
+          container: any;
+          background: any;
+          text: any;
+        };
         private propLayers: any[] = [];
         private developmentPngPropSprites: any[] = [];
         private developmentLookTextureKeys = new Set<string>();
@@ -5514,7 +6258,7 @@ export function QortalLand({
           right: number;
           top: number;
           bottom: number;
-        }
+        };
         private parkPortalDoor?: {
           frames: any[];
           progress: number;
@@ -5533,7 +6277,7 @@ export function QortalLand({
           right: number;
           top: number;
           bottom: number;
-        }
+        };
 
         constructor() {
           super('QortalLandScene');
@@ -5554,24 +6298,50 @@ export function QortalLand({
         private updateCameraLayout() {
           const camera = this.cameras.main;
           const roomSize = roomSizeForRoom(currentRoomRef.current);
-          const viewportWidth = Math.max(1, Number(this.scale.width) || camera.width || roomSize.width);
-          const viewportHeight = Math.max(1, Number(this.scale.height) || camera.height || roomSize.height);
-          const avatarLogicalX = Number(this.localAvatar?.getData?.('logicalX'));
-          const avatarLogicalY = Number(this.localAvatar?.getData?.('logicalY'));
+          const viewportWidth = Math.max(
+            1,
+            Number(this.scale.width) || camera.width || roomSize.width
+          );
+          const viewportHeight = Math.max(
+            1,
+            Number(this.scale.height) || camera.height || roomSize.height
+          );
+          const avatarLogicalX = Number(
+            this.localAvatar?.getData?.('logicalX')
+          );
+          const avatarLogicalY = Number(
+            this.localAvatar?.getData?.('logicalY')
+          );
           const targetX = Number.isFinite(avatarLogicalX)
             ? avatarLogicalX
-            : localStateRef.current.x ?? roomSize.width / 2;
+            : (localStateRef.current.x ?? roomSize.width / 2);
           const targetY = Number.isFinite(avatarLogicalY)
             ? avatarLogicalY
-            : localStateRef.current.y ?? roomSize.height / 2;
-          const horizontalPadding = Math.max(0, (viewportWidth - roomSize.width) / 2);
-          const verticalPadding = Math.max(0, (viewportHeight - roomSize.height) / 2);
-          const scrollX = horizontalPadding > 0
-            ? -horizontalPadding
-            : Phaser.Math.Clamp(targetX - viewportWidth / 2, 0, roomSize.width - viewportWidth);
-          const scrollY = verticalPadding > 0
-            ? -verticalPadding
-            : Phaser.Math.Clamp(targetY - viewportHeight / 2, 0, roomSize.height - viewportHeight);
+            : (localStateRef.current.y ?? roomSize.height / 2);
+          const horizontalPadding = Math.max(
+            0,
+            (viewportWidth - roomSize.width) / 2
+          );
+          const verticalPadding = Math.max(
+            0,
+            (viewportHeight - roomSize.height) / 2
+          );
+          const scrollX =
+            horizontalPadding > 0
+              ? -horizontalPadding
+              : Phaser.Math.Clamp(
+                  targetX - viewportWidth / 2,
+                  0,
+                  roomSize.width - viewportWidth
+                );
+          const scrollY =
+            verticalPadding > 0
+              ? -verticalPadding
+              : Phaser.Math.Clamp(
+                  targetY - viewportHeight / 2,
+                  0,
+                  roomSize.height - viewportHeight
+                );
 
           camera.stopFollow();
           camera.setBackgroundColor('#050811');
@@ -5587,19 +6357,27 @@ export function QortalLand({
 
         preload() {
           QORTAL_LAND_CHARACTER_SKINS.forEach((skin) => {
-            this.load.spritesheet(qortalLandSkinTextureKey(skin.id), skin.spritesheetUrl, {
-              frameWidth: LAND_CHARACTER_FRAME_SIZE,
-              frameHeight: LAND_CHARACTER_FRAME_SIZE,
-            });
+            this.load.spritesheet(
+              qortalLandSkinTextureKey(skin.id),
+              skin.spritesheetUrl,
+              {
+                frameWidth: LAND_CHARACTER_FRAME_SIZE,
+                frameHeight: LAND_CHARACTER_FRAME_SIZE,
+              }
+            );
           });
-          qortalLandDevelopmentPngAssetsForRoom(QORTAL_LAND_START_ROOM_ID).forEach((asset) => {
+          qortalLandDevelopmentPngAssetsForRoom(
+            QORTAL_LAND_START_ROOM_ID
+          ).forEach((asset) => {
             const textureKey = qortalLandDevelopmentPngTextureKey(asset.id);
             if (!this.textures.exists(textureKey)) {
               this.load.image(textureKey, asset.url);
             }
           });
           QORTAL_LAND_AVAILABLE_CHAT_EMOJIS.forEach((emoji) => {
-            const emojiUrl = qortalLandChatEmojiUrlByFileName.get(emoji.fileName);
+            const emojiUrl = qortalLandChatEmojiUrlByFileName.get(
+              emoji.fileName
+            );
             const textureKey = qortalLandChatEmojiTextureKey(emoji.key);
             if (emojiUrl && !this.textures.exists(textureKey)) {
               this.load.image(textureKey, emojiUrl);
@@ -5614,8 +6392,13 @@ export function QortalLand({
         }
 
         private ensureRoomAssets(roomId: LandRoomId, onReady: () => void) {
-          const missingAssets = qortalLandDevelopmentPngAssetsForRoom(roomId).filter(
-            (asset) => !this.textures.exists(qortalLandDevelopmentPngTextureKey(asset.id))
+          const missingAssets = qortalLandDevelopmentPngAssetsForRoom(
+            roomId
+          ).filter(
+            (asset) =>
+              !this.textures.exists(
+                qortalLandDevelopmentPngTextureKey(asset.id)
+              )
           );
           if (missingAssets.length === 0) {
             onReady();
@@ -5628,7 +6411,10 @@ export function QortalLand({
           }
           this.roomAssetLoadCallbacks.set(roomId, [onReady]);
           missingAssets.forEach((asset) => {
-            this.load.image(qortalLandDevelopmentPngTextureKey(asset.id), asset.url);
+            this.load.image(
+              qortalLandDevelopmentPngTextureKey(asset.id),
+              asset.url
+            );
           });
           this.load.once(Phaser.Loader.Events.COMPLETE, () => {
             const callbacks = this.roomAssetLoadCallbacks.get(roomId) ?? [];
@@ -5639,13 +6425,16 @@ export function QortalLand({
         }
 
         private prefetchAdjacentRoomAssets(roomId: LandRoomId) {
-          const adjacentRoomId = roomId === QORTAL_LAND_PARK_ROOM_ID
-            ? QORTAL_LAND_DEFAULT_ROOM_ID
-            : QORTAL_LAND_PARK_ROOM_ID;
+          const adjacentRoomId =
+            roomId === QORTAL_LAND_PARK_ROOM_ID
+              ? QORTAL_LAND_DEFAULT_ROOM_ID
+              : QORTAL_LAND_PARK_ROOM_ID;
           this.ensureRoomAssets(adjacentRoomId, () => {});
         }
 
-        private applyRoomTransition(transition: QortalLandRoomTransitionTarget) {
+        private applyRoomTransition(
+          transition: QortalLandRoomTransitionTarget
+        ) {
           if (destroyed) return;
           currentRoomRef.current = transition.roomId;
           setLandGameRoomId(transition.roomId);
@@ -5692,7 +6481,9 @@ export function QortalLand({
             localStateRef.current.dnd,
             transition.x,
             renderY -
-              (LAND_CHARACTER_LABEL_OFFSET + LAND_CHARACTER_AVAILABILITY_OFFSET) * scale,
+              (LAND_CHARACTER_LABEL_OFFSET +
+                LAND_CHARACTER_AVAILABILITY_OFFSET) *
+                scale,
             transition.y + 91
           );
           this.updateCameraLayout();
@@ -5702,7 +6493,9 @@ export function QortalLand({
           }, 0);
         }
 
-        private requestRoomTransition(transition: QortalLandRoomTransitionTarget) {
+        private requestRoomTransition(
+          transition: QortalLandRoomTransitionTarget
+        ) {
           if (this.pendingRoomTransition) return;
           if (this.areRoomAssetsReady(transition.roomId)) {
             this.applyRoomTransition(transition);
@@ -5722,7 +6515,12 @@ export function QortalLand({
           currentRoomRef.current = localStateRef.current.roomId;
           setLandGameRoomId(currentRoomRef.current);
           const startRoomSize = roomSizeForRoom(currentRoomRef.current);
-          this.cameras.main.setBounds(0, 0, startRoomSize.width, startRoomSize.height);
+          this.cameras.main.setBounds(
+            0,
+            0,
+            startRoomSize.width,
+            startRoomSize.height
+          );
           this.ensureCharacterAnimations();
           this.drawWorld();
           const start = localStateRef.current;
@@ -5739,43 +6537,48 @@ export function QortalLand({
             pixelPerfect: true,
             useHandCursor: true,
           });
-          this.localAvatar.on('pointerdown', (pointer: any, _localX: number, _localY: number, event: any) => {
-            event?.stopPropagation?.();
-            const bounds = containerRef.current?.getBoundingClientRect();
-            if (!bounds) return;
-            const pointerEvent = pointer?.event as PointerEvent | undefined;
-            const menuX = clampNumber(
-              (pointerEvent?.clientX ?? bounds.left + bounds.width / 2) - bounds.left,
-              12,
-              Math.max(12, bounds.width - 290)
-            );
-            const menuY = clampNumber(
-              (pointerEvent?.clientY ?? bounds.top + bounds.height / 2) - bounds.top,
-              12,
-              Math.max(12, bounds.height - 24)
-            );
-            setActionTarget({
-              key: `${myAddress}:${sessionId}`,
-              authorAddress: myAddress,
-              sessionId,
-              roomId: currentRoomRef.current,
-              anchorX: menuX,
-              anchorY: menuY,
-              menuX,
-              menuY,
-            });
-          });
+          this.localAvatar.on(
+            'pointerdown',
+            (pointer: any, _localX: number, _localY: number, event: any) => {
+              event?.stopPropagation?.();
+              const bounds = containerRef.current?.getBoundingClientRect();
+              if (!bounds) return;
+              const pointerEvent = pointer?.event as PointerEvent | undefined;
+              const menuX = clampNumber(
+                (pointerEvent?.clientX ?? bounds.left + bounds.width / 2) -
+                  bounds.left,
+                12,
+                Math.max(12, bounds.width - 290)
+              );
+              const menuY = clampNumber(
+                (pointerEvent?.clientY ?? bounds.top + bounds.height / 2) -
+                  bounds.top,
+                12,
+                Math.max(12, bounds.height - 24)
+              );
+              setActionTarget({
+                key: `${myAddress}:${sessionId}`,
+                authorAddress: myAddress,
+                sessionId,
+                roomId: currentRoomRef.current,
+                anchorX: menuX,
+                anchorY: menuY,
+                menuX,
+                menuY,
+              });
+            }
+          );
           this.localLabel = this.add
             .text(
               start.x,
               start.y - LAND_CHARACTER_LABEL_OFFSET * startScale,
               displayNameForAddress(myAddress, primaryNameCacheRef.current),
               {
-              color: '#f8fbff',
-              fontFamily: 'Inter, Arial, sans-serif',
-              fontSize: '12px',
-              stroke: '#10151c',
-              strokeThickness: 4,
+                color: '#f8fbff',
+                fontFamily: 'Inter, Arial, sans-serif',
+                fontSize: '12px',
+                stroke: '#10151c',
+                strokeThickness: 4,
               }
             )
             .setOrigin(0.5);
@@ -5789,7 +6592,9 @@ export function QortalLand({
             start.dnd,
             start.x,
             start.y -
-              (LAND_CHARACTER_LABEL_OFFSET + LAND_CHARACTER_AVAILABILITY_OFFSET) * startScale,
+              (LAND_CHARACTER_LABEL_OFFSET +
+                LAND_CHARACTER_AVAILABILITY_OFFSET) *
+                startScale,
             start.y + 91
           );
           this.interactionPrompt = this.createInteractionPrompt();
@@ -5826,7 +6631,10 @@ export function QortalLand({
           } catch (error) {
             console.warn('[QortalLand] Chat bubble update failed', error);
             landChatBubblesRef.current.clear();
-            for (const [messageId, bubbleObjects] of this.chatBubbles.entries()) {
+            for (const [
+              messageId,
+              bubbleObjects,
+            ] of this.chatBubbles.entries()) {
               this.removeChatBubble(messageId, bubbleObjects);
             }
           }
@@ -5835,7 +6643,10 @@ export function QortalLand({
           } catch (error) {
             console.warn('[QortalLand] Action animation update failed', error);
             landActionAnimationsRef.current.clear();
-            for (const [actionId, animationObjects] of this.actionAnimations.entries()) {
+            for (const [
+              actionId,
+              animationObjects,
+            ] of this.actionAnimations.entries()) {
               this.removeActionAnimation(actionId, animationObjects);
             }
           }
@@ -5843,7 +6654,10 @@ export function QortalLand({
             this.updateCallIndicators();
           } catch (error) {
             console.warn('[QortalLand] Call indicator update failed', error);
-            for (const [indicatorKey, indicatorObjects] of this.callIndicators.entries()) {
+            for (const [
+              indicatorKey,
+              indicatorObjects,
+            ] of this.callIndicators.entries()) {
               this.removeCallIndicator(indicatorKey, indicatorObjects);
             }
           }
@@ -5851,14 +6665,20 @@ export function QortalLand({
             this.updateGameIndicators();
           } catch (error) {
             console.warn('[QortalLand] Game indicator update failed', error);
-            for (const [indicatorKey, indicatorObjects] of this.gameIndicators.entries()) {
+            for (const [
+              indicatorKey,
+              indicatorObjects,
+            ] of this.gameIndicators.entries()) {
               this.removeGameIndicator(indicatorKey, indicatorObjects);
             }
           }
           try {
             this.updateProximityVoiceIndicators();
           } catch (error) {
-            console.warn('[QortalLand] Proximity voice indicator update failed', error);
+            console.warn(
+              '[QortalLand] Proximity voice indicator update failed',
+              error
+            );
           }
         }
 
@@ -5932,7 +6752,8 @@ export function QortalLand({
           }
           const layout = roomLayoutForRoom(roomId);
           const { floor } = layout;
-          const showProceduralClubShell = shouldShowQortalLandProceduralClubShell();
+          const showProceduralClubShell =
+            shouldShowQortalLandProceduralClubShell();
 
           g.fillStyle(0x070914, 1);
           g.fillRect(0, 0, layout.width, layout.height);
@@ -5943,34 +6764,44 @@ export function QortalLand({
             this.drawCeilingRig(g);
 
             g.fillStyle(0x0c0d19, 1);
-            g.fillPoints([
-              new Phaser.Geom.Point(floor.back.minX, floor.topY),
-              new Phaser.Geom.Point(floor.back.maxX, floor.topY),
-              new Phaser.Geom.Point(floor.front.maxX, floor.bottomY),
-              new Phaser.Geom.Point(floor.front.minX, floor.bottomY),
-            ], true);
+            g.fillPoints(
+              [
+                new Phaser.Geom.Point(floor.back.minX, floor.topY),
+                new Phaser.Geom.Point(floor.back.maxX, floor.topY),
+                new Phaser.Geom.Point(floor.front.maxX, floor.bottomY),
+                new Phaser.Geom.Point(floor.front.minX, floor.bottomY),
+              ],
+              true
+            );
             g.lineStyle(3, 0x1be7ff, 0.16);
-            g.strokePoints([
-              new Phaser.Geom.Point(floor.back.minX, floor.topY),
-              new Phaser.Geom.Point(floor.back.maxX, floor.topY),
-              new Phaser.Geom.Point(floor.front.maxX, floor.bottomY),
-              new Phaser.Geom.Point(floor.front.minX, floor.bottomY),
-              new Phaser.Geom.Point(floor.back.minX, floor.topY),
-            ], false);
+            g.strokePoints(
+              [
+                new Phaser.Geom.Point(floor.back.minX, floor.topY),
+                new Phaser.Geom.Point(floor.back.maxX, floor.topY),
+                new Phaser.Geom.Point(floor.front.maxX, floor.bottomY),
+                new Phaser.Geom.Point(floor.front.minX, floor.bottomY),
+                new Phaser.Geom.Point(floor.back.minX, floor.topY),
+              ],
+              false
+            );
 
             this.drawFloorTexture(g);
             g.lineStyle(1, 0x00e7ff, 0.055);
             for (let i = 1; i <= 4; i += 1) {
               const t = i / 5;
-              const leftX = floor.back.minX + (floor.front.minX - floor.back.minX) * t;
-              const rightX = floor.back.maxX + (floor.front.maxX - floor.back.maxX) * t;
+              const leftX =
+                floor.back.minX + (floor.front.minX - floor.back.minX) * t;
+              const rightX =
+                floor.back.maxX + (floor.front.maxX - floor.back.maxX) * t;
               const y = floor.topY + t * (floor.bottomY - floor.topY);
               g.lineBetween(leftX, y, rightX, y);
             }
             for (let i = 1; i <= 6; i += 1) {
               const t = i / 7;
-              const topX = floor.back.minX + t * (floor.back.maxX - floor.back.minX);
-              const bottomX = floor.front.minX + t * (floor.front.maxX - floor.front.minX);
+              const topX =
+                floor.back.minX + t * (floor.back.maxX - floor.back.minX);
+              const bottomX =
+                floor.front.minX + t * (floor.front.maxX - floor.front.minX);
               g.lineBetween(topX, floor.topY, bottomX, floor.bottomY);
             }
 
@@ -5982,8 +6813,12 @@ export function QortalLand({
           g.setDepth(-100);
 
           this.drawClubBackWallPng();
-          this.drawClubSideWallPng(QORTAL_LAND_DEVELOPMENT_LEFT_WALL_DEFAULT_PLACEMENT);
-          this.drawClubSideWallPng(QORTAL_LAND_DEVELOPMENT_RIGHT_WALL_DEFAULT_PLACEMENT);
+          this.drawClubSideWallPng(
+            QORTAL_LAND_DEVELOPMENT_LEFT_WALL_DEFAULT_PLACEMENT
+          );
+          this.drawClubSideWallPng(
+            QORTAL_LAND_DEVELOPMENT_RIGHT_WALL_DEFAULT_PLACEMENT
+          );
           this.drawClubSkywalkDoorPng();
           this.drawClubFloorPng();
           this.drawDepthProps();
@@ -6008,8 +6843,15 @@ export function QortalLand({
           if (!asset) return;
           const textureKey = qortalLandDevelopmentPngTextureKey(asset.id);
           if (!this.textures.exists(textureKey)) return;
-          const lookTextureKey = this.developmentLookTextureKeyForPlacement(placement, textureKey);
-          const sprite = this.add.image(placement.x, placement.y, lookTextureKey);
+          const lookTextureKey = this.developmentLookTextureKeyForPlacement(
+            placement,
+            textureKey
+          );
+          const sprite = this.add.image(
+            placement.x,
+            placement.y,
+            lookTextureKey
+          );
           sprite.setName('club.floor_png');
           sprite.setOrigin(placement.originX ?? 0, placement.originY ?? 0);
           sprite.setScale(
@@ -6031,8 +6873,15 @@ export function QortalLand({
           if (!asset) return;
           const textureKey = qortalLandDevelopmentPngTextureKey(asset.id);
           if (!this.textures.exists(textureKey)) return;
-          const lookTextureKey = this.developmentLookTextureKeyForPlacement(placement, textureKey);
-          const sprite = this.add.image(placement.x, placement.y, lookTextureKey);
+          const lookTextureKey = this.developmentLookTextureKeyForPlacement(
+            placement,
+            textureKey
+          );
+          const sprite = this.add.image(
+            placement.x,
+            placement.y,
+            lookTextureKey
+          );
           sprite.setName('park.skyline_png');
           sprite.setOrigin(placement.originX ?? 0.5, placement.originY ?? 1);
           sprite.setScale(
@@ -6054,8 +6903,15 @@ export function QortalLand({
           if (!asset) return;
           const textureKey = qortalLandDevelopmentPngTextureKey(asset.id);
           if (!this.textures.exists(textureKey)) return;
-          const lookTextureKey = this.developmentLookTextureKeyForPlacement(placement, textureKey);
-          const sprite = this.add.image(placement.x, placement.y, lookTextureKey);
+          const lookTextureKey = this.developmentLookTextureKeyForPlacement(
+            placement,
+            textureKey
+          );
+          const sprite = this.add.image(
+            placement.x,
+            placement.y,
+            lookTextureKey
+          );
           sprite.setName('park.floor_png');
           sprite.setOrigin(placement.originX ?? 0.5, placement.originY ?? 1);
           sprite.setScale(
@@ -6080,22 +6936,29 @@ export function QortalLand({
 
         private getParkFountainAmbientAnchor() {
           if (!shouldShowQortalLandDevelopmentPngProps()) return null;
-          const basePlacement = QORTAL_LAND_DEVELOPMENT_PARK_PROP_DEFAULT_PLACEMENTS.find(
-            (placement) => placement.id === QORTAL_LAND_DEVELOPMENT_PARK_FOUNTAIN_BLUE_PLACEMENT_ID
-          );
+          const basePlacement =
+            QORTAL_LAND_DEVELOPMENT_PARK_PROP_DEFAULT_PLACEMENTS.find(
+              (placement) =>
+                placement.id ===
+                QORTAL_LAND_DEVELOPMENT_PARK_FOUNTAIN_BLUE_PLACEMENT_ID
+            );
           if (!basePlacement) return null;
           const placement = {
             ...basePlacement,
             ...readQortalLandDevelopmentPngPlacementOverride(basePlacement.id),
           };
           if (placement.visible === false) return null;
-          const asset = qortalLandDevelopmentPngAssetById.get(placement.assetId);
+          const asset = qortalLandDevelopmentPngAssetById.get(
+            placement.assetId
+          );
           if (!asset) return null;
           const textureKey = qortalLandDevelopmentPngTextureKey(asset.id);
           if (!this.textures.exists(textureKey)) return null;
           const frame = this.textures.getFrame(textureKey) as any;
-          const sourceWidth = Math.max(1, Number(frame?.width) || 1) * asset.renderScaleX;
-          const sourceHeight = Math.max(1, Number(frame?.height) || 1) * asset.renderScaleY;
+          const sourceWidth =
+            Math.max(1, Number(frame?.width) || 1) * asset.renderScaleX;
+          const sourceHeight =
+            Math.max(1, Number(frame?.height) || 1) * asset.renderScaleY;
           const scaleX = placement.scaleX ?? placement.scale ?? 1;
           const scaleY = placement.scaleY ?? placement.scale ?? 1;
           const originX = placement.originX ?? 0.5;
@@ -6165,8 +7028,15 @@ export function QortalLand({
           if (!asset) return;
           const textureKey = qortalLandDevelopmentPngTextureKey(asset.id);
           if (!this.textures.exists(textureKey)) return;
-          const lookTextureKey = this.developmentLookTextureKeyForPlacement(placement, textureKey);
-          const sprite = this.add.image(placement.x, placement.y, lookTextureKey);
+          const lookTextureKey = this.developmentLookTextureKeyForPlacement(
+            placement,
+            textureKey
+          );
+          const sprite = this.add.image(
+            placement.x,
+            placement.y,
+            lookTextureKey
+          );
           sprite.setName('club.back_wall_main_png');
           sprite.setOrigin(placement.originX ?? 0.5, placement.originY ?? 1);
           sprite.setScale(
@@ -6178,7 +7048,9 @@ export function QortalLand({
           this.developmentPngPropSprites.push(sprite);
         }
 
-        private drawClubSideWallPng(defaultPlacement: QortalLandDevelopmentPngPropPlacement) {
+        private drawClubSideWallPng(
+          defaultPlacement: QortalLandDevelopmentPngPropPlacement
+        ) {
           const placement = getQortalLandDevelopmentPlacement(defaultPlacement);
           const asset = qortalLandDevelopmentPngAssetById.get(
             placement.assetId
@@ -6186,8 +7058,15 @@ export function QortalLand({
           if (!asset) return;
           const textureKey = qortalLandDevelopmentPngTextureKey(asset.id);
           if (!this.textures.exists(textureKey)) return;
-          const lookTextureKey = this.developmentLookTextureKeyForPlacement(placement, textureKey);
-          const sprite = this.add.image(placement.x, placement.y, lookTextureKey);
+          const lookTextureKey = this.developmentLookTextureKeyForPlacement(
+            placement,
+            textureKey
+          );
+          const sprite = this.add.image(
+            placement.x,
+            placement.y,
+            lookTextureKey
+          );
           sprite.setName(placement.id);
           sprite.setOrigin(placement.originX ?? 0.5, placement.originY ?? 0);
           sprite.setScale(
@@ -6200,25 +7079,48 @@ export function QortalLand({
         }
 
         private hasClubSkywalkDoorPng() {
-          return QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_ASSET_IDS.every((assetId) => {
-            const asset = qortalLandDevelopmentPngAssetById.get(assetId);
-            return asset && this.textures.exists(qortalLandDevelopmentPngTextureKey(asset.id));
-          });
+          return QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_ASSET_IDS.every(
+            (assetId) => {
+              const asset = qortalLandDevelopmentPngAssetById.get(assetId);
+              return (
+                asset &&
+                this.textures.exists(
+                  qortalLandDevelopmentPngTextureKey(asset.id)
+                )
+              );
+            }
+          );
         }
 
         private hasParkPortalPng() {
-          return QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_ASSET_IDS.every((assetId) => {
-            const asset = qortalLandDevelopmentPngAssetById.get(assetId);
-            return asset && this.textures.exists(qortalLandDevelopmentPngTextureKey(asset.id));
-          });
+          return QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_ASSET_IDS.every(
+            (assetId) => {
+              const asset = qortalLandDevelopmentPngAssetById.get(assetId);
+              return (
+                asset &&
+                this.textures.exists(
+                  qortalLandDevelopmentPngTextureKey(asset.id)
+                )
+              );
+            }
+          );
         }
 
-        private hasWarpOffset(warp?: QortalLandDevelopmentPngPropPlacement['warp']) {
+        private hasWarpOffset(
+          warp?: QortalLandDevelopmentPngPropPlacement['warp']
+        ) {
           if (!warp) return false;
-          return ['tlX', 'tlY', 'trX', 'trY', 'brX', 'brY', 'blX', 'blY'].some((key) => {
-            const value = warp[key as keyof NonNullable<QortalLandDevelopmentPngPropPlacement['warp']>];
-            return Number.isFinite(value) && Math.abs(Number(value)) > 0.001;
-          });
+          return ['tlX', 'tlY', 'trX', 'trY', 'brX', 'brY', 'blX', 'blY'].some(
+            (key) => {
+              const value =
+                warp[
+                  key as keyof NonNullable<
+                    QortalLandDevelopmentPngPropPlacement['warp']
+                  >
+                ];
+              return Number.isFinite(value) && Math.abs(Number(value)) > 0.001;
+            }
+          );
         }
 
         private developmentLookTextureKeyForPlacement(
@@ -6226,11 +7128,16 @@ export function QortalLand({
           textureKey: string
         ): string {
           const settings = readQortalLandDevelopmentLookSettings();
-          if (!settings.enabled || shouldSkipQortalLandDevelopmentLook(placement)) {
+          if (
+            !settings.enabled ||
+            shouldSkipQortalLandDevelopmentLook(placement)
+          ) {
             return textureKey;
           }
           const frame = this.textures.getFrame(textureKey) as any;
-          const sourceImage = frame?.source?.image as CanvasImageSource | undefined;
+          const sourceImage = frame?.source?.image as
+            | CanvasImageSource
+            | undefined;
           if (!sourceImage) return textureKey;
           const width = Math.max(1, Math.floor(frame.width ?? 1));
           const height = Math.max(1, Math.floor(frame.height ?? 1));
@@ -6244,7 +7151,9 @@ export function QortalLand({
             width,
             height
           ) as any;
-          const context = canvasTexture?.getContext?.() as CanvasRenderingContext2D | undefined;
+          const context = canvasTexture?.getContext?.() as
+            | CanvasRenderingContext2D
+            | undefined;
           if (!canvasTexture || !context) return textureKey;
           context.clearRect(0, 0, width, height);
           context.imageSmoothingEnabled = true;
@@ -6281,14 +7190,27 @@ export function QortalLand({
                 blue *= shadowWeight;
               }
               const saturatedRed = luminance + (red - luminance) * saturation;
-              const saturatedGreen = luminance + (green - luminance) * saturation;
+              const saturatedGreen =
+                luminance + (green - luminance) * saturation;
               const saturatedBlue = luminance + (blue - luminance) * saturation;
               red = (saturatedRed - 0.5) * contrast + 0.5;
               green = (saturatedGreen - 0.5) * contrast + 0.5;
               blue = (saturatedBlue - 0.5) * contrast + 0.5;
-              data[index] = Phaser.Math.Clamp(Math.round(red * brightness * 255), 0, 255);
-              data[index + 1] = Phaser.Math.Clamp(Math.round(green * brightness * 255), 0, 255);
-              data[index + 2] = Phaser.Math.Clamp(Math.round(blue * brightness * 255), 0, 255);
+              data[index] = Phaser.Math.Clamp(
+                Math.round(red * brightness * 255),
+                0,
+                255
+              );
+              data[index + 1] = Phaser.Math.Clamp(
+                Math.round(green * brightness * 255),
+                0,
+                255
+              );
+              data[index + 2] = Phaser.Math.Clamp(
+                Math.round(blue * brightness * 255),
+                0,
+                255
+              );
             }
             context.putImageData(imageData, 0, 0);
             canvasTexture.refresh?.();
@@ -6311,20 +7233,36 @@ export function QortalLand({
           height: number
         ): { textureKey: string; originX: number; originY: number } | null {
           const frame = this.textures.getFrame(textureKey) as any;
-          const sourceImage = frame?.source?.image as CanvasImageSource | undefined;
+          const sourceImage = frame?.source?.image as
+            | CanvasImageSource
+            | undefined;
           if (!sourceImage) return null;
           const warp = placement.warp ?? {};
-          const asset = qortalLandDevelopmentPngAssetById.get(placement.assetId);
+          const asset = qortalLandDevelopmentPngAssetById.get(
+            placement.assetId
+          );
           const renderScaleX = asset?.renderScaleX ?? 1;
           const renderScaleY = asset?.renderScaleY ?? 1;
           const maxWarpOffset = Math.max(
             80,
-            Math.min(720, Math.max(width * renderScaleX, height * renderScaleY) * 0.55)
+            Math.min(
+              720,
+              Math.max(width * renderScaleX, height * renderScaleY) * 0.55
+            )
           );
-          const warpOffset = (value: number | undefined, renderScale: number): number =>
-            Math.max(-maxWarpOffset, Math.min(maxWarpOffset, Number(value) || 0)) / renderScale;
+          const warpOffset = (
+            value: number | undefined,
+            renderScale: number
+          ): number =>
+            Math.max(
+              -maxWarpOffset,
+              Math.min(maxWarpOffset, Number(value) || 0)
+            ) / renderScale;
           const points = {
-            tl: { x: warpOffset(warp.tlX, renderScaleX), y: warpOffset(warp.tlY, renderScaleY) },
+            tl: {
+              x: warpOffset(warp.tlX, renderScaleX),
+              y: warpOffset(warp.tlY, renderScaleY),
+            },
             tr: {
               x: width + warpOffset(warp.trX, renderScaleX),
               y: warpOffset(warp.trY, renderScaleY),
@@ -6338,10 +7276,30 @@ export function QortalLand({
               y: height + warpOffset(warp.blY, renderScaleY),
             },
           };
-          const minX = Math.min(points.tl.x, points.tr.x, points.br.x, points.bl.x);
-          const minY = Math.min(points.tl.y, points.tr.y, points.br.y, points.bl.y);
-          const maxX = Math.max(points.tl.x, points.tr.x, points.br.x, points.bl.x);
-          const maxY = Math.max(points.tl.y, points.tr.y, points.br.y, points.bl.y);
+          const minX = Math.min(
+            points.tl.x,
+            points.tr.x,
+            points.br.x,
+            points.bl.x
+          );
+          const minY = Math.min(
+            points.tl.y,
+            points.tr.y,
+            points.br.y,
+            points.bl.y
+          );
+          const maxX = Math.max(
+            points.tl.x,
+            points.tr.x,
+            points.br.x,
+            points.bl.x
+          );
+          const maxY = Math.max(
+            points.tl.y,
+            points.tr.y,
+            points.br.y,
+            points.bl.y
+          );
           const canvasWidth = Math.max(1, Math.ceil(maxX - minX));
           const canvasHeight = Math.max(1, Math.ceil(maxY - minY));
           const warpedTextureKey = `${textureKey}:warp:${placement.id}:${index}`;
@@ -6353,7 +7311,9 @@ export function QortalLand({
             canvasWidth,
             canvasHeight
           ) as any;
-          const context = canvasTexture?.getContext?.() as CanvasRenderingContext2D | undefined;
+          const context = canvasTexture?.getContext?.() as
+            | CanvasRenderingContext2D
+            | undefined;
           if (!canvasTexture || !context) return null;
           context.clearRect(0, 0, canvasWidth, canvasHeight);
           context.imageSmoothingEnabled = true;
@@ -6388,7 +7348,8 @@ export function QortalLand({
           return {
             textureKey: warpedTextureKey,
             originX: ((placement.originX ?? 0.5) * width - minX) / canvasWidth,
-            originY: ((placement.originY ?? 0.5) * height - minY) / canvasHeight,
+            originY:
+              ((placement.originY ?? 0.5) * height - minY) / canvasHeight,
           };
         }
 
@@ -6397,12 +7358,19 @@ export function QortalLand({
           textureKey: string,
           index: number
         ) {
-          const lookTextureKey = this.developmentLookTextureKeyForPlacement(placement, textureKey);
-          const asset = qortalLandDevelopmentPngAssetById.get(placement.assetId);
+          const lookTextureKey = this.developmentLookTextureKeyForPlacement(
+            placement,
+            textureKey
+          );
+          const asset = qortalLandDevelopmentPngAssetById.get(
+            placement.assetId
+          );
           const baseScaleX =
-            (placement.scaleX ?? placement.scale ?? 1) * (asset?.renderScaleX ?? 1);
+            (placement.scaleX ?? placement.scale ?? 1) *
+            (asset?.renderScaleX ?? 1);
           const baseScaleY =
-            (placement.scaleY ?? placement.scale ?? 1) * (asset?.renderScaleY ?? 1);
+            (placement.scaleY ?? placement.scale ?? 1) *
+            (asset?.renderScaleY ?? 1);
           const depth = placement.depth ?? -82;
           const baseAlpha = placement.alpha ?? 1;
           const frame = this.textures.getFrame(lookTextureKey);
@@ -6422,7 +7390,11 @@ export function QortalLand({
               height
             );
             if (warpedTexture) {
-              const sprite = this.add.image(placement.x, placement.y, warpedTexture.textureKey);
+              const sprite = this.add.image(
+                placement.x,
+                placement.y,
+                warpedTexture.textureKey
+              );
               sprite.setName(`${placement.id}:${index}`);
               sprite.setOrigin(warpedTexture.originX, warpedTexture.originY);
               sprite.setScale(baseScaleX, baseScaleY);
@@ -6435,7 +7407,11 @@ export function QortalLand({
             }
           }
 
-          const sprite = this.add.image(placement.x, placement.y, lookTextureKey);
+          const sprite = this.add.image(
+            placement.x,
+            placement.y,
+            lookTextureKey
+          );
           sprite.setName(`${placement.id}:${index}`);
           sprite.setOrigin(originX, originY);
           sprite.setScale(baseScaleX, baseScaleY);
@@ -6450,14 +7426,18 @@ export function QortalLand({
         private drawClubSkywalkDoorPng() {
           if (!this.hasClubSkywalkDoorPng()) return;
           const placement = getQortalLandDevelopmentClubDoorPlacement();
-          const textureKeys = QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_ASSET_IDS.map((assetId) =>
-            qortalLandDevelopmentPngTextureKey(assetId)
+          const textureKeys = QORTAL_LAND_DEVELOPMENT_CLUB_DOOR_ASSET_IDS.map(
+            (assetId) => qortalLandDevelopmentPngTextureKey(assetId)
           );
-          const asset = qortalLandDevelopmentPngAssetById.get(placement.assetId);
+          const asset = qortalLandDevelopmentPngAssetById.get(
+            placement.assetId
+          );
           const baseScaleX =
-            (placement.scaleX ?? placement.scale ?? 1) * (asset?.renderScaleX ?? 1);
+            (placement.scaleX ?? placement.scale ?? 1) *
+            (asset?.renderScaleX ?? 1);
           const baseScaleY =
-            (placement.scaleY ?? placement.scale ?? 1) * (asset?.renderScaleY ?? 1);
+            (placement.scaleY ?? placement.scale ?? 1) *
+            (asset?.renderScaleY ?? 1);
           const baseAlpha = placement.alpha ?? 1;
           const sprites = textureKeys.map((textureKey, index) =>
             this.createWarpableDevelopmentPng(placement, textureKey, index)
@@ -6491,13 +7471,15 @@ export function QortalLand({
         private drawParkPortalPng() {
           if (!this.hasParkPortalPng()) return;
           const placement = getQortalLandDevelopmentParkPortalPlacement();
-          const textureKeys = QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_ASSET_IDS.map((assetId) =>
-            qortalLandDevelopmentPngTextureKey(assetId)
+          const textureKeys = QORTAL_LAND_DEVELOPMENT_PARK_PORTAL_ASSET_IDS.map(
+            (assetId) => qortalLandDevelopmentPngTextureKey(assetId)
           );
           const baseAlpha = placement.alpha ?? 1;
-          const frames = textureKeys.map((textureKey, index) =>
-            this.createWarpableDevelopmentPng(placement, textureKey, index)
-          ).filter(Boolean);
+          const frames = textureKeys
+            .map((textureKey, index) =>
+              this.createWarpableDevelopmentPng(placement, textureKey, index)
+            )
+            .filter(Boolean);
           const hotspot = qortalLandParkPortalHotspot(placement);
           this.parkPortalDoor = {
             frames,
@@ -6523,19 +7505,59 @@ export function QortalLand({
         private ensureCharacterAnimations() {
           QORTAL_LAND_CHARACTER_SKINS.forEach((skin) => {
             const textureKey = qortalLandSkinTextureKey(skin.id);
-            ([
-              ['idle', 'side', 0, 0, 1, 0],
-              ['walk', 'side', 0, LAND_CHARACTER_FRAMES_PER_DIRECTION - 1, 10, -1],
-              ['idle', 'down', LAND_CHARACTER_FRAMES_PER_DIRECTION, LAND_CHARACTER_FRAMES_PER_DIRECTION, 1, 0],
-              ['walk', 'down', LAND_CHARACTER_FRAMES_PER_DIRECTION, LAND_CHARACTER_FRAMES_PER_DIRECTION * 2 - 1, 10, -1],
-              ['idle', 'up', LAND_CHARACTER_FRAMES_PER_DIRECTION * 2, LAND_CHARACTER_FRAMES_PER_DIRECTION * 2, 1, 0],
-              ['walk', 'up', LAND_CHARACTER_FRAMES_PER_DIRECTION * 2, LAND_CHARACTER_FRAMES_PER_DIRECTION * 3 - 1, 10, -1],
-            ] as const).forEach(([movement, facing, start, end, frameRate, repeat]) => {
+            (
+              [
+                ['idle', 'side', 0, 0, 1, 0],
+                [
+                  'walk',
+                  'side',
+                  0,
+                  LAND_CHARACTER_FRAMES_PER_DIRECTION - 1,
+                  10,
+                  -1,
+                ],
+                [
+                  'idle',
+                  'down',
+                  LAND_CHARACTER_FRAMES_PER_DIRECTION,
+                  LAND_CHARACTER_FRAMES_PER_DIRECTION,
+                  1,
+                  0,
+                ],
+                [
+                  'walk',
+                  'down',
+                  LAND_CHARACTER_FRAMES_PER_DIRECTION,
+                  LAND_CHARACTER_FRAMES_PER_DIRECTION * 2 - 1,
+                  10,
+                  -1,
+                ],
+                [
+                  'idle',
+                  'up',
+                  LAND_CHARACTER_FRAMES_PER_DIRECTION * 2,
+                  LAND_CHARACTER_FRAMES_PER_DIRECTION * 2,
+                  1,
+                  0,
+                ],
+                [
+                  'walk',
+                  'up',
+                  LAND_CHARACTER_FRAMES_PER_DIRECTION * 2,
+                  LAND_CHARACTER_FRAMES_PER_DIRECTION * 3 - 1,
+                  10,
+                  -1,
+                ],
+              ] as const
+            ).forEach(([movement, facing, start, end, frameRate, repeat]) => {
               const key = qortalLandSkinAnimationKey(skin.id, movement, facing);
               if (this.anims.exists(key)) return;
               this.anims.create({
                 key,
-                frames: this.anims.generateFrameNumbers(textureKey, { start, end }),
+                frames: this.anims.generateFrameNumbers(textureKey, {
+                  start,
+                  end,
+                }),
                 frameRate,
                 repeat,
               });
@@ -6557,7 +7579,10 @@ export function QortalLand({
             qortalLandSkinTextureKey(normalizedSkinId),
             LAND_CHARACTER_FRAMES_PER_DIRECTION
           );
-          avatar.setOrigin(0.5, LAND_CHARACTER_FEET_BASELINE / LAND_CHARACTER_FRAME_SIZE);
+          avatar.setOrigin(
+            0.5,
+            LAND_CHARACTER_FEET_BASELINE / LAND_CHARACTER_FRAME_SIZE
+          );
           avatar.setSize(104, 174);
           const initialAnimation = qortalLandSkinAnimationKey(
             normalizedSkinId,
@@ -6598,19 +7623,29 @@ export function QortalLand({
           const door = this.clubSkywalkDoor;
           if (!door) return;
           const avatar = this.localAvatar;
-          const isInClub = currentRoomRef.current === QORTAL_LAND_DEFAULT_ROOM_ID;
+          const isInClub =
+            currentRoomRef.current === QORTAL_LAND_DEFAULT_ROOM_ID;
           const avatarLogicalX = Number(avatar?.getData?.('logicalX'));
           const avatarLogicalY = Number(avatar?.getData?.('logicalY'));
-          const weightedDistance = avatar && isInClub
-            ? Math.hypot(
-                (Number.isFinite(avatarLogicalX) ? avatarLogicalX : avatar.x) - door.hotspotX,
-                ((Number.isFinite(avatarLogicalY) ? avatarLogicalY : avatar.y) - door.hotspotY) * 1.16
-              )
-            : Number.POSITIVE_INFINITY;
-          door.targetProgress = weightedDistance <= door.proximityRadius ? 1 : 0;
-          const speed = door.targetProgress > door.progress
-            ? QORTAL_LAND_CLUB_SKYWALK_DOOR_OPEN_SPEED
-            : QORTAL_LAND_CLUB_SKYWALK_DOOR_CLOSE_SPEED;
+          const weightedDistance =
+            avatar && isInClub
+              ? Math.hypot(
+                  (Number.isFinite(avatarLogicalX)
+                    ? avatarLogicalX
+                    : avatar.x) - door.hotspotX,
+                  ((Number.isFinite(avatarLogicalY)
+                    ? avatarLogicalY
+                    : avatar.y) -
+                    door.hotspotY) *
+                    1.16
+                )
+              : Number.POSITIVE_INFINITY;
+          door.targetProgress =
+            weightedDistance <= door.proximityRadius ? 1 : 0;
+          const speed =
+            door.targetProgress > door.progress
+              ? QORTAL_LAND_CLUB_SKYWALK_DOOR_OPEN_SPEED
+              : QORTAL_LAND_CLUB_SKYWALK_DOOR_CLOSE_SPEED;
           const step = Math.max(0.001, delta * speed);
           if (door.targetProgress > door.progress) {
             door.progress = Math.min(door.targetProgress, door.progress + step);
@@ -6619,18 +7654,27 @@ export function QortalLand({
           }
 
           const progress = Phaser.Math.Easing.Sine.InOut(door.progress);
-          const closedAlpha = door.baseAlpha * (1 - Phaser.Math.Clamp(progress / 0.52, 0, 1));
-          const semiOpenAlpha = door.baseAlpha * Math.max(0, 1 - Math.abs(progress - 0.5) / 0.5);
-          const openAlpha = door.baseAlpha * Phaser.Math.Clamp((progress - 0.36) / 0.64, 0, 1);
+          const closedAlpha =
+            door.baseAlpha * (1 - Phaser.Math.Clamp(progress / 0.52, 0, 1));
+          const semiOpenAlpha =
+            door.baseAlpha * Math.max(0, 1 - Math.abs(progress - 0.5) / 0.5);
+          const openAlpha =
+            door.baseAlpha * Phaser.Math.Clamp((progress - 0.36) / 0.64, 0, 1);
           door.closed.setAlpha(closedAlpha);
           door.semiOpen.setAlpha(semiOpenAlpha);
           door.open.setAlpha(openAlpha);
-          door.closed.setScale(door.baseScaleX * (1 - progress * 0.025), door.baseScaleY);
+          door.closed.setScale(
+            door.baseScaleX * (1 - progress * 0.025),
+            door.baseScaleY
+          );
           door.semiOpen.setScale(
             door.baseScaleX * (0.98 + Math.sin(progress * Math.PI) * 0.045),
             door.baseScaleY
           );
-          door.open.setScale(door.baseScaleX * (0.985 + progress * 0.028), door.baseScaleY);
+          door.open.setScale(
+            door.baseScaleX * (0.985 + progress * 0.028),
+            door.baseScaleY
+          );
         }
 
         private updateParkPortalDoor(delta: number) {
@@ -6640,16 +7684,25 @@ export function QortalLand({
           const isInPark = currentRoomRef.current === QORTAL_LAND_PARK_ROOM_ID;
           const avatarLogicalX = Number(avatar?.getData?.('logicalX'));
           const avatarLogicalY = Number(avatar?.getData?.('logicalY'));
-          const weightedDistance = avatar && isInPark
-            ? Math.hypot(
-                (Number.isFinite(avatarLogicalX) ? avatarLogicalX : avatar.x) - door.hotspotX,
-                ((Number.isFinite(avatarLogicalY) ? avatarLogicalY : avatar.y) - door.hotspotY) * 1.05
-              )
-            : Number.POSITIVE_INFINITY;
-          door.targetProgress = weightedDistance <= door.proximityRadius ? 1 : 0;
-          const speed = door.targetProgress > door.progress
-            ? QORTAL_LAND_PARK_PORTAL_OPEN_SPEED
-            : QORTAL_LAND_PARK_PORTAL_CLOSE_SPEED;
+          const weightedDistance =
+            avatar && isInPark
+              ? Math.hypot(
+                  (Number.isFinite(avatarLogicalX)
+                    ? avatarLogicalX
+                    : avatar.x) - door.hotspotX,
+                  ((Number.isFinite(avatarLogicalY)
+                    ? avatarLogicalY
+                    : avatar.y) -
+                    door.hotspotY) *
+                    1.05
+                )
+              : Number.POSITIVE_INFINITY;
+          door.targetProgress =
+            weightedDistance <= door.proximityRadius ? 1 : 0;
+          const speed =
+            door.targetProgress > door.progress
+              ? QORTAL_LAND_PARK_PORTAL_OPEN_SPEED
+              : QORTAL_LAND_PARK_PORTAL_CLOSE_SPEED;
           const step = Math.max(0.001, delta * speed);
           if (door.targetProgress > door.progress) {
             door.progress = Math.min(door.targetProgress, door.progress + step);
@@ -6659,7 +7712,9 @@ export function QortalLand({
 
           const frameCount = Math.max(1, door.frames.length);
           const frameIndex = Phaser.Math.Clamp(
-            Math.round(Phaser.Math.Easing.Sine.InOut(door.progress) * (frameCount - 1)),
+            Math.round(
+              Phaser.Math.Easing.Sine.InOut(door.progress) * (frameCount - 1)
+            ),
             0,
             frameCount - 1
           );
@@ -6681,11 +7736,16 @@ export function QortalLand({
           for (const basePlacement of QORTAL_LAND_DEVELOPMENT_PNG_PROP_PLACEMENTS) {
             const placement = {
               ...basePlacement,
-              ...readQortalLandDevelopmentPngPlacementOverride(basePlacement.id),
+              ...readQortalLandDevelopmentPngPlacementOverride(
+                basePlacement.id
+              ),
             };
             if (placement.visible === false) continue;
-            if (placement.roomIds && !placement.roomIds.includes(roomId)) continue;
-            const asset = qortalLandDevelopmentPngAssetById.get(placement.assetId);
+            if (placement.roomIds && !placement.roomIds.includes(roomId))
+              continue;
+            const asset = qortalLandDevelopmentPngAssetById.get(
+              placement.assetId
+            );
             if (!asset) {
               if (!warnedMissingDevelopmentPngAssets.has(placement.assetId)) {
                 warnedMissingDevelopmentPngAssets.add(placement.assetId);
@@ -6697,11 +7757,19 @@ export function QortalLand({
             }
             const textureKey = qortalLandDevelopmentPngTextureKey(asset.id);
             if (!this.textures.exists(textureKey)) continue;
-            const instanceCount = Math.max(1, Math.min(12, Math.round(placement.count ?? 1)));
+            const instanceCount = Math.max(
+              1,
+              Math.min(12, Math.round(placement.count ?? 1))
+            );
             const spacing = placement.spacing ?? 0;
             const startOffsetX = -((instanceCount - 1) * spacing) / 2;
-            for (let instanceIndex = 0; instanceIndex < instanceCount; instanceIndex += 1) {
-              const instanceX = placement.x + startOffsetX + instanceIndex * spacing;
+            for (
+              let instanceIndex = 0;
+              instanceIndex < instanceCount;
+              instanceIndex += 1
+            ) {
+              const instanceX =
+                placement.x + startOffsetX + instanceIndex * spacing;
               const instanceY = placement.y;
               if (placement.contactShadow) {
                 const shadow = placement.contactShadow;
@@ -6711,7 +7779,10 @@ export function QortalLand({
                     ? `${placement.id}:contact-shadow`
                     : `${placement.id}:${instanceIndex}:contact-shadow`
                 );
-                shadowGraphic.fillStyle(shadow.color ?? 0x000000, shadow.alpha ?? 0.2);
+                shadowGraphic.fillStyle(
+                  shadow.color ?? 0x000000,
+                  shadow.alpha ?? 0.2
+                );
                 shadowGraphic.fillEllipse(
                   instanceX + (shadow.offsetX ?? 0),
                   instanceY + (shadow.offsetY ?? 0),
@@ -6722,7 +7793,8 @@ export function QortalLand({
                   shadow.depth ??
                     (placement.depthMode === 'y-sort'
                       ? instanceY + (placement.depthOffset ?? 20) - 1
-                      : (placement.depth ?? instanceY) + (shadow.depthOffset ?? -1))
+                      : (placement.depth ?? instanceY) +
+                        (shadow.depthOffset ?? -1))
                 );
                 this.developmentPngPropSprites.push(shadowGraphic);
               }
@@ -6733,7 +7805,7 @@ export function QortalLand({
                 depth:
                   placement.depthMode === 'y-sort'
                     ? instanceY + (placement.depthOffset ?? 20)
-                    : placement.depth ?? instanceY,
+                    : (placement.depth ?? instanceY),
               };
               if (this.hasWarpOffset(instancePlacement.warp)) {
                 this.createWarpableDevelopmentPng(
@@ -6747,11 +7819,20 @@ export function QortalLand({
                 instancePlacement,
                 textureKey
               );
-              const sprite = this.add.image(instanceX, instanceY, lookTextureKey);
-              sprite.setName(
-                instanceCount === 1 ? placement.id : `${placement.id}:${instanceIndex}`
+              const sprite = this.add.image(
+                instanceX,
+                instanceY,
+                lookTextureKey
               );
-              sprite.setOrigin(placement.originX ?? 0.5, placement.originY ?? 1);
+              sprite.setName(
+                instanceCount === 1
+                  ? placement.id
+                  : `${placement.id}:${instanceIndex}`
+              );
+              sprite.setOrigin(
+                placement.originX ?? 0.5,
+                placement.originY ?? 1
+              );
               sprite.setScale(
                 (placement.scaleX ?? placement.scale ?? 1) * asset.renderScaleX,
                 (placement.scaleY ?? placement.scale ?? 1) * asset.renderScaleY
@@ -6767,10 +7848,14 @@ export function QortalLand({
         private drawCollisionDebug() {
           if (!shouldShowQortalLandCollisionDebug()) return;
           const roomId = currentRoomRef.current;
-          for (const footprint of qortalLandCollisionFootprintsForRoom(roomId)) {
+          for (const footprint of qortalLandCollisionFootprintsForRoom(
+            roomId
+          )) {
             const expanded = qortalLandExpandedCollisionRadii(footprint);
             const debugGraphic = this.add.graphics();
-            debugGraphic.setName(`collision-debug:${footprint.x}:${footprint.y}`);
+            debugGraphic.setName(
+              `collision-debug:${footprint.x}:${footprint.y}`
+            );
             debugGraphic.setDepth(9997);
             debugGraphic.lineStyle(2, 0xffe066, 0.9);
             debugGraphic.fillStyle(0xffe066, 0.14);
@@ -6788,15 +7873,26 @@ export function QortalLand({
                 expanded.y * 2
               );
             } else {
-              debugGraphic.fillEllipse(footprint.x, footprint.y, expanded.x * 2, expanded.y * 2);
-              debugGraphic.strokeEllipse(footprint.x, footprint.y, expanded.x * 2, expanded.y * 2);
+              debugGraphic.fillEllipse(
+                footprint.x,
+                footprint.y,
+                expanded.x * 2,
+                expanded.y * 2
+              );
+              debugGraphic.strokeEllipse(
+                footprint.x,
+                footprint.y,
+                expanded.x * 2,
+                expanded.y * 2
+              );
             }
             this.developmentPngPropSprites.push(debugGraphic);
           }
         }
 
         private createInteractionPrompt() {
-          const hotspot = roomLayoutForRoom(QORTAL_LAND_DEFAULT_ROOM_ID).interactions?.djBooth;
+          const hotspot = roomLayoutForRoom(QORTAL_LAND_DEFAULT_ROOM_ID)
+            .interactions?.djBooth;
           const background = this.add.graphics();
           const text = this.add.text(0, 0, 'Work in Progress', {
             color: '#f8fbff',
@@ -6806,7 +7902,11 @@ export function QortalLand({
             stroke: '#050711',
             strokeThickness: 4,
           });
-          const container = this.add.container(hotspot?.x ?? 0, hotspot?.promptY ?? 0, [background, text]);
+          const container = this.add.container(
+            hotspot?.x ?? 0,
+            hotspot?.promptY ?? 0,
+            [background, text]
+          );
           container.setDepth(9998);
           container.setVisible(false);
           text.setOrigin(0.5);
@@ -6825,13 +7925,18 @@ export function QortalLand({
           const avatarLogicalY = Number(this.localAvatar.getData('logicalY'));
           const show = isNearClubDjBooth(
             currentRoomRef.current,
-            Number.isFinite(avatarLogicalX) ? avatarLogicalX : this.localAvatar.x,
-            Number.isFinite(avatarLogicalY) ? avatarLogicalY : this.localAvatar.y
+            Number.isFinite(avatarLogicalX)
+              ? avatarLogicalX
+              : this.localAvatar.x,
+            Number.isFinite(avatarLogicalY)
+              ? avatarLogicalY
+              : this.localAvatar.y
           );
           this.interactionPrompt.container.setVisible(show);
           if (!show) return;
           const pulse = 0.88 + Math.sin(this.time.now / 180) * 0.12;
-          const hotspot = roomLayoutForRoom(QORTAL_LAND_DEFAULT_ROOM_ID).interactions?.djBooth;
+          const hotspot = roomLayoutForRoom(QORTAL_LAND_DEFAULT_ROOM_ID)
+            .interactions?.djBooth;
           this.interactionPrompt.container.setPosition(
             hotspot?.x ?? this.interactionPrompt.container.x,
             (hotspot?.promptY ?? this.interactionPrompt.container.y) - pulse * 3
@@ -6859,12 +7964,15 @@ export function QortalLand({
         private drawFloorTexture(g: any) {
           const floor = roomLayoutForRoom(QORTAL_LAND_DEFAULT_ROOM_ID).floor;
           g.fillStyle(0x101830, 0.26);
-          g.fillPoints([
-            new Phaser.Geom.Point(floor.back.minX + 33, floor.topY + 18),
-            new Phaser.Geom.Point(floor.back.maxX - 33, floor.topY + 18),
-            new Phaser.Geom.Point(floor.front.maxX - 41, floor.bottomY - 18),
-            new Phaser.Geom.Point(floor.front.minX + 41, floor.bottomY - 18),
-          ], true);
+          g.fillPoints(
+            [
+              new Phaser.Geom.Point(floor.back.minX + 33, floor.topY + 18),
+              new Phaser.Geom.Point(floor.back.maxX - 33, floor.topY + 18),
+              new Phaser.Geom.Point(floor.front.maxX - 41, floor.bottomY - 18),
+              new Phaser.Geom.Point(floor.front.minX + 41, floor.bottomY - 18),
+            ],
+            true
+          );
           for (let i = 0; i < 14; i += 1) {
             const y = floor.topY + 26 + (i % 13) * 28;
             const bounds = floorBoundsForY(y);
@@ -6892,19 +8000,25 @@ export function QortalLand({
           const layout = roomLayoutForRoom(QORTAL_LAND_DEFAULT_ROOM_ID);
           const { floor } = layout;
           g.fillStyle(0x080b19, 0.92);
-          g.fillPoints([
-            new Phaser.Geom.Point(0, 128),
-            new Phaser.Geom.Point(floor.back.minX, floor.topY),
-            new Phaser.Geom.Point(floor.front.minX, floor.bottomY),
-            new Phaser.Geom.Point(0, floor.bottomY + 40),
-          ], true);
+          g.fillPoints(
+            [
+              new Phaser.Geom.Point(0, 128),
+              new Phaser.Geom.Point(floor.back.minX, floor.topY),
+              new Phaser.Geom.Point(floor.front.minX, floor.bottomY),
+              new Phaser.Geom.Point(0, floor.bottomY + 40),
+            ],
+            true
+          );
           g.fillStyle(0x0b1022, 0.92);
-          g.fillPoints([
-            new Phaser.Geom.Point(layout.width, 128),
-            new Phaser.Geom.Point(floor.back.maxX, floor.topY),
-            new Phaser.Geom.Point(floor.front.maxX, floor.bottomY),
-            new Phaser.Geom.Point(layout.width, floor.bottomY + 40),
-          ], true);
+          g.fillPoints(
+            [
+              new Phaser.Geom.Point(layout.width, 128),
+              new Phaser.Geom.Point(floor.back.maxX, floor.topY),
+              new Phaser.Geom.Point(floor.front.maxX, floor.bottomY),
+              new Phaser.Geom.Point(layout.width, floor.bottomY + 40),
+            ],
+            true
+          );
           g.lineStyle(2, 0x2cf8ff, 0.055);
           for (let y = 220; y <= 560; y += 170) {
             g.lineBetween(18, y, 155, y + 72);
@@ -6921,12 +8035,15 @@ export function QortalLand({
           g.fillStyle(0x060917, 0.56);
           g.fillRoundedRect(188, 166, 1424, 218, 22);
           g.fillStyle(0x0d1328, 0.92);
-          g.fillPoints([
-            new Phaser.Geom.Point(floor.back.minX, floor.topY),
-            new Phaser.Geom.Point(floor.back.maxX, floor.topY),
-            new Phaser.Geom.Point(1484, 392),
-            new Phaser.Geom.Point(316, 392),
-          ], true);
+          g.fillPoints(
+            [
+              new Phaser.Geom.Point(floor.back.minX, floor.topY),
+              new Phaser.Geom.Point(floor.back.maxX, floor.topY),
+              new Phaser.Geom.Point(1484, 392),
+              new Phaser.Geom.Point(316, 392),
+            ],
+            true
+          );
           g.lineStyle(2, 0x2cf8ff, 0.1);
           g.lineBetween(230, 327, 1570, 327);
           g.lineBetween(250, 366, 1550, 366);
@@ -6935,20 +8052,26 @@ export function QortalLand({
             const x = 268 + i * 196;
             const panelColor = i % 2 === 0 ? 0x071021 : 0x0a1024;
             g.fillStyle(panelColor, 0.62);
-            g.fillPoints([
-              new Phaser.Geom.Point(x, 300),
-              new Phaser.Geom.Point(x + 154, 300),
-              new Phaser.Geom.Point(x + 132, 390),
-              new Phaser.Geom.Point(x + 18, 390),
-            ], true);
+            g.fillPoints(
+              [
+                new Phaser.Geom.Point(x, 300),
+                new Phaser.Geom.Point(x + 154, 300),
+                new Phaser.Geom.Point(x + 132, 390),
+                new Phaser.Geom.Point(x + 18, 390),
+              ],
+              true
+            );
             g.lineStyle(1, i % 2 === 0 ? 0x2cf8ff : 0xff2bd6, 0.09);
-            g.strokePoints([
-              new Phaser.Geom.Point(x, 300),
-              new Phaser.Geom.Point(x + 154, 300),
-              new Phaser.Geom.Point(x + 132, 390),
-              new Phaser.Geom.Point(x + 18, 390),
-              new Phaser.Geom.Point(x, 300),
-            ], false);
+            g.strokePoints(
+              [
+                new Phaser.Geom.Point(x, 300),
+                new Phaser.Geom.Point(x + 154, 300),
+                new Phaser.Geom.Point(x + 132, 390),
+                new Phaser.Geom.Point(x + 18, 390),
+                new Phaser.Geom.Point(x, 300),
+              ],
+              false
+            );
           }
 
           g.fillStyle(0x02040b, 0.34);
@@ -7038,7 +8161,13 @@ export function QortalLand({
           g.strokeRoundedRect(x + 26, y + 28, 84, 132, 10);
           for (let i = 0; i < 4; i += 1) {
             g.lineStyle(2, 0x2cf8ff, 0.28 - i * 0.04);
-            g.strokeRoundedRect(x + 5 - i * 7, y + 5 - i * 7, 126 + i * 14, 178 + i * 14, 16);
+            g.strokeRoundedRect(
+              x + 5 - i * 7,
+              y + 5 - i * 7,
+              126 + i * 14,
+              178 + i * 14,
+              16
+            );
           }
           g.fillStyle(0xf8fbff, 0.74);
           g.fillCircle(x + 104, y + 100, 5);
@@ -7057,7 +8186,13 @@ export function QortalLand({
           g.fillEllipse(x + 72, y + 196, 168, 34);
           for (let i = 0; i < 4; i += 1) {
             g.lineStyle(3, i % 2 === 0 ? accent : secondary, 0.2 - i * 0.028);
-            g.strokeRoundedRect(x - i * 9, y - i * 7, 144 + i * 18, 202 + i * 14, 34);
+            g.strokeRoundedRect(
+              x - i * 9,
+              y - i * 7,
+              144 + i * 18,
+              202 + i * 14,
+              34
+            );
           }
           g.fillStyle(0x061018, 0.98);
           g.fillRoundedRect(x + 8, y + 8, 128, 184, 28);
@@ -7068,7 +8203,12 @@ export function QortalLand({
           for (let i = 0; i < 5; i += 1) {
             const offset = flip ? -i * 7 : i * 7;
             g.lineStyle(2, i % 2 === 0 ? accent : secondary, 0.28 + i * 0.04);
-            g.lineBetween(x + 44 + offset, y + 48, x + 96 - offset * 0.4, y + 158);
+            g.lineBetween(
+              x + 44 + offset,
+              y + 48,
+              x + 96 - offset * 0.4,
+              y + 158
+            );
           }
           g.lineStyle(5, accent, 0.72);
           g.strokeRoundedRect(x + 18, y + 18, 108, 164, 26);
@@ -7082,7 +8222,13 @@ export function QortalLand({
           g.fillRoundedRect(x + 42, y + 202, 60, 7, 4);
         }
 
-        private drawSkylineWindow(g: any, x: number, y: number, width: number, height: number) {
+        private drawSkylineWindow(
+          g: any,
+          x: number,
+          y: number,
+          width: number,
+          height: number
+        ) {
           g.fillStyle(0x050817, 1);
           g.fillRoundedRect(x, y, width, height, 18);
           g.fillStyle(0x07142c, 1);
@@ -7090,7 +8236,12 @@ export function QortalLand({
           g.lineStyle(4, 0x2cf8ff, 0.32);
           g.strokeRoundedRect(x, y, width, height, 18);
           g.lineStyle(2, 0xff2bd6, 0.18);
-          g.lineBetween(x + 40, y + height - 38, x + width - 40, y + height - 38);
+          g.lineBetween(
+            x + 40,
+            y + height - 38,
+            x + width - 40,
+            y + height - 38
+          );
           g.fillStyle(0xff2bd6, 0.14);
           g.fillCircle(x + width * 0.68, y + 74, 42);
           g.fillStyle(0x2cf8ff, 0.08);
@@ -7103,10 +8254,20 @@ export function QortalLand({
             g.fillStyle(tower % 2 === 0 ? 0x070a18 : 0x0b1024, 0.96);
             g.fillRect(towerX, baseY - towerH, towerW, towerH);
             for (let row = 0; row < Math.floor(towerH / 18); row += 1) {
-              for (let col = 0; col < Math.max(1, Math.floor(towerW / 13)); col += 1) {
+              for (
+                let col = 0;
+                col < Math.max(1, Math.floor(towerW / 13));
+                col += 1
+              ) {
                 const lit = (tower + row + col) % 3 !== 0;
                 g.fillStyle(lit ? 0x2cf8ff : 0x17213c, lit ? 0.52 : 0.32);
-                g.fillRoundedRect(towerX + 6 + col * 13, baseY - towerH + 10 + row * 17, 7, 6, 2);
+                g.fillRoundedRect(
+                  towerX + 6 + col * 13,
+                  baseY - towerH + 10 + row * 17,
+                  7,
+                  6,
+                  2
+                );
               }
             }
           }
@@ -7122,27 +8283,36 @@ export function QortalLand({
           g.fillRect(0, 0, LAND_WIDTH, range.top);
           this.drawSkylineWindow(g, 64, 42, LAND_WIDTH - 128, 238);
           g.fillStyle(0x050711, 1);
-          g.fillPoints([
-            new Phaser.Geom.Point(128, range.top),
-            new Phaser.Geom.Point(1672, range.top),
-            new Phaser.Geom.Point(1650, range.bottom),
-            new Phaser.Geom.Point(150, range.bottom),
-          ], true);
+          g.fillPoints(
+            [
+              new Phaser.Geom.Point(128, range.top),
+              new Phaser.Geom.Point(1672, range.top),
+              new Phaser.Geom.Point(1650, range.bottom),
+              new Phaser.Geom.Point(150, range.bottom),
+            ],
+            true
+          );
           g.fillStyle(0x10172d, 0.86);
-          g.fillPoints([
-            new Phaser.Geom.Point(150, range.top + 26),
-            new Phaser.Geom.Point(1650, range.top + 26),
-            new Phaser.Geom.Point(1605, range.bottom - 18),
-            new Phaser.Geom.Point(195, range.bottom - 18),
-          ], true);
+          g.fillPoints(
+            [
+              new Phaser.Geom.Point(150, range.top + 26),
+              new Phaser.Geom.Point(1650, range.top + 26),
+              new Phaser.Geom.Point(1605, range.bottom - 18),
+              new Phaser.Geom.Point(195, range.bottom - 18),
+            ],
+            true
+          );
           g.lineStyle(3, 0x2cf8ff, 0.22);
-          g.strokePoints([
-            new Phaser.Geom.Point(128, range.top),
-            new Phaser.Geom.Point(1672, range.top),
-            new Phaser.Geom.Point(1650, range.bottom),
-            new Phaser.Geom.Point(150, range.bottom),
-            new Phaser.Geom.Point(128, range.top),
-          ], false);
+          g.strokePoints(
+            [
+              new Phaser.Geom.Point(128, range.top),
+              new Phaser.Geom.Point(1672, range.top),
+              new Phaser.Geom.Point(1650, range.bottom),
+              new Phaser.Geom.Point(150, range.bottom),
+              new Phaser.Geom.Point(128, range.top),
+            ],
+            false
+          );
           for (let i = 0; i < 6; i += 1) {
             const y = range.top + 56 + i * 44;
             const bounds = floorBoundsForRoomY(QORTAL_LAND_SKYWALK_ROOM_ID, y);
@@ -7170,27 +8340,36 @@ export function QortalLand({
           g.fillStyle(0x10182a, 1);
           g.fillRect(0, 0, LAND_WIDTH, range.top);
           g.fillStyle(0x050711, 1);
-          g.fillPoints([
-            new Phaser.Geom.Point(150, range.top),
-            new Phaser.Geom.Point(1650, range.top),
-            new Phaser.Geom.Point(1730, range.bottom),
-            new Phaser.Geom.Point(70, range.bottom),
-          ], true);
+          g.fillPoints(
+            [
+              new Phaser.Geom.Point(150, range.top),
+              new Phaser.Geom.Point(1650, range.top),
+              new Phaser.Geom.Point(1730, range.bottom),
+              new Phaser.Geom.Point(70, range.bottom),
+            ],
+            true
+          );
           g.fillStyle(0x0d1222, 1);
-          g.fillPoints([
-            new Phaser.Geom.Point(190, range.top + 42),
-            new Phaser.Geom.Point(1610, range.top + 42),
-            new Phaser.Geom.Point(1665, range.bottom - 12),
-            new Phaser.Geom.Point(135, range.bottom - 12),
-          ], true);
+          g.fillPoints(
+            [
+              new Phaser.Geom.Point(190, range.top + 42),
+              new Phaser.Geom.Point(1610, range.top + 42),
+              new Phaser.Geom.Point(1665, range.bottom - 12),
+              new Phaser.Geom.Point(135, range.bottom - 12),
+            ],
+            true
+          );
           g.lineStyle(3, 0x2cf8ff, 0.16);
-          g.strokePoints([
-            new Phaser.Geom.Point(150, range.top),
-            new Phaser.Geom.Point(1650, range.top),
-            new Phaser.Geom.Point(1730, range.bottom),
-            new Phaser.Geom.Point(70, range.bottom),
-            new Phaser.Geom.Point(150, range.top),
-          ], false);
+          g.strokePoints(
+            [
+              new Phaser.Geom.Point(150, range.top),
+              new Phaser.Geom.Point(1650, range.top),
+              new Phaser.Geom.Point(1730, range.bottom),
+              new Phaser.Geom.Point(70, range.bottom),
+              new Phaser.Geom.Point(150, range.top),
+            ],
+            false
+          );
           for (let row = 0; row < 5; row += 1) {
             const y = range.top + 74 + row * 58;
             const bounds = floorBoundsForRoomY(QORTAL_LAND_MALL_ROOM_ID, y);
@@ -7211,7 +8390,12 @@ export function QortalLand({
           g.fillStyle(0x071329, 1);
           g.fillRect(0, 0, layout.width, range.top + 4);
           g.fillStyle(0x050711, 0.72);
-          g.fillRect(0, range.top - 24, layout.width, layout.height - range.top + 24);
+          g.fillRect(
+            0,
+            range.top - 24,
+            layout.width,
+            layout.height - range.top + 24
+          );
           this.drawParkPlatformSupport(g);
           g.fillStyle(0x2cf8ff, 0.035);
           g.fillEllipse(420, 616, 720, 160);
@@ -7278,7 +8462,12 @@ export function QortalLand({
           g.lineStyle(3, 0x22eaff, 0.22);
           g.lineBetween(leftBackX, floor.topY + 14, leftFrontX, supportTopY);
           g.lineBetween(rightBackX, floor.topY + 14, rightFrontX, supportTopY);
-          g.lineBetween(leftFrontX + 18, supportTopY, rightFrontX - 18, supportTopY);
+          g.lineBetween(
+            leftFrontX + 18,
+            supportTopY,
+            rightFrontX - 18,
+            supportTopY
+          );
 
           g.lineStyle(2, 0xff2bd6, 0.18);
           g.lineBetween(0, lowerLipY, width, lowerLipY);
@@ -7331,7 +8520,12 @@ export function QortalLand({
           g.fillRoundedRect(x + 122, y + 26, 14, 38, 5);
         }
 
-        private drawEscalator(g: any, centerX: number, centerY: number, up: boolean) {
+        private drawEscalator(
+          g: any,
+          centerX: number,
+          centerY: number,
+          up: boolean
+        ) {
           const topY = centerY - 92;
           const bottomY = centerY + 112;
           const topHalf = up ? 120 : 92;
@@ -7339,19 +8533,25 @@ export function QortalLand({
           g.fillStyle(0x02040b, 0.62);
           g.fillEllipse(centerX, bottomY + 30, 360, 48);
           g.fillStyle(0x070a17, 0.98);
-          g.fillPoints([
-            new Phaser.Geom.Point(centerX - topHalf, topY),
-            new Phaser.Geom.Point(centerX + topHalf, topY),
-            new Phaser.Geom.Point(centerX + bottomHalf, bottomY),
-            new Phaser.Geom.Point(centerX - bottomHalf, bottomY),
-          ], true);
+          g.fillPoints(
+            [
+              new Phaser.Geom.Point(centerX - topHalf, topY),
+              new Phaser.Geom.Point(centerX + topHalf, topY),
+              new Phaser.Geom.Point(centerX + bottomHalf, bottomY),
+              new Phaser.Geom.Point(centerX - bottomHalf, bottomY),
+            ],
+            true
+          );
           g.fillStyle(0x121a30, 1);
-          g.fillPoints([
-            new Phaser.Geom.Point(centerX - topHalf + 28, topY + 18),
-            new Phaser.Geom.Point(centerX + topHalf - 28, topY + 18),
-            new Phaser.Geom.Point(centerX + bottomHalf - 26, bottomY - 18),
-            new Phaser.Geom.Point(centerX - bottomHalf + 26, bottomY - 18),
-          ], true);
+          g.fillPoints(
+            [
+              new Phaser.Geom.Point(centerX - topHalf + 28, topY + 18),
+              new Phaser.Geom.Point(centerX + topHalf - 28, topY + 18),
+              new Phaser.Geom.Point(centerX + bottomHalf - 26, bottomY - 18),
+              new Phaser.Geom.Point(centerX - bottomHalf + 26, bottomY - 18),
+            ],
+            true
+          );
           g.lineStyle(5, 0x2cf8ff, 0.34);
           g.lineBetween(centerX - topHalf, topY, centerX - bottomHalf, bottomY);
           g.lineBetween(centerX + topHalf, topY, centerX + bottomHalf, bottomY);
@@ -7368,7 +8568,13 @@ export function QortalLand({
           g.strokeRoundedRect(centerX - 92, topY - 34, 184, 24, 10);
         }
 
-        private drawCinemaStorefront(g: any, x: number, y: number, width: number, height: number) {
+        private drawCinemaStorefront(
+          g: any,
+          x: number,
+          y: number,
+          width: number,
+          height: number
+        ) {
           g.fillStyle(0x03040b, 1);
           g.fillRoundedRect(x, y, width, height, 18);
           g.fillStyle(0x0d1022, 1);
@@ -7394,7 +8600,12 @@ export function QortalLand({
           g.fillStyle(0x050711, 1);
           g.fillRoundedRect(x + width / 2 - 88, y + height - 62, 176, 62, 14);
           g.lineStyle(2, 0xffffff, 0.1);
-          g.lineBetween(x + width / 2, y + height - 58, x + width / 2, y + height - 4);
+          g.lineBetween(
+            x + width / 2,
+            y + height - 58,
+            x + width / 2,
+            y + height - 4
+          );
           for (let i = 0; i < 10; i += 1) {
             g.fillStyle(i % 2 === 0 ? 0xffae00 : 0x2cf8ff, 0.72);
             g.fillCircle(x + 70 + i * 78, y + 26, 6);
@@ -7407,12 +8618,15 @@ export function QortalLand({
           g.fillStyle(0x090b16, 1);
           g.fillRoundedRect(x, y, 250, 88, 18);
           g.fillStyle(0x040611, 0.96);
-          g.fillPoints([
-            new Phaser.Geom.Point(x + 12, y + 60),
-            new Phaser.Geom.Point(x + 238, y + 60),
-            new Phaser.Geom.Point(x + 216, y + 104),
-            new Phaser.Geom.Point(x + 34, y + 104),
-          ], true);
+          g.fillPoints(
+            [
+              new Phaser.Geom.Point(x + 12, y + 60),
+              new Phaser.Geom.Point(x + 238, y + 60),
+              new Phaser.Geom.Point(x + 216, y + 104),
+              new Phaser.Geom.Point(x + 34, y + 104),
+            ],
+            true
+          );
           g.fillStyle(0x02030a, 0.34);
           g.fillRoundedRect(x + 12, y + 72, 226, 24, 9);
           g.fillStyle(0x11172d, 1);
@@ -7447,19 +8661,43 @@ export function QortalLand({
           g.strokeRoundedRect(x, y, width, 86, 12);
           for (let row = 0; row < 2; row += 1) {
             g.lineStyle(2, 0xffffff, 0.055);
-            g.lineBetween(x + 20, y + 35 + row * 32, x + width - 20, y + 35 + row * 32);
+            g.lineBetween(
+              x + 20,
+              y + 35 + row * 32,
+              x + width - 20,
+              y + 35 + row * 32
+            );
             for (let col = 0; col < 13; col += 1) {
               const bottleX = x + 24 + col * ((width - 48) / 12);
-              const bottleColor = col % 3 === 0 ? 0xff2bd6 : col % 3 === 1 ? 0x2cf8ff : 0xffae00;
+              const bottleColor =
+                col % 3 === 0 ? 0xff2bd6 : col % 3 === 1 ? 0x2cf8ff : 0xffae00;
               const bottleHeight = 22 + ((col + row) % 3) * 4;
               g.fillStyle(0x02030a, 0.45);
               g.fillRoundedRect(bottleX - 3, y + 15 + row * 32, 17, 24, 4);
               g.fillStyle(bottleColor, 0.42);
-              g.fillRoundedRect(bottleX, y + 13 + row * 32 - (bottleHeight - 22), 10, bottleHeight, 3);
+              g.fillRoundedRect(
+                bottleX,
+                y + 13 + row * 32 - (bottleHeight - 22),
+                10,
+                bottleHeight,
+                3
+              );
               g.fillStyle(bottleColor, 0.22);
-              g.fillRoundedRect(bottleX + 3, y + 8 + row * 32 - (bottleHeight - 22), 4, 8, 2);
+              g.fillRoundedRect(
+                bottleX + 3,
+                y + 8 + row * 32 - (bottleHeight - 22),
+                4,
+                8,
+                2
+              );
               g.fillStyle(0xffffff, 0.08);
-              g.fillRoundedRect(bottleX + 2, y + 16 + row * 32 - (bottleHeight - 22), 3, 12, 2);
+              g.fillRoundedRect(
+                bottleX + 2,
+                y + 16 + row * 32 - (bottleHeight - 22),
+                3,
+                12,
+                2
+              );
             }
           }
         }
@@ -7509,29 +8747,40 @@ export function QortalLand({
         }
 
         private drawDanceFloor(g: any) {
-          const centerX = roomLayoutForRoom(QORTAL_LAND_DEFAULT_ROOM_ID).width / 2;
+          const centerX =
+            roomLayoutForRoom(QORTAL_LAND_DEFAULT_ROOM_ID).width / 2;
           const top = 430;
           const bottom = 645;
           g.fillStyle(0x02040b, 0.45);
-          g.fillPoints([
-            new Phaser.Geom.Point(centerX - 455, bottom),
-            new Phaser.Geom.Point(centerX + 455, bottom),
-            new Phaser.Geom.Point(centerX + 405, bottom + 34),
-            new Phaser.Geom.Point(centerX - 405, bottom + 34),
-          ], true);
+          g.fillPoints(
+            [
+              new Phaser.Geom.Point(centerX - 455, bottom),
+              new Phaser.Geom.Point(centerX + 455, bottom),
+              new Phaser.Geom.Point(centerX + 405, bottom + 34),
+              new Phaser.Geom.Point(centerX - 405, bottom + 34),
+            ],
+            true
+          );
           g.fillStyle(0x2cf8ff, 0.055);
           g.fillEllipse(centerX, bottom - 42, 820, 112);
           g.fillStyle(0x0a0d19, 0.96);
-          g.fillPoints([
-            new Phaser.Geom.Point(centerX - 315, top),
-            new Phaser.Geom.Point(centerX + 315, top),
-            new Phaser.Geom.Point(centerX + 455, bottom),
-            new Phaser.Geom.Point(centerX - 455, bottom),
-          ], true);
+          g.fillPoints(
+            [
+              new Phaser.Geom.Point(centerX - 315, top),
+              new Phaser.Geom.Point(centerX + 315, top),
+              new Phaser.Geom.Point(centerX + 455, bottom),
+              new Phaser.Geom.Point(centerX - 455, bottom),
+            ],
+            true
+          );
           for (let row = 0; row < 5; row += 1) {
             for (let col = 0; col < 9; col += 1) {
               const hue = (row * 42 + col * 24) % 360;
-              const color = Phaser.Display.Color.HSLToColor(hue / 360, 0.9, 0.55).color;
+              const color = Phaser.Display.Color.HSLToColor(
+                hue / 360,
+                0.9,
+                0.55
+              ).color;
               const rowY = top + 18 + row * 38;
               const rowWidth = 540 + row * 42;
               const cellW = rowWidth / 9 - 8;
@@ -7545,21 +8794,27 @@ export function QortalLand({
                 new Phaser.Geom.Point(startX + skew - 6, rowY + 26),
               ];
               g.fillStyle(0x010209, 0.3);
-              g.fillPoints([
-                new Phaser.Geom.Point(points[0].x + 4, points[0].y + 5),
-                new Phaser.Geom.Point(points[1].x + 4, points[1].y + 5),
-                new Phaser.Geom.Point(points[2].x + 4, points[2].y + 5),
-                new Phaser.Geom.Point(points[3].x + 4, points[3].y + 5),
-              ], true);
+              g.fillPoints(
+                [
+                  new Phaser.Geom.Point(points[0].x + 4, points[0].y + 5),
+                  new Phaser.Geom.Point(points[1].x + 4, points[1].y + 5),
+                  new Phaser.Geom.Point(points[2].x + 4, points[2].y + 5),
+                  new Phaser.Geom.Point(points[3].x + 4, points[3].y + 5),
+                ],
+                true
+              );
               g.fillStyle(color, lit);
               g.fillPoints(points, true);
               g.fillStyle(0xffffff, 0.035);
-              g.fillPoints([
-                new Phaser.Geom.Point(points[0].x + 3, points[0].y + 3),
-                new Phaser.Geom.Point(points[1].x - 4, points[1].y + 3),
-                new Phaser.Geom.Point(points[1].x - 10, points[1].y + 9),
-                new Phaser.Geom.Point(points[0].x + 9, points[0].y + 9),
-              ], true);
+              g.fillPoints(
+                [
+                  new Phaser.Geom.Point(points[0].x + 3, points[0].y + 3),
+                  new Phaser.Geom.Point(points[1].x - 4, points[1].y + 3),
+                  new Phaser.Geom.Point(points[1].x - 10, points[1].y + 9),
+                  new Phaser.Geom.Point(points[0].x + 9, points[0].y + 9),
+                ],
+                true
+              );
               g.lineStyle(1, color, 0.12);
               g.strokePoints([...points, points[0]], false);
             }
@@ -7571,13 +8826,16 @@ export function QortalLand({
             g.lineBetween(centerX - half, y, centerX + half, y + 2);
           }
           g.lineStyle(3, 0xff2bd6, 0.32);
-          g.strokePoints([
-            new Phaser.Geom.Point(centerX - 315, top),
-            new Phaser.Geom.Point(centerX + 315, top),
-            new Phaser.Geom.Point(centerX + 455, bottom),
-            new Phaser.Geom.Point(centerX - 455, bottom),
-            new Phaser.Geom.Point(centerX - 315, top),
-          ], false);
+          g.strokePoints(
+            [
+              new Phaser.Geom.Point(centerX - 315, top),
+              new Phaser.Geom.Point(centerX + 315, top),
+              new Phaser.Geom.Point(centerX + 455, bottom),
+              new Phaser.Geom.Point(centerX - 455, bottom),
+              new Phaser.Geom.Point(centerX - 315, top),
+            ],
+            false
+          );
           g.lineStyle(2, 0x2cf8ff, 0.18);
           g.lineBetween(centerX - 432, bottom - 6, centerX + 432, bottom - 6);
         }
@@ -7588,26 +8846,35 @@ export function QortalLand({
           g.fillStyle(0x2cf8ff, 0.035);
           g.fillEllipse(900, 346, 760, 42);
           g.fillStyle(0x03040b, 1);
-          g.fillPoints([
-            new Phaser.Geom.Point(420, 338),
-            new Phaser.Geom.Point(1380, 338),
-            new Phaser.Geom.Point(1330, 400),
-            new Phaser.Geom.Point(470, 400),
-          ], true);
+          g.fillPoints(
+            [
+              new Phaser.Geom.Point(420, 338),
+              new Phaser.Geom.Point(1380, 338),
+              new Phaser.Geom.Point(1330, 400),
+              new Phaser.Geom.Point(470, 400),
+            ],
+            true
+          );
           g.fillStyle(0x0d1226, 1);
-          g.fillPoints([
-            new Phaser.Geom.Point(456, 346),
-            new Phaser.Geom.Point(1344, 346),
-            new Phaser.Geom.Point(1294, 386),
-            new Phaser.Geom.Point(506, 386),
-          ], true);
+          g.fillPoints(
+            [
+              new Phaser.Geom.Point(456, 346),
+              new Phaser.Geom.Point(1344, 346),
+              new Phaser.Geom.Point(1294, 386),
+              new Phaser.Geom.Point(506, 386),
+            ],
+            true
+          );
           g.fillStyle(0x151c36, 0.78);
-          g.fillPoints([
-            new Phaser.Geom.Point(492, 352),
-            new Phaser.Geom.Point(1308, 352),
-            new Phaser.Geom.Point(1278, 374),
-            new Phaser.Geom.Point(522, 374),
-          ], true);
+          g.fillPoints(
+            [
+              new Phaser.Geom.Point(492, 352),
+              new Phaser.Geom.Point(1308, 352),
+              new Phaser.Geom.Point(1278, 374),
+              new Phaser.Geom.Point(522, 374),
+            ],
+            true
+          );
           g.lineStyle(2, 0x2cf8ff, 0.12);
           g.lineBetween(470, 400, 1330, 400);
           g.lineStyle(2, 0xffffff, 0.055);
@@ -7629,7 +8896,8 @@ export function QortalLand({
             g.fillRoundedRect(x + 7, 344, 20, 33, 6);
           }
           this.drawBottleShelf(g, 540, 178, 720);
-          const hotspot = roomLayoutForRoom(QORTAL_LAND_DEFAULT_ROOM_ID).interactions?.djBooth;
+          const hotspot = roomLayoutForRoom(QORTAL_LAND_DEFAULT_ROOM_ID)
+            .interactions?.djBooth;
           this.drawDjBooth(g, hotspot?.x ?? 900, 286);
         }
 
@@ -7728,7 +8996,13 @@ export function QortalLand({
           const range = roomFloorRange(roomId);
           const roomSize = roomSizeForRoom(roomId);
           g.fillStyle(0x050611, 0.82);
-          g.fillRoundedRect(120, range.bottom + 6, roomSize.width - 240, 46, 18);
+          g.fillRoundedRect(
+            120,
+            range.bottom + 6,
+            roomSize.width - 240,
+            46,
+            18
+          );
           const color =
             roomId === QORTAL_LAND_MALL_ROOM_ID
               ? 0x2cf8ff
@@ -7736,7 +9010,12 @@ export function QortalLand({
                 ? 0x78ff9a
                 : 0xff2bd6;
           g.lineStyle(3, color, 0.2);
-          g.lineBetween(150, range.bottom + 12, roomSize.width - 150, range.bottom + 12);
+          g.lineBetween(
+            150,
+            range.bottom + 12,
+            roomSize.width - 150,
+            range.bottom + 12
+          );
         }
 
         private animateRoom(time: number) {
@@ -7780,7 +9059,14 @@ export function QortalLand({
           const sweepX = 260 + ((time / 18) % 1280);
           const pulse = 0.5 + Math.sin(time / 180) * 0.5;
           this.lightSweep.fillStyle(0x2cf8ff, 0.04);
-          this.lightSweep.fillTriangle(sweepX - 90, 90, sweepX + 60, layout.floor.bottomY, sweepX + 210, layout.floor.bottomY);
+          this.lightSweep.fillTriangle(
+            sweepX - 90,
+            90,
+            sweepX + 60,
+            layout.floor.bottomY,
+            sweepX + 210,
+            layout.floor.bottomY
+          );
           this.lightSweep.fillStyle(0xff2bd6, 0.035);
           this.lightSweep.fillTriangle(
             layout.width - sweepX + 90,
@@ -7791,7 +9077,12 @@ export function QortalLand({
             layout.floor.bottomY
           );
           this.lightSweep.fillStyle(0xff2bd6, 0.04 + pulse * 0.035);
-          this.lightSweep.fillEllipse(layout.width / 2, 540, 620 + pulse * 40, 190 + pulse * 22);
+          this.lightSweep.fillEllipse(
+            layout.width / 2,
+            540,
+            620 + pulse * 40,
+            190 + pulse * 22
+          );
           this.lightSweep.fillStyle(0x2cf8ff, 0.055);
           for (let index = 0; index < 5; index += 1) {
             const angle = time / 520 + index * 0.9;
@@ -7829,8 +9120,14 @@ export function QortalLand({
                 originX + normalX * originHalfWidth,
                 originY + normalY * originHalfWidth
               ),
-              new Phaser.Geom.Point(topX + normalX * topHalfWidth, topY + normalY * topHalfWidth),
-              new Phaser.Geom.Point(topX - normalX * topHalfWidth, topY - normalY * topHalfWidth),
+              new Phaser.Geom.Point(
+                topX + normalX * topHalfWidth,
+                topY + normalY * topHalfWidth
+              ),
+              new Phaser.Geom.Point(
+                topX - normalX * topHalfWidth,
+                topY - normalY * topHalfWidth
+              ),
             ],
             true
           );
@@ -7900,14 +9197,78 @@ export function QortalLand({
           if (currentRoomRef.current !== QORTAL_LAND_PARK_ROOM_ID) return;
 
           const fireflySpecs = [
-            { x: 182, y: 486, rx: 36, ry: 44, phase: 0, cycle: 7600, color: 0xffe28a },
-            { x: 235, y: 570, rx: 42, ry: 34, phase: 2100, cycle: 9200, color: 0x95f7ff },
-            { x: 352, y: 304, rx: 38, ry: 28, phase: 3900, cycle: 8800, color: 0xffd782 },
-            { x: 1468, y: 338, rx: 48, ry: 30, phase: 1100, cycle: 8400, color: 0x8ffaff },
-            { x: 1588, y: 472, rx: 38, ry: 42, phase: 5400, cycle: 9800, color: 0xffe6a0 },
-            { x: 1484, y: 592, rx: 44, ry: 28, phase: 2800, cycle: 7900, color: 0x93faff },
-            { x: 826, y: 304, rx: 54, ry: 24, phase: 6600, cycle: 11000, color: 0xffe08c },
-            { x: 1218, y: 374, rx: 58, ry: 22, phase: 4700, cycle: 10500, color: 0x8ef8ff },
+            {
+              x: 182,
+              y: 486,
+              rx: 36,
+              ry: 44,
+              phase: 0,
+              cycle: 7600,
+              color: 0xffe28a,
+            },
+            {
+              x: 235,
+              y: 570,
+              rx: 42,
+              ry: 34,
+              phase: 2100,
+              cycle: 9200,
+              color: 0x95f7ff,
+            },
+            {
+              x: 352,
+              y: 304,
+              rx: 38,
+              ry: 28,
+              phase: 3900,
+              cycle: 8800,
+              color: 0xffd782,
+            },
+            {
+              x: 1468,
+              y: 338,
+              rx: 48,
+              ry: 30,
+              phase: 1100,
+              cycle: 8400,
+              color: 0x8ffaff,
+            },
+            {
+              x: 1588,
+              y: 472,
+              rx: 38,
+              ry: 42,
+              phase: 5400,
+              cycle: 9800,
+              color: 0xffe6a0,
+            },
+            {
+              x: 1484,
+              y: 592,
+              rx: 44,
+              ry: 28,
+              phase: 2800,
+              cycle: 7900,
+              color: 0x93faff,
+            },
+            {
+              x: 826,
+              y: 304,
+              rx: 54,
+              ry: 24,
+              phase: 6600,
+              cycle: 11000,
+              color: 0xffe08c,
+            },
+            {
+              x: 1218,
+              y: 374,
+              rx: 58,
+              ry: 22,
+              phase: 4700,
+              cycle: 10500,
+              color: 0x8ef8ff,
+            },
           ];
 
           for (let index = 0; index < fireflySpecs.length; index += 1) {
@@ -7920,8 +9281,14 @@ export function QortalLand({
             if (alpha <= 0.03) continue;
             const driftA = time / (1500 + index * 110) + index * 1.21;
             const driftB = time / (2200 + index * 160) + index * 0.77;
-            const x = spec.x + Math.cos(driftA) * spec.rx + Math.sin(driftB) * spec.rx * 0.18;
-            const y = spec.y + Math.sin(driftB) * spec.ry + Math.cos(driftA * 0.7) * spec.ry * 0.16;
+            const x =
+              spec.x +
+              Math.cos(driftA) * spec.rx +
+              Math.sin(driftB) * spec.rx * 0.18;
+            const y =
+              spec.y +
+              Math.sin(driftB) * spec.ry +
+              Math.cos(driftA * 0.7) * spec.ry * 0.16;
             const radius = 1.2 + life * 0.9;
 
             this.parkFireflies.fillStyle(spec.color, alpha * 0.14);
@@ -7937,11 +9304,18 @@ export function QortalLand({
           if (!this.parkPortalAmbient) return;
           this.parkPortalAmbient.clear();
           const door = this.parkPortalDoor;
-          if (!door || currentRoomRef.current !== QORTAL_LAND_PARK_ROOM_ID) return;
-          const openVisibility = Phaser.Math.Clamp((door.progress - 0.08) / 0.5, 0, 1);
+          if (!door || currentRoomRef.current !== QORTAL_LAND_PARK_ROOM_ID)
+            return;
+          const openVisibility = Phaser.Math.Clamp(
+            (door.progress - 0.08) / 0.5,
+            0,
+            1
+          );
           if (openVisibility <= 0.001) return;
-          const scaleX = (door.right - door.left) / QORTAL_LAND_PARK_PORTAL_SOURCE_WIDTH;
-          const scaleY = (door.bottom - door.top) / QORTAL_LAND_PARK_PORTAL_SOURCE_HEIGHT;
+          const scaleX =
+            (door.right - door.left) / QORTAL_LAND_PARK_PORTAL_SOURCE_WIDTH;
+          const scaleY =
+            (door.bottom - door.top) / QORTAL_LAND_PARK_PORTAL_SOURCE_HEIGHT;
           const innerLeft = door.left + 248 * scaleX;
           const innerRight = door.left + 506 * scaleX;
           const innerTop = door.top + 236 * scaleY;
@@ -7951,7 +9325,8 @@ export function QortalLand({
 
           for (let index = 0; index < 7; index += 1) {
             const sparkPhase = (time / (1700 + index * 190) + index * 0.21) % 1;
-            const sparkAlpha = Math.sin(sparkPhase * Math.PI) * 0.34 * openVisibility;
+            const sparkAlpha =
+              Math.sin(sparkPhase * Math.PI) * 0.34 * openVisibility;
             if (sparkAlpha <= 0.02) continue;
             const x =
               innerLeft +
@@ -7979,10 +9354,18 @@ export function QortalLand({
 
           const rippleCycleMs = 3300;
           const visibleRippleWindow = 0.68;
-          const maxRippleWidth = Math.max(88, anchor.sourceWidth * anchor.scaleX * 0.5);
-          const maxRippleHeight = Math.max(18, anchor.sourceHeight * anchor.scaleY * 0.15);
+          const maxRippleWidth = Math.max(
+            88,
+            anchor.sourceWidth * anchor.scaleX * 0.5
+          );
+          const maxRippleHeight = Math.max(
+            18,
+            anchor.sourceHeight * anchor.scaleY * 0.15
+          );
           for (let index = 0; index < 3; index += 1) {
-            const phase = ((time + index * (rippleCycleMs / 3)) % rippleCycleMs) / rippleCycleMs;
+            const phase =
+              ((time + index * (rippleCycleMs / 3)) % rippleCycleMs) /
+              rippleCycleMs;
             if (phase > visibleRippleWindow) continue;
             const t = phase / visibleRippleWindow;
             const eased = Phaser.Math.Easing.Sine.Out(t);
@@ -7990,20 +9373,36 @@ export function QortalLand({
             const width = Phaser.Math.Linear(22, maxRippleWidth, eased);
             const height = Phaser.Math.Linear(5, maxRippleHeight, eased);
             this.parkFountainAmbient.lineStyle(1.45, 0x8dfcff, alpha);
-            this.parkFountainAmbient.strokeEllipse(anchor.centerX, anchor.centerY, width, height);
+            this.parkFountainAmbient.strokeEllipse(
+              anchor.centerX,
+              anchor.centerY,
+              width,
+              height
+            );
           }
 
           const pulse = 0.5 + Math.sin((time / 2100) * Math.PI * 2) * 0.5;
           const columnOpacity = 0.88 + pulse * 0.18;
-          const columnHeight = Math.max(58, anchor.sourceHeight * anchor.scaleY * 0.52);
-          this.parkFountainAmbient.lineStyle(2.2, 0x9effff, 0.13 * columnOpacity);
+          const columnHeight = Math.max(
+            58,
+            anchor.sourceHeight * anchor.scaleY * 0.52
+          );
+          this.parkFountainAmbient.lineStyle(
+            2.2,
+            0x9effff,
+            0.13 * columnOpacity
+          );
           this.parkFountainAmbient.lineBetween(
             anchor.centerX,
             anchor.centerY - columnHeight * 0.72,
             anchor.centerX,
             anchor.centerY + columnHeight * 0.08
           );
-          this.parkFountainAmbient.lineStyle(1.15, 0xd9ffff, 0.16 * columnOpacity);
+          this.parkFountainAmbient.lineStyle(
+            1.15,
+            0xd9ffff,
+            0.16 * columnOpacity
+          );
           this.parkFountainAmbient.lineBetween(
             anchor.centerX + 3,
             anchor.centerY - columnHeight * 0.52,
@@ -8012,14 +9411,19 @@ export function QortalLand({
           );
 
           const dropletCycleMs = 2300;
-          const dropletTravel = Math.max(22, anchor.sourceHeight * anchor.scaleY * 0.16);
+          const dropletTravel = Math.max(
+            22,
+            anchor.sourceHeight * anchor.scaleY * 0.16
+          );
           for (let index = 0; index < 3; index += 1) {
-            const phase = ((time + index * 760) % dropletCycleMs) / dropletCycleMs;
+            const phase =
+              ((time + index * 760) % dropletCycleMs) / dropletCycleMs;
             if (phase > 0.42) continue;
             const t = phase / 0.42;
             const x =
               anchor.centerX +
-              Math.sin(index * 1.7 + time / 1300) * Math.max(5, maxRippleWidth * 0.07);
+              Math.sin(index * 1.7 + time / 1300) *
+                Math.max(5, maxRippleWidth * 0.07);
             const y = anchor.centerY - 5 - dropletTravel * t;
             const alpha = 0.48 * (1 - Phaser.Math.Easing.Sine.In(t));
             this.parkFountainAmbient.fillStyle(0x8dfcff, alpha);
@@ -8040,9 +9444,7 @@ export function QortalLand({
           background.lineBetween(9, 0, 0, 10);
         }
 
-        private clearChatBubbleContent(bubbleObjects: {
-          contentItems: any[];
-        }) {
+        private clearChatBubbleContent(bubbleObjects: { contentItems: any[] }) {
           bubbleObjects.contentItems.forEach((item) => {
             try {
               item.destroy();
@@ -8077,9 +9479,10 @@ export function QortalLand({
             fontFamily: 'Inter, Arial, sans-serif',
             fontSize: '13px',
           };
-          const lines: Array<{ items: Array<{ item: any | null; width: number; yOffset: number }>; width: number }> = [
-            { items: [], width: 0 },
-          ];
+          const lines: Array<{
+            items: Array<{ item: any | null; width: number; yOffset: number }>;
+            width: number;
+          }> = [{ items: [], width: 0 }];
           let pendingSpace = false;
 
           const currentLine = () => lines[lines.length - 1];
@@ -8112,19 +9515,25 @@ export function QortalLand({
             if (part.type === 'emoji') {
               const textureKey = qortalLandChatEmojiTextureKey(part.emoji.key);
               if (this.textures.exists(textureKey)) {
-                const emojiObject = this.add.image(0, 0, textureKey).setOrigin(0, 0);
+                const emojiObject = this.add
+                  .image(0, 0, textureKey)
+                  .setOrigin(0, 0);
                 const emojiFrame = this.textures.getFrame(textureKey);
                 const sourceWidth = Number(emojiFrame?.width) || emojiSize;
                 const sourceHeight = Number(emojiFrame?.height) || emojiSize;
                 const emojiWidth = Math.max(
                   emojiSize,
-                  Math.round((emojiSize * sourceWidth) / Math.max(1, sourceHeight))
+                  Math.round(
+                    (emojiSize * sourceWidth) / Math.max(1, sourceHeight)
+                  )
                 );
                 emojiObject.setDisplaySize(emojiWidth, emojiSize);
                 addDisplayItem(emojiObject, emojiWidth, 1);
                 return;
               }
-              const fallbackText = this.add.text(0, 0, part.shortcut, textStyle).setOrigin(0, 0);
+              const fallbackText = this.add
+                .text(0, 0, part.shortcut, textStyle)
+                .setOrigin(0, 0);
               addDisplayItem(fallbackText, Math.ceil(fallbackText.width), 2);
               return;
             }
@@ -8135,23 +9544,36 @@ export function QortalLand({
                 pendingSpace = currentLine().width > 0;
                 return;
               }
-              const textObject = this.add.text(0, 0, token, textStyle).setOrigin(0, 0);
+              const textObject = this.add
+                .text(0, 0, token, textStyle)
+                .setOrigin(0, 0);
               addDisplayItem(textObject, Math.ceil(textObject.width), 2);
             });
           });
 
-          const usedLines = lines.filter((line) => line.items.some((entry) => entry.item));
+          const usedLines = lines.filter((line) =>
+            line.items.some((entry) => entry.item)
+          );
           const lineCount = Math.max(1, usedLines.length);
-          const contentWidth = Math.max(1, ...usedLines.map((line) => line.width));
+          const contentWidth = Math.max(
+            1,
+            ...usedLines.map((line) => line.width)
+          );
           const contentHeight = lineCount * lineHeight;
-          const width = Math.min(250, Math.max(68, Math.ceil(contentWidth) + 28));
+          const width = Math.min(
+            250,
+            Math.max(68, Math.ceil(contentWidth) + 28)
+          );
           const height = Math.max(34, Math.ceil(contentHeight) + 18);
           const offsetY = -height + 9;
           usedLines.forEach((line, lineIndex) => {
             let cursorX = -line.width / 2;
             line.items.forEach((entry) => {
               if (entry.item) {
-                entry.item.setPosition(cursorX, offsetY + lineIndex * lineHeight + entry.yOffset);
+                entry.item.setPosition(
+                  cursorX,
+                  offsetY + lineIndex * lineHeight + entry.yOffset
+                );
               }
               cursorX += entry.width;
             });
@@ -8201,7 +9623,10 @@ export function QortalLand({
 
         private updateChatBubbles() {
           const now = Date.now();
-          for (const [messageId, bubble] of landChatBubblesRef.current.entries()) {
+          for (const [
+            messageId,
+            bubble,
+          ] of landChatBubblesRef.current.entries()) {
             if (bubble.expiresAt > now) continue;
             landChatBubblesRef.current.delete(messageId);
           }
@@ -8210,26 +9635,35 @@ export function QortalLand({
             this.removeChatBubble(messageId, bubbleObjects);
           }
 
-          const bubbleGroups = new Map<string, Array<{
-            messageId: string;
-            bubble: LandChatBubble;
-            bubbleObjects: {
-              container: any;
-              background: any;
-              contentItems: any[];
-              signature: string;
-              width: number;
-              height: number;
-              lineCount: number;
-              popStarted: boolean;
-            };
-            avatar: any;
-          }>>();
+          const bubbleGroups = new Map<
+            string,
+            Array<{
+              messageId: string;
+              bubble: LandChatBubble;
+              bubbleObjects: {
+                container: any;
+                background: any;
+                contentItems: any[];
+                signature: string;
+                width: number;
+                height: number;
+                lineCount: number;
+                popStarted: boolean;
+              };
+              avatar: any;
+            }>
+          >();
 
-          for (const [messageId, bubble] of landChatBubblesRef.current.entries()) {
+          for (const [
+            messageId,
+            bubble,
+          ] of landChatBubblesRef.current.entries()) {
             let avatar: any | undefined;
             const avatarKey = `${bubble.authorAddress}:${bubble.sessionId}`;
-            if (bubble.authorAddress === myAddress && bubble.sessionId === sessionId) {
+            if (
+              bubble.authorAddress === myAddress &&
+              bubble.sessionId === sessionId
+            ) {
               avatar = this.localAvatar;
             } else {
               avatar = this.remotes.get(avatarKey);
@@ -8254,9 +9688,11 @@ export function QortalLand({
             if (bubbleObjects.signature !== bubble.text) {
               this.rebuildChatBubbleContent(bubbleObjects, bubble.text);
             }
-            const key = bubble.authorAddress === myAddress && bubble.sessionId === sessionId
-              ? 'local'
-              : avatarKey;
+            const key =
+              bubble.authorAddress === myAddress &&
+              bubble.sessionId === sessionId
+                ? 'local'
+                : avatarKey;
             const group = bubbleGroups.get(key) || [];
             group.push({ messageId, bubble, bubbleObjects, avatar });
             bubbleGroups.set(key, group);
@@ -8265,13 +9701,19 @@ export function QortalLand({
           const visibleMessageIds = new Set<string>();
           const stackAlphas = [1, 0.7, 0.4, 0.2];
           for (const group of bubbleGroups.values()) {
-            const newestFirst = group.sort((a, b) => b.bubble.createdAt - a.bubble.createdAt);
+            const newestFirst = group.sort(
+              (a, b) => b.bubble.createdAt - a.bubble.createdAt
+            );
             const visibleStack: typeof newestFirst = [];
             let remainingLineBudget = 4;
 
             for (const entry of newestFirst) {
-              const lineCost = Math.max(1, Math.min(4, entry.bubbleObjects.lineCount || 1));
-              if (visibleStack.length > 0 && lineCost > remainingLineBudget) continue;
+              const lineCost = Math.max(
+                1,
+                Math.min(4, entry.bubbleObjects.lineCount || 1)
+              );
+              if (visibleStack.length > 0 && lineCost > remainingLineBudget)
+                continue;
               visibleStack.push(entry);
               remainingLineBudget -= lineCost;
               if (visibleStack.length >= 4 || remainingLineBudget <= 0) break;
@@ -8311,10 +9753,18 @@ export function QortalLand({
               const popProgress = Math.max(0, Math.min(1, ageMs / 180));
               const targetScale = 0.84 + popProgress * 0.16;
               bubbleObjects.container.setScale(
-                Phaser.Math.Linear(bubbleObjects.container.scaleX || 1, targetScale, 0.34)
+                Phaser.Math.Linear(
+                  bubbleObjects.container.scaleX || 1,
+                  targetScale,
+                  0.34
+                )
               );
-              bubbleObjects.container.setAlpha((stackAlphas[stackIndex] || 0.16) * fadeAlpha);
-              bubbleObjects.container.setDepth(avatar.depth + 120 + visibleStack.length - stackIndex);
+              bubbleObjects.container.setAlpha(
+                (stackAlphas[stackIndex] || 0.16) * fadeAlpha
+              );
+              bubbleObjects.container.setDepth(
+                avatar.depth + 120 + visibleStack.length - stackIndex
+              );
             });
           }
 
@@ -8326,19 +9776,55 @@ export function QortalLand({
 
         private createLandActionAnimation(animation: LandActionAnimation) {
           const container = this.add.container(0, 0);
-          const visual = animation.type === 'qort_received'
-            ? { color: 0xffd65c, symbol: '◈', particle: '●', label: `+${formatQortAmount(animation.amount)} QORT` }
-            : animation.type === 'buzz'
-              ? { color: 0x67e8f9, symbol: '⚡', particle: 'ϟ', label: 'BUZZ!' }
-              : animation.type === 'love'
-                ? { color: 0xff6f9f, symbol: '♥', particle: '♥', label: 'LOVE' }
-                : animation.type === 'devil'
-                  ? { color: 0xff695e, symbol: '😈', particle: '▲', label: 'DEVIL' }
-                  : animation.type === 'angel'
-                    ? { color: 0xffe48a, symbol: '😇', particle: '✦', label: 'ANGEL' }
-                    : animation.type === 'rain'
-                      ? { color: 0x74b9ff, symbol: '☁', particle: '│', label: 'RAIN' }
-                      : { color: 0xffd45a, symbol: '☀', particle: '✦', label: 'SUNSHINE' };
+          const visual =
+            animation.type === 'qort_received'
+              ? {
+                  color: 0xffd65c,
+                  symbol: '◈',
+                  particle: '●',
+                  label: `+${formatQortAmount(animation.amount)} QORT`,
+                }
+              : animation.type === 'buzz'
+                ? {
+                    color: 0x67e8f9,
+                    symbol: '⚡',
+                    particle: 'ϟ',
+                    label: 'BUZZ!',
+                  }
+                : animation.type === 'love'
+                  ? {
+                      color: 0xff6f9f,
+                      symbol: '♥',
+                      particle: '♥',
+                      label: 'LOVE',
+                    }
+                  : animation.type === 'devil'
+                    ? {
+                        color: 0xff695e,
+                        symbol: '😈',
+                        particle: '▲',
+                        label: 'DEVIL',
+                      }
+                    : animation.type === 'angel'
+                      ? {
+                          color: 0xffe48a,
+                          symbol: '😇',
+                          particle: '✦',
+                          label: 'ANGEL',
+                        }
+                      : animation.type === 'rain'
+                        ? {
+                            color: 0x74b9ff,
+                            symbol: '☁',
+                            particle: '│',
+                            label: 'RAIN',
+                          }
+                        : {
+                            color: 0xffd45a,
+                            symbol: '☀',
+                            particle: '✦',
+                            label: 'SUNSHINE',
+                          };
           const isSelfMood =
             animation.type !== 'qort_received' &&
             animation.fromAddress === animation.toAddress &&
@@ -8346,7 +9832,10 @@ export function QortalLand({
           if (animation.type !== 'qort_received') {
             visual.label = isSelfMood
               ? ''
-              : displayNameForAddress(animation.fromAddress, primaryNameCacheRef.current);
+              : displayNameForAddress(
+                  animation.fromAddress,
+                  primaryNameCacheRef.current
+                );
           }
           const aura = this.add.graphics();
           aura.fillStyle(visual.color, 0.15);
@@ -8357,38 +9846,55 @@ export function QortalLand({
             aura.lineStyle(3, 0xfff4bd, 0.82);
             aura.strokeEllipse(0, -25, 44, 12);
           }
-          const symbol = this.add.text(0, -2, visual.symbol, {
-            align: 'center',
-            color: `#${visual.color.toString(16).padStart(6, '0')}`,
-            fontFamily: 'Arial, sans-serif',
-            fontSize: animation.type === 'qort_received' ? '28px' : '34px',
-            fontStyle: 'bold',
-            stroke: '#07101f',
-            strokeThickness: 4,
-          }).setOrigin(0.5);
-          const text = this.add.text(0, animation.type === 'qort_received' ? 35 : -52, visual.label, {
-            align: 'center',
-            backgroundColor: 'rgba(4, 10, 23, 0.78)',
-            color: '#ffffff',
-            fontFamily: 'Inter, Arial, sans-serif',
-            fontSize: animation.type === 'qort_received' ? '15px' : '12px',
-            fontStyle: 'bold',
-            padding: { x: 7, y: 3 },
-            stroke: '#07101f',
-            strokeThickness: 2,
-          }).setOrigin(0.5).setVisible(Boolean(visual.label));
-          const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
-          const particles = Array.from({ length: reducedMotion ? 4 : 8 }, (_, index) => {
-            const particle = this.add.text(0, 0, visual.particle, {
+          const symbol = this.add
+            .text(0, -2, visual.symbol, {
+              align: 'center',
               color: `#${visual.color.toString(16).padStart(6, '0')}`,
               fontFamily: 'Arial, sans-serif',
-              fontSize: `${10 + (index % 3) * 2}px`,
+              fontSize: animation.type === 'qort_received' ? '28px' : '34px',
               fontStyle: 'bold',
               stroke: '#07101f',
-              strokeThickness: 2,
-            }).setOrigin(0.5);
-            return particle;
-          });
+              strokeThickness: 4,
+            })
+            .setOrigin(0.5);
+          const text = this.add
+            .text(
+              0,
+              animation.type === 'qort_received' ? 35 : -52,
+              visual.label,
+              {
+                align: 'center',
+                backgroundColor: 'rgba(4, 10, 23, 0.78)',
+                color: '#ffffff',
+                fontFamily: 'Inter, Arial, sans-serif',
+                fontSize: animation.type === 'qort_received' ? '15px' : '12px',
+                fontStyle: 'bold',
+                padding: { x: 7, y: 3 },
+                stroke: '#07101f',
+                strokeThickness: 2,
+              }
+            )
+            .setOrigin(0.5)
+            .setVisible(Boolean(visual.label));
+          const reducedMotion =
+            window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ===
+            true;
+          const particles = Array.from(
+            { length: reducedMotion ? 4 : 8 },
+            (_, index) => {
+              const particle = this.add
+                .text(0, 0, visual.particle, {
+                  color: `#${visual.color.toString(16).padStart(6, '0')}`,
+                  fontFamily: 'Arial, sans-serif',
+                  fontSize: `${10 + (index % 3) * 2}px`,
+                  fontStyle: 'bold',
+                  stroke: '#07101f',
+                  strokeThickness: 2,
+                })
+                .setOrigin(0.5);
+              return particle;
+            }
+          );
           container.add([aura, ...particles, symbol, text]);
           container.setDepth(12000);
           return { container, aura, particles, symbol, text };
@@ -8408,26 +9914,43 @@ export function QortalLand({
               animationObjects.container.destroy();
             }
           } catch (error) {
-            console.warn('[QortalLand] Failed to remove action animation', error);
+            console.warn(
+              '[QortalLand] Failed to remove action animation',
+              error
+            );
           }
         }
 
         private updateActionAnimations() {
           const now = Date.now();
-          for (const [actionId, animation] of landActionAnimationsRef.current.entries()) {
+          for (const [
+            actionId,
+            animation,
+          ] of landActionAnimationsRef.current.entries()) {
             if (animation.expiresAt > now) continue;
             landActionAnimationsRef.current.delete(actionId);
           }
-          for (const [actionId, animationObjects] of this.actionAnimations.entries()) {
+          for (const [
+            actionId,
+            animationObjects,
+          ] of this.actionAnimations.entries()) {
             if (landActionAnimationsRef.current.has(actionId)) continue;
             this.removeActionAnimation(actionId, animationObjects);
           }
-          for (const [actionId, animation] of landActionAnimationsRef.current.entries()) {
+          for (const [
+            actionId,
+            animation,
+          ] of landActionAnimationsRef.current.entries()) {
             let avatar: any | undefined;
-            if (animation.toAddress === myAddress && animation.targetSessionId === sessionId) {
+            if (
+              animation.toAddress === myAddress &&
+              animation.targetSessionId === sessionId
+            ) {
               avatar = this.localAvatar;
             } else {
-              avatar = this.remotes.get(`${animation.toAddress}:${animation.targetSessionId}`);
+              avatar = this.remotes.get(
+                `${animation.toAddress}:${animation.targetSessionId}`
+              );
             }
             let animationObjects = this.actionAnimations.get(actionId);
             if (!animationObjects) {
@@ -8442,36 +9965,73 @@ export function QortalLand({
               continue;
             }
             const ageMs = now - animation.createdAt;
-            const progress = Phaser.Math.Clamp(ageMs / LAND_ACTION_ANIMATION_TTL_MS, 0, 1);
-            const fadeAlpha = progress > 0.76 ? Phaser.Math.Clamp((1 - progress) / 0.24, 0, 1) : 1;
+            const progress = Phaser.Math.Clamp(
+              ageMs / LAND_ACTION_ANIMATION_TTL_MS,
+              0,
+              1
+            );
+            const fadeAlpha =
+              progress > 0.76
+                ? Phaser.Math.Clamp((1 - progress) / 0.24, 0, 1)
+                : 1;
             const scale = Math.abs(avatar.scaleY || 1);
-            const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
-            const rise = reducedMotion ? 16 : 12 + Math.sin(progress * Math.PI) * 12;
-            const seed = [...animation.actionId].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 360;
+            const reducedMotion =
+              window.matchMedia?.('(prefers-reduced-motion: reduce)')
+                .matches === true;
+            const rise = reducedMotion
+              ? 16
+              : 12 + Math.sin(progress * Math.PI) * 12;
+            const seed =
+              [...animation.actionId].reduce(
+                (sum, char) => sum + char.charCodeAt(0),
+                0
+              ) % 360;
             animationObjects.container.setVisible(true);
             animationObjects.container.setAlpha(fadeAlpha);
-            animationObjects.container.setPosition(avatar.x, avatar.y - LAND_CHARACTER_CHAT_BUBBLE_OFFSET * scale - rise);
+            animationObjects.container.setPosition(
+              avatar.x,
+              avatar.y - LAND_CHARACTER_CHAT_BUBBLE_OFFSET * scale - rise
+            );
             animationObjects.container.setDepth(avatar.depth + 180);
-            const pulse = reducedMotion ? 1 : 1 + Math.sin(progress * Math.PI * 5) * 0.08;
+            const pulse = reducedMotion
+              ? 1
+              : 1 + Math.sin(progress * Math.PI * 5) * 0.08;
             animationObjects.symbol.setScale(pulse);
-            animationObjects.aura.setScale(1 + Math.sin(progress * Math.PI) * 0.24);
-            animationObjects.aura.setRotation(animation.type === 'sunshine' ? progress * Math.PI : 0);
+            animationObjects.aura.setScale(
+              1 + Math.sin(progress * Math.PI) * 0.24
+            );
+            animationObjects.aura.setRotation(
+              animation.type === 'sunshine' ? progress * Math.PI : 0
+            );
             if (animation.type === 'buzz' && !reducedMotion) {
-              animationObjects.container.x += Math.sin(progress * Math.PI * 34) * 4;
+              animationObjects.container.x +=
+                Math.sin(progress * Math.PI * 34) * 4;
             }
             animationObjects.particles.forEach((particle, index) => {
               const offset = (seed + index * 47) * (Math.PI / 180);
               if (animation.type === 'rain') {
-                particle.setPosition(-30 + index * 9, -20 + ((progress * 150 + index * 17) % 82));
-              } else if (animation.type === 'love' || animation.type === 'devil') {
+                particle.setPosition(
+                  -30 + index * 9,
+                  -20 + ((progress * 150 + index * 17) % 82)
+                );
+              } else if (
+                animation.type === 'love' ||
+                animation.type === 'devil'
+              ) {
                 particle.setPosition(
                   Math.sin(offset + progress * Math.PI * 4) * (18 + index * 3),
                   24 - ((progress * 100 + index * 13) % 78)
                 );
               } else {
-                const angle = offset + progress * Math.PI * (animation.type === 'buzz' ? 5 : 2.4);
-                const radius = 24 + index * 3 + Math.sin(progress * Math.PI) * 14;
-                particle.setPosition(Math.cos(angle) * radius, Math.sin(angle) * radius * 0.68);
+                const angle =
+                  offset +
+                  progress * Math.PI * (animation.type === 'buzz' ? 5 : 2.4);
+                const radius =
+                  24 + index * 3 + Math.sin(progress * Math.PI) * 14;
+                particle.setPosition(
+                  Math.cos(angle) * radius,
+                  Math.sin(angle) * radius * 0.68
+                );
               }
               particle.setAlpha(fadeAlpha * (0.62 + (index % 3) * 0.16));
             });
@@ -8489,13 +10049,15 @@ export function QortalLand({
           badge.strokeCircle(0, 0, 15);
           badge.lineStyle(2, 0x2cf8ff, 0.28);
           badge.strokeCircle(0, 0, 22);
-          const phone = this.add.text(0, -1, '☎', {
-            align: 'center',
-            color: '#06101d',
-            fontFamily: 'Arial, sans-serif',
-            fontSize: '20px',
-            fontStyle: 'bold',
-          }).setOrigin(0.5);
+          const phone = this.add
+            .text(0, -1, '☎', {
+              align: 'center',
+              color: '#06101d',
+              fontFamily: 'Arial, sans-serif',
+              fontSize: '20px',
+              fontStyle: 'bold',
+            })
+            .setOrigin(0.5);
           container.add([badge, phone]);
           container.setDepth(13000);
           return { container, badge, phone };
@@ -8526,14 +10088,19 @@ export function QortalLand({
           container.input.cursor = 'pointer';
           container.on('pointerover', () => tooltip.setVisible(true));
           container.on('pointerout', () => tooltip.setVisible(false));
-          container.on('pointerdown', (_pointer: any, _x: number, _y: number, event: any) => {
-            event?.stopPropagation?.();
-            setProximityVoicePanelTarget(
-              String(container.getData('voiceAddress') || '')
-            );
-            proximityVoicePanelRequestRef.current += 1;
-            setProximityVoicePanelRequest(proximityVoicePanelRequestRef.current);
-          });
+          container.on(
+            'pointerdown',
+            (_pointer: any, _x: number, _y: number, event: any) => {
+              event?.stopPropagation?.();
+              setProximityVoicePanelTarget(
+                String(container.getData('voiceAddress') || '')
+              );
+              proximityVoicePanelRequestRef.current += 1;
+              setProximityVoicePanelRequest(
+                proximityVoicePanelRequestRef.current
+              );
+            }
+          );
           container.setDepth(12950);
           return {
             container,
@@ -8586,7 +10153,10 @@ export function QortalLand({
               });
             }
           }
-          for (const [key, indicator] of this.proximityVoiceIndicators.entries()) {
+          for (const [
+            key,
+            indicator,
+          ] of this.proximityVoiceIndicators.entries()) {
             if (active.has(key)) continue;
             this.proximityVoiceIndicators.delete(key);
             indicator.container?.destroy(true);
@@ -8600,7 +10170,9 @@ export function QortalLand({
             const { address, avatar, label, muted, speaking } = voice;
             indicator.container.setData('voiceAddress', address);
             const scale = Math.abs(avatar.scaleY || 1);
-            const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+            const reduceMotion =
+              window.matchMedia?.('(prefers-reduced-motion: reduce)')
+                .matches === true;
             const indicatorScale = Math.max(0.72, Math.min(1, scale));
             const labelWidth = Number(label?.width) || 42;
             indicator.container.setPosition(
@@ -8612,9 +10184,10 @@ export function QortalLand({
             indicator.container.setDepth((label?.depth ?? avatar.depth) + 10);
             indicator.glyph.clear();
             const color = muted ? 0x8b96a8 : speaking ? 0x4dffb8 : 0x2cf8ff;
-            const pulse = speaking && !reduceMotion
-              ? 0.5 + ((Math.sin(this.time.now / 150) + 1) / 2) * 0.5
-              : 0.55;
+            const pulse =
+              speaking && !reduceMotion
+                ? 0.5 + ((Math.sin(this.time.now / 150) + 1) / 2) * 0.5
+                : 0.55;
             indicator.glyph.fillStyle(0x03101c, 0.92);
             indicator.glyph.fillCircle(0, 0, 15);
             indicator.glyph.lineStyle(1.5, color, muted ? 0.55 : 0.92);
@@ -8663,12 +10236,18 @@ export function QortalLand({
 
         private updateCallIndicators() {
           const now = Date.now();
-          for (const [address, presence] of landCallPresenceRef.current.entries()) {
+          for (const [
+            address,
+            presence,
+          ] of landCallPresenceRef.current.entries()) {
             if (presence.expiresAt > now) continue;
             landCallPresenceRef.current.delete(address);
           }
 
-          const activeIndicators = new Map<string, { avatar: any; roomId: LandRoomId }>();
+          const activeIndicators = new Map<
+            string,
+            { avatar: any; roomId: LandRoomId }
+          >();
           const localPresence = landCallPresenceRef.current.get(myAddress);
           if (
             this.localAvatar &&
@@ -8683,7 +10262,9 @@ export function QortalLand({
           }
 
           for (const [key, player] of remotePlayersRef.current.entries()) {
-            const presence = landCallPresenceRef.current.get(player.authorAddress);
+            const presence = landCallPresenceRef.current.get(
+              player.authorAddress
+            );
             const avatar = this.remotes.get(key);
             if (
               !presence ||
@@ -8700,7 +10281,10 @@ export function QortalLand({
             });
           }
 
-          for (const [indicatorKey, indicatorObjects] of this.callIndicators.entries()) {
+          for (const [
+            indicatorKey,
+            indicatorObjects,
+          ] of this.callIndicators.entries()) {
             if (activeIndicators.has(indicatorKey)) continue;
             this.removeCallIndicator(indicatorKey, indicatorObjects);
           }
@@ -8717,8 +10301,12 @@ export function QortalLand({
               avatar.x + 36 * scale,
               avatar.y - (LAND_CHARACTER_LABEL_OFFSET + 28) * scale
             );
-            indicatorObjects.container.setScale(Math.max(0.78, Math.min(1.04, scale * 0.9)));
-            indicatorObjects.container.setAlpha(0.9 + Math.sin(this.time.now / 260) * 0.08);
+            indicatorObjects.container.setScale(
+              Math.max(0.78, Math.min(1.04, scale * 0.9))
+            );
+            indicatorObjects.container.setAlpha(
+              0.9 + Math.sin(this.time.now / 260) * 0.08
+            );
             indicatorObjects.container.setDepth(avatar.depth + 220);
           }
         }
@@ -8734,12 +10322,14 @@ export function QortalLand({
           badge.strokeCircle(0, 0, 15);
           badge.lineStyle(2, 0x9d6cff, 0.3);
           badge.strokeCircle(0, 0, 22);
-          const gamepad = this.add.text(0, -1, '🎮', {
-            align: 'center',
-            color: '#ffffff',
-            fontFamily: 'Arial, sans-serif',
-            fontSize: '17px',
-          }).setOrigin(0.5);
+          const gamepad = this.add
+            .text(0, -1, '🎮', {
+              align: 'center',
+              color: '#ffffff',
+              fontFamily: 'Arial, sans-serif',
+              fontSize: '17px',
+            })
+            .setOrigin(0.5);
           container.add([badge, gamepad]);
           container.setDepth(13000);
           return { container, badge, gamepad };
@@ -8765,7 +10355,10 @@ export function QortalLand({
 
         private updateGameIndicators() {
           const now = Date.now();
-          for (const [address, presence] of landGamePresenceRef.current.entries()) {
+          for (const [
+            address,
+            presence,
+          ] of landGamePresenceRef.current.entries()) {
             if (presence.expiresAt > now) continue;
             landGamePresenceRef.current.delete(address);
           }
@@ -8778,11 +10371,15 @@ export function QortalLand({
             localPresence.expiresAt > now &&
             localPresence.roomId === currentRoomRef.current
           ) {
-            activeIndicators.set(`local:${myAddress}`, { avatar: this.localAvatar });
+            activeIndicators.set(`local:${myAddress}`, {
+              avatar: this.localAvatar,
+            });
           }
 
           for (const [key, player] of remotePlayersRef.current.entries()) {
-            const presence = landGamePresenceRef.current.get(player.authorAddress);
+            const presence = landGamePresenceRef.current.get(
+              player.authorAddress
+            );
             const avatar = this.remotes.get(key);
             if (
               !presence ||
@@ -8796,7 +10393,10 @@ export function QortalLand({
             activeIndicators.set(`remote:${key}`, { avatar });
           }
 
-          for (const [indicatorKey, indicatorObjects] of this.gameIndicators.entries()) {
+          for (const [
+            indicatorKey,
+            indicatorObjects,
+          ] of this.gameIndicators.entries()) {
             if (activeIndicators.has(indicatorKey)) continue;
             this.removeGameIndicator(indicatorKey, indicatorObjects);
           }
@@ -8813,8 +10413,12 @@ export function QortalLand({
               avatar.x + 36 * scale,
               avatar.y - (LAND_CHARACTER_LABEL_OFFSET + 28) * scale
             );
-            indicatorObjects.container.setScale(Math.max(0.78, Math.min(1.04, scale * 0.9)));
-            indicatorObjects.container.setAlpha(0.9 + Math.sin(this.time.now / 260) * 0.08);
+            indicatorObjects.container.setScale(
+              Math.max(0.78, Math.min(1.04, scale * 0.9))
+            );
+            indicatorObjects.container.setAlpha(
+              0.9 + Math.sin(this.time.now / 260) * 0.08
+            );
             indicatorObjects.container.setDepth(avatar.depth + 220);
           }
         }
@@ -8842,7 +10446,8 @@ export function QortalLand({
           depth: number
         ) {
           if (!label) return;
-          const text = afk && dnd ? 'AFK · DND' : dnd ? 'DND' : afk ? 'AFK' : '';
+          const text =
+            afk && dnd ? 'AFK · DND' : dnd ? 'DND' : afk ? 'AFK' : '';
           label
             .setText(text)
             .setPosition(x, y)
@@ -8908,7 +10513,12 @@ export function QortalLand({
           const desiredY = y;
           ({ x, y } = clampLandPosition(roomId, x, y));
           if (roomId === QORTAL_LAND_DEFAULT_ROOM_ID) {
-            ({ x, y } = this.extendClubSkywalkDoorWalkThrough(desiredX, desiredY, x, y));
+            ({ x, y } = this.extendClubSkywalkDoorWalkThrough(
+              desiredX,
+              desiredY,
+              x,
+              y
+            ));
           }
           ({ x, y } = resolveQortalLandPropCollisions(
             roomId,
@@ -8939,7 +10549,10 @@ export function QortalLand({
             recordLandActivityRef.current();
           }
           const scale = characterScaleForRoomY(roomId, y);
-          const localLabelText = displayNameForAddress(myAddress, primaryNameCacheRef.current);
+          const localLabelText = displayNameForAddress(
+            myAddress,
+            primaryNameCacheRef.current
+          );
           if (this.localLabel?.text !== localLabelText) {
             this.localLabel?.setText(localLabelText);
           }
@@ -8947,14 +10560,20 @@ export function QortalLand({
           this.localAvatar.setData('logicalX', x);
           this.localAvatar.setData('logicalY', y);
           this.localAvatar.setPosition(x, renderY);
-          this.localAvatar.setScale(avatarScaleXForDirection(direction, scale), scale);
+          this.localAvatar.setScale(
+            avatarScaleXForDirection(direction, scale),
+            scale
+          );
           this.animateAvatar(
             this.localAvatar,
             moving,
             direction,
             localStateRef.current.skinId
           );
-          this.localLabel?.setPosition(x, renderY - LAND_CHARACTER_LABEL_OFFSET * scale);
+          this.localLabel?.setPosition(
+            x,
+            renderY - LAND_CHARACTER_LABEL_OFFSET * scale
+          );
           this.localAvatar.setDepth(y + 20);
           this.localLabel?.setDepth(y + 90);
           this.updateAvailabilityLabel(
@@ -8963,7 +10582,9 @@ export function QortalLand({
             localStateRef.current.dnd,
             x,
             renderY -
-              (LAND_CHARACTER_LABEL_OFFSET + LAND_CHARACTER_AVAILABILITY_OFFSET) * scale,
+              (LAND_CHARACTER_LABEL_OFFSET +
+                LAND_CHARACTER_AVAILABILITY_OFFSET) *
+                scale,
             y + 91
           );
           localStateRef.current = {
@@ -8983,10 +10604,17 @@ export function QortalLand({
           clampedY: number
         ): { x: number; y: number } {
           const door = this.clubSkywalkDoor;
-          if (!door || door.progress < QORTAL_LAND_CLUB_SKYWALK_DOOR_OPEN_THRESHOLD) {
+          if (
+            !door ||
+            door.progress < QORTAL_LAND_CLUB_SKYWALK_DOOR_OPEN_THRESHOLD
+          ) {
             return { x: clampedX, y: clampedY };
           }
-          if (desiredY < door.passMinY || desiredY > door.passMaxY || desiredX <= clampedX) {
+          if (
+            desiredY < door.passMinY ||
+            desiredY > door.passMaxY ||
+            desiredX <= clampedX
+          ) {
             return { x: clampedX, y: clampedY };
           }
           return {
@@ -8999,7 +10627,12 @@ export function QortalLand({
           roomId: LandRoomId,
           x: number,
           y: number
-        ): { roomId: LandRoomId; x: number; y: number; direction: string } | null {
+        ): {
+          roomId: LandRoomId;
+          x: number;
+          y: number;
+          direction: string;
+        } | null {
           const clubLayout = roomLayoutForRoom(QORTAL_LAND_DEFAULT_ROOM_ID);
           const clubToSkywalk = clubLayout.transitions?.clubToSkywalk;
           if (
@@ -9020,7 +10653,8 @@ export function QortalLand({
 
         private isAtClubSkywalkDoorPassage(x: number, y: number): boolean {
           const doorProgress = this.clubSkywalkDoor?.progress ?? 0;
-          if (doorProgress < QORTAL_LAND_CLUB_SKYWALK_DOOR_OPEN_THRESHOLD) return false;
+          if (doorProgress < QORTAL_LAND_CLUB_SKYWALK_DOOR_OPEN_THRESHOLD)
+            return false;
           const passage = this.clubSkywalkDoor
             ? {
                 passMinX: this.clubSkywalkDoor.passMinX,
@@ -9028,7 +10662,11 @@ export function QortalLand({
                 passMaxY: this.clubSkywalkDoor.passMaxY,
               }
             : qortalLandClubSkywalkDoorHotspot();
-          return x >= passage.passMinX && y >= passage.passMinY && y <= passage.passMaxY;
+          return (
+            x >= passage.passMinX &&
+            y >= passage.passMinY &&
+            y <= passage.passMaxY
+          );
         }
 
         private getClubSkywalkDoorReturnTarget(): QortalLandRoomTransitionTarget {
@@ -9043,7 +10681,8 @@ export function QortalLand({
 
         private isAtParkPortalPassage(x: number, y: number): boolean {
           const doorProgress = this.parkPortalDoor?.progress ?? 0;
-          if (doorProgress < QORTAL_LAND_PARK_PORTAL_OPEN_THRESHOLD) return false;
+          if (doorProgress < QORTAL_LAND_PARK_PORTAL_OPEN_THRESHOLD)
+            return false;
           const passage = this.parkPortalDoor
             ? {
                 passMinX: this.parkPortalDoor.passMinX,
@@ -9116,41 +10755,56 @@ export function QortalLand({
                 pixelPerfect: true,
                 useHandCursor: true,
               });
-              avatar.on('pointerdown', (pointer: any, _localX: number, _localY: number, event: any) => {
-                event?.stopPropagation?.();
-                const bounds = containerRef.current?.getBoundingClientRect();
-                if (!bounds) return;
-                const currentPlayer = remotePlayersRef.current.get(key);
-                if (!currentPlayer) return;
-                const pointerEvent = pointer?.event as PointerEvent | undefined;
-                const menuX = clampNumber(
-                  (pointerEvent?.clientX ?? bounds.left + bounds.width / 2) - bounds.left,
-                  12,
-                  Math.max(12, bounds.width - 290)
-                );
-                const menuY = clampNumber(
-                  (pointerEvent?.clientY ?? bounds.top + bounds.height / 2) - bounds.top,
-                  12,
-                  Math.max(12, bounds.height - 24)
-                );
-                setActionTarget({
-                  key,
-                  authorAddress: currentPlayer.authorAddress,
-                  sessionId: currentPlayer.sessionId,
-                  destinationHash: currentPlayer.destinationHash,
-                  roomId: currentPlayer.roomId,
-                  anchorX: menuX,
-                  anchorY: menuY,
-                  menuX,
-                  menuY,
-                });
-              });
+              avatar.on(
+                'pointerdown',
+                (
+                  pointer: any,
+                  _localX: number,
+                  _localY: number,
+                  event: any
+                ) => {
+                  event?.stopPropagation?.();
+                  const bounds = containerRef.current?.getBoundingClientRect();
+                  if (!bounds) return;
+                  const currentPlayer = remotePlayersRef.current.get(key);
+                  if (!currentPlayer) return;
+                  const pointerEvent = pointer?.event as
+                    | PointerEvent
+                    | undefined;
+                  const menuX = clampNumber(
+                    (pointerEvent?.clientX ?? bounds.left + bounds.width / 2) -
+                      bounds.left,
+                    12,
+                    Math.max(12, bounds.width - 290)
+                  );
+                  const menuY = clampNumber(
+                    (pointerEvent?.clientY ?? bounds.top + bounds.height / 2) -
+                      bounds.top,
+                    12,
+                    Math.max(12, bounds.height - 24)
+                  );
+                  setActionTarget({
+                    key,
+                    authorAddress: currentPlayer.authorAddress,
+                    sessionId: currentPlayer.sessionId,
+                    destinationHash: currentPlayer.destinationHash,
+                    roomId: currentPlayer.roomId,
+                    anchorX: menuX,
+                    anchorY: menuY,
+                    menuX,
+                    menuY,
+                  });
+                }
+              );
               this.remotes.set(key, avatar);
               const label = this.add
                 .text(
                   player.x,
                   player.y - LAND_CHARACTER_LABEL_OFFSET * scale,
-                  displayNameForAddress(player.authorAddress, primaryNameCacheRef.current),
+                  displayNameForAddress(
+                    player.authorAddress,
+                    primaryNameCacheRef.current
+                  ),
                   {
                     color: '#f8fbff',
                     fontFamily: 'Inter, Arial, sans-serif',
@@ -9161,35 +10815,56 @@ export function QortalLand({
                 )
                 .setOrigin(0.5);
               this.remoteLabels.set(key, label);
-              this.remoteAvailabilityLabels.set(key, this.createAvailabilityLabel());
+              this.remoteAvailabilityLabels.set(
+                key,
+                this.createAvailabilityLabel()
+              );
             }
             const elapsedSinceUpdate = now - player.receivedAt;
             const renderAt = now - LAND_REMOTE_INTERPOLATION_BUFFER_MS;
-            const timelineSpan = Math.max(1, player.timelineAt - player.fromTimelineAt);
+            const timelineSpan = Math.max(
+              1,
+              player.timelineAt - player.fromTimelineAt
+            );
             const interpolationProgress = Phaser.Math.Clamp(
               (renderAt - player.fromTimelineAt) / timelineSpan,
               0,
               1
             );
-            let nextX = Phaser.Math.Linear(player.fromX, player.x, interpolationProgress);
-            let nextY = Phaser.Math.Linear(player.fromY, player.y, interpolationProgress);
+            let nextX = Phaser.Math.Linear(
+              player.fromX,
+              player.x,
+              interpolationProgress
+            );
+            let nextY = Phaser.Math.Linear(
+              player.fromY,
+              player.y,
+              interpolationProgress
+            );
             const afterTargetMs = Math.max(0, renderAt - player.timelineAt);
-            const renderDirection = interpolationProgress < 1
-              ? player.fromDirection
-              : player.direction;
-            const renderMovement = interpolationProgress < 1
-              ? player.fromMovement
-              : player.movement;
+            const renderDirection =
+              interpolationProgress < 1
+                ? player.fromDirection
+                : player.direction;
+            const renderMovement =
+              interpolationProgress < 1 ? player.fromMovement : player.movement;
             const shouldPredict =
               renderMovement === 'walk' &&
               afterTargetMs > 0 &&
               afterTargetMs <= LAND_REMOTE_EXTRAPOLATE_MS &&
-              (Math.abs(player.velocityX) > 0.001 || Math.abs(player.velocityY) > 0.001);
+              (Math.abs(player.velocityX) > 0.001 ||
+                Math.abs(player.velocityY) > 0.001);
             if (shouldPredict) {
-              const velocityLength = Math.hypot(player.velocityX, player.velocityY);
+              const velocityLength = Math.hypot(
+                player.velocityX,
+                player.velocityY
+              );
               const maxPredictionMs =
                 velocityLength > 0
-                  ? Math.min(afterTargetMs, LAND_REMOTE_MAX_EXTRAPOLATE_DISTANCE / velocityLength)
+                  ? Math.min(
+                      afterTargetMs,
+                      LAND_REMOTE_MAX_EXTRAPOLATE_DISTANCE / velocityLength
+                    )
                   : 0;
               const predicted = clampLandPosition(
                 player.roomId,
@@ -9202,24 +10877,38 @@ export function QortalLand({
             player.displayX = nextX;
             player.displayY = nextY;
             const scale = characterScaleForRoomY(player.roomId, nextY);
-            const renderY = qortalLandAvatarRenderY(player.roomId, nextX, nextY);
+            const renderY = qortalLandAvatarRenderY(
+              player.roomId,
+              nextX,
+              nextY
+            );
             const label = this.remoteLabels.get(key);
-            const labelText = displayNameForAddress(player.authorAddress, primaryNameCacheRef.current);
+            const labelText = displayNameForAddress(
+              player.authorAddress,
+              primaryNameCacheRef.current
+            );
             if (label?.text !== labelText) {
               label?.setText(labelText);
             }
             avatar.setData('logicalX', nextX);
             avatar.setData('logicalY', nextY);
             avatar.setPosition(nextX, renderY);
-            avatar.setScale(avatarScaleXForDirection(renderDirection, scale), scale);
+            avatar.setScale(
+              avatarScaleXForDirection(renderDirection, scale),
+              scale
+            );
             this.animateAvatar(
               avatar,
-              renderMovement === 'walk' && elapsedSinceUpdate <= LAND_REMOTE_STOP_WALKING_AFTER_MS,
+              renderMovement === 'walk' &&
+                elapsedSinceUpdate <= LAND_REMOTE_STOP_WALKING_AFTER_MS,
               renderDirection,
               player.skinId
             );
             avatar.setDepth(nextY + 20);
-            label?.setPosition(nextX, renderY - LAND_CHARACTER_LABEL_OFFSET * scale);
+            label?.setPosition(
+              nextX,
+              renderY - LAND_CHARACTER_LABEL_OFFSET * scale
+            );
             label?.setDepth(nextY + 90);
             this.updateAvailabilityLabel(
               this.remoteAvailabilityLabels.get(key),
@@ -9227,7 +10916,9 @@ export function QortalLand({
               player.dnd,
               nextX,
               renderY -
-                (LAND_CHARACTER_LABEL_OFFSET + LAND_CHARACTER_AVAILABILITY_OFFSET) * scale,
+                (LAND_CHARACTER_LABEL_OFFSET +
+                  LAND_CHARACTER_AVAILABILITY_OFFSET) *
+                  scale,
               nextY + 91
             );
             remoteIndex += 1;
@@ -9261,8 +10952,16 @@ export function QortalLand({
         if (!containerRef.current) return { width, height };
         const rect = containerRef.current.getBoundingClientRect();
         return {
-          width: Math.max(320, Math.floor(rect.width || containerRef.current.clientWidth || width)),
-          height: Math.max(320, Math.floor(rect.height || containerRef.current.clientHeight || height)),
+          width: Math.max(
+            320,
+            Math.floor(rect.width || containerRef.current.clientWidth || width)
+          ),
+          height: Math.max(
+            320,
+            Math.floor(
+              rect.height || containerRef.current.clientHeight || height
+            )
+          ),
         };
       };
 
@@ -9291,7 +10990,8 @@ export function QortalLand({
 
       scheduleGameResize();
       window.addEventListener('resize', scheduleGameResize);
-      removeWindowResizeListener = () => window.removeEventListener('resize', scheduleGameResize);
+      removeWindowResizeListener = () =>
+        window.removeEventListener('resize', scheduleGameResize);
       resizeObserver = new ResizeObserver(() => {
         scheduleGameResize();
       });
@@ -9320,7 +11020,10 @@ export function QortalLand({
   }, [myAddress]);
 
   const actionTargetName = actionTarget
-    ? displayNameForAddress(actionTarget.authorAddress, primaryNameCacheRef.current)
+    ? displayNameForAddress(
+        actionTarget.authorAddress,
+        primaryNameCacheRef.current
+      )
     : '';
   const actionTargetSkinId =
     actionTarget?.authorAddress === myAddress
@@ -9332,7 +11035,10 @@ export function QortalLand({
         );
   const isSelfActionTarget = actionTarget?.authorAddress === myAddress;
   const sendQortTargetName = sendQortTarget
-    ? displayNameForAddress(sendQortTarget.authorAddress, primaryNameCacheRef.current)
+    ? displayNameForAddress(
+        sendQortTarget.authorAddress,
+        primaryNameCacheRef.current
+      )
     : '';
   const sendQortAmountNumber = Number(sendQortAmount);
   const canSendQort =
@@ -9345,15 +11051,21 @@ export function QortalLand({
   void landCallPresenceVersion;
   void landGamePresenceVersion;
   void landAvailabilityVersion;
-  const actionTargetInCall = actionTarget ? isAddressInLandCall(actionTarget.authorAddress) : false;
-  const actionTargetInGame = actionTarget ? isAddressInLandGame(actionTarget.authorAddress) : false;
+  const actionTargetInCall = actionTarget
+    ? isAddressInLandCall(actionTarget.authorAddress)
+    : false;
+  const actionTargetInGame = actionTarget
+    ? isAddressInLandGame(actionTarget.authorAddress)
+    : false;
   const actionTargetDnd = actionTarget
     ? remotePlayersRef.current.get(actionTarget.key)?.dnd === true
     : false;
   const currentActionTarget = actionTarget
     ? resolveCurrentLandActionTarget(actionTarget)
     : null;
-  const localLandCallActive = ['calling', 'ringing', 'connected'].includes(landVoiceCall.callState);
+  const localLandCallActive = ['calling', 'ringing', 'connected'].includes(
+    landVoiceCall.callState
+  );
   const canStartLandCall =
     Boolean(actionTarget) &&
     reticulumReady === true &&
@@ -9374,18 +11086,31 @@ export function QortalLand({
     Boolean(currentActionTarget?.destinationHash) &&
     actionTarget?.authorAddress !== myAddress;
   const activeLandCallPeerName = activeLandCallPeerAddress
-    ? displayNameForAddress(activeLandCallPeerAddress, primaryNameCacheRef.current)
+    ? displayNameForAddress(
+        activeLandCallPeerAddress,
+        primaryNameCacheRef.current
+      )
     : '';
   const incomingLandCallName = landVoiceCall.incomingCall
-    ? displayNameForAddress(landVoiceCall.incomingCall.fromAddress, primaryNameCacheRef.current)
+    ? displayNameForAddress(
+        landVoiceCall.incomingCall.fromAddress,
+        primaryNameCacheRef.current
+      )
     : '';
   const activeLandCallSubtitle = (() => {
-    if (landVoiceCall.callState === 'calling') return landVoiceCall.startupStatus.detail || 'Calling...';
+    if (landVoiceCall.callState === 'calling')
+      return landVoiceCall.startupStatus.detail || 'Calling...';
     if (landVoiceCall.callState === 'ringing') return 'Incoming call';
     if (landVoiceCall.callState === 'connected') {
-      const minutes = Math.floor(landVoiceCall.callDuration / 60).toString().padStart(2, '0');
-      const seconds = Math.floor(landVoiceCall.callDuration % 60).toString().padStart(2, '0');
-      return landVoiceCall.callMediaReady ? `Connected ${minutes}:${seconds}` : landVoiceCall.startupStatus.detail || 'Connecting audio...';
+      const minutes = Math.floor(landVoiceCall.callDuration / 60)
+        .toString()
+        .padStart(2, '0');
+      const seconds = Math.floor(landVoiceCall.callDuration % 60)
+        .toString()
+        .padStart(2, '0');
+      return landVoiceCall.callMediaReady
+        ? `Connected ${minutes}:${seconds}`
+        : landVoiceCall.startupStatus.detail || 'Connecting audio...';
     }
     return '';
   })();
@@ -9395,9 +11120,11 @@ export function QortalLand({
       : characterPreviewFacing === 'front'
         ? '50%'
         : '0%';
-  const characterPreviewScaleX = characterPreviewFacing === 'left' ? -0.96 : 0.96;
+  const characterPreviewScaleX =
+    characterPreviewFacing === 'left' ? -0.96 : 0.96;
   const characterPreviewFacingLabel =
-    characterPreviewFacing.charAt(0).toUpperCase() + characterPreviewFacing.slice(1);
+    characterPreviewFacing.charAt(0).toUpperCase() +
+    characterPreviewFacing.slice(1);
   const landChatOpacity = isChatDimmed && !isChatFocused ? 0.5 : 0.9;
 
   return (
@@ -9539,7 +11266,7 @@ export function QortalLand({
           >
             <Box
               data-qortalland-chat-panel="true"
-            onClick={wakeLandChatPanel}
+              onClick={wakeLandChatPanel}
               ref={chatPanelRef}
               sx={{
                 background:
@@ -9554,13 +11281,16 @@ export function QortalLand({
                 display: 'flex',
                 flexDirection: 'column',
                 height: chatPanelGeometry ? chatPanelGeometry.height : 'auto',
-                left: chatPanelGeometry ? chatPanelGeometry.x : { xs: 12, md: 22 },
+                left: chatPanelGeometry
+                  ? chatPanelGeometry.x
+                  : { xs: 12, md: 22 },
                 opacity: landChatOpacity,
                 padding: '14px 14px 16px',
                 pointerEvents: 'auto',
                 position: 'absolute',
                 top: chatPanelGeometry ? chatPanelGeometry.y : 'auto',
-                transition: 'opacity 180ms ease, border-color 180ms ease, background 180ms ease',
+                transition:
+                  'opacity 180ms ease, border-color 180ms ease, background 180ms ease',
                 width: chatPanelGeometry
                   ? chatPanelGeometry.width
                   : 'min(468px, calc(100% - 24px))',
@@ -9645,52 +11375,60 @@ export function QortalLand({
                   userSelect: 'none',
                 }}
               >
-                {([
-                  ['local', 'World'],
-                  ['whispers', 'Whispers'],
-                ] as const).map(([tab, label]) => {
+                {(
+                  [
+                    ['local', 'World'],
+                    ['whispers', 'Whispers'],
+                  ] as const
+                ).map(([tab, label]) => {
                   const isActive = activeChatTab === tab;
                   return (
-                  <Box
-                    component="button"
-                    key={tab}
-                    onClick={() => {
-                      setActiveChatTab(tab);
-                      setIsEmojiPickerOpen(false);
-                      wakeLandChatPanel();
-                      if (tab === 'whispers') {
-                        setChatText('');
-                        setChatError('');
-                        chatInputRef.current?.blur();
-                      }
-                    }}
-                    sx={{
-                      alignItems: 'center',
-                      backgroundColor: isActive
-                        ? 'rgba(7, 22, 28, 0.58)'
-                        : 'rgba(255, 255, 255, 0.02)',
-                      border: `1px solid ${isActive ? 'rgba(44, 248, 255, 0.34)' : 'rgba(255, 255, 255, 0.12)'}`,
-                      borderRadius: '5px',
-                      color: isActive ? '#2cf8ff' : 'rgba(220, 220, 226, 0.48)',
-                      cursor: 'pointer',
-                      // Keep Whispers implemented but out of the QortalLand UI
-                      // until its transport is ready for users.
-                      display: tab === 'whispers' ? 'none' : 'flex',
-                      fontSize: 12,
-                      fontWeight: isActive ? 900 : 800,
-                      height: 31,
-                      justifyContent: 'center',
-                      minWidth: 96,
-                      padding: '0 14px',
-                      textShadow: isActive ? '0 0 8px rgba(44, 248, 255, 0.34)' : 'none',
-                      '&:hover': {
-                        borderColor: 'rgba(44, 248, 255, 0.28)',
-                        color: isActive ? '#2cf8ff' : 'rgba(220, 220, 226, 0.68)',
-                      },
-                    }}
-                  >
-                    {label}
-                  </Box>
+                    <Box
+                      component="button"
+                      key={tab}
+                      onClick={() => {
+                        setActiveChatTab(tab);
+                        setIsEmojiPickerOpen(false);
+                        wakeLandChatPanel();
+                        if (tab === 'whispers') {
+                          setChatText('');
+                          setChatError('');
+                          chatInputRef.current?.blur();
+                        }
+                      }}
+                      sx={{
+                        alignItems: 'center',
+                        backgroundColor: isActive
+                          ? 'rgba(7, 22, 28, 0.58)'
+                          : 'rgba(255, 255, 255, 0.02)',
+                        border: `1px solid ${isActive ? 'rgba(44, 248, 255, 0.34)' : 'rgba(255, 255, 255, 0.12)'}`,
+                        borderRadius: '5px',
+                        color: isActive
+                          ? '#2cf8ff'
+                          : 'rgba(220, 220, 226, 0.48)',
+                        cursor: 'pointer',
+                        // Keep Whispers implemented but out of the QortalLand UI
+                        // until its transport is ready for users.
+                        display: tab === 'whispers' ? 'none' : 'flex',
+                        fontSize: 12,
+                        fontWeight: isActive ? 900 : 800,
+                        height: 31,
+                        justifyContent: 'center',
+                        minWidth: 96,
+                        padding: '0 14px',
+                        textShadow: isActive
+                          ? '0 0 8px rgba(44, 248, 255, 0.34)'
+                          : 'none',
+                        '&:hover': {
+                          borderColor: 'rgba(44, 248, 255, 0.28)',
+                          color: isActive
+                            ? '#2cf8ff'
+                            : 'rgba(220, 220, 226, 0.68)',
+                        },
+                      }}
+                    >
+                      {label}
+                    </Box>
                   );
                 })}
                 {(window.qortalLandRealtime || window.qortalLandGames) && (
@@ -9757,74 +11495,86 @@ export function QortalLand({
                     },
                   }}
                 >
-                  {activeChatTab === 'local' && landChatMessages.map((message) => {
-                    const authorName = displayNameForAddress(message.authorAddress, primaryNameCacheRef.current);
-                    const isYell = message.mode === 'yell';
-                    const isEmote = message.mode === 'emote';
-                    const authorColor = isYell
-                      ? '#ff4d4d'
-                      : message.authorAddress === myAddress
-                        ? '#2cf8ff'
-                        : '#ff4dde';
-                    const sentAt = new Date(message.timestamp);
-                    const sentTime = `${sentAt.getHours().toString().padStart(2, '0')}:${sentAt.getMinutes().toString().padStart(2, '0')}`;
-                    return (
-                      <Box
-                        key={message.messageId}
-                        sx={{
-                          display: 'grid',
-                          gap: 1.15,
-                          gridTemplateColumns: '50px minmax(0, 1fr)',
-                          marginBottom: 0.35,
-                        }}
-                      >
-                        <Typography
-                          component="span"
+                  {activeChatTab === 'local' &&
+                    landChatMessages.map((message) => {
+                      const authorName = displayNameForAddress(
+                        message.authorAddress,
+                        primaryNameCacheRef.current
+                      );
+                      const isYell = message.mode === 'yell';
+                      const isEmote = message.mode === 'emote';
+                      const authorColor = isYell
+                        ? '#ff4d4d'
+                        : message.authorAddress === myAddress
+                          ? '#2cf8ff'
+                          : '#ff4dde';
+                      const sentAt = new Date(message.timestamp);
+                      const sentTime = `${sentAt.getHours().toString().padStart(2, '0')}:${sentAt.getMinutes().toString().padStart(2, '0')}`;
+                      return (
+                        <Box
+                          key={message.messageId}
                           sx={{
-                            color: 'rgba(220, 220, 226, 0.68)',
-                            fontSize: 12,
-                            lineHeight: 1.2,
-                            textShadow: '0 1px 2px rgba(0, 0, 0, 0.85)',
+                            display: 'grid',
+                            gap: 1.15,
+                            gridTemplateColumns: '50px minmax(0, 1fr)',
+                            marginBottom: 0.35,
                           }}
                         >
-                          {sentTime}
-                        </Typography>
-                        <Typography
-                          component="span"
-                          sx={{
-                            color: isYell ? '#ff4d4d' : isEmote ? '#ffd64a' : '#f8fbff',
-                            fontSize: 12,
-                            fontWeight: isYell || isEmote ? 900 : 500,
-                            lineHeight: 1.2,
-                            minWidth: 0,
-                            textShadow: '0 1px 2px rgba(0, 0, 0, 0.85)',
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-word',
-                          }}
-                        >
-                          {isYell ? (
-                            <>
-                              <Box component="span" sx={{ color: authorColor, fontWeight: 900 }}>
-                                {authorName} yelled:
-                              </Box>
-                              {' '}
-                              {renderLandChatTextParts(message.text)}
-                            </>
-                          ) : isEmote ? (
-                            `${authorName} ${message.text}`
-                          ) : (
-                            <>
-                              <Box component="span" sx={{ color: authorColor, fontWeight: 900 }}>
-                                {authorName}:
-                              </Box>
-                              {' '}
-                              {renderLandChatTextParts(message.text)}
-                            </>
-                          )}
-                        </Typography>
-                      </Box>
-                    );
-                  })}
+                          <Typography
+                            component="span"
+                            sx={{
+                              color: 'rgba(220, 220, 226, 0.68)',
+                              fontSize: 12,
+                              lineHeight: 1.2,
+                              textShadow: '0 1px 2px rgba(0, 0, 0, 0.85)',
+                            }}
+                          >
+                            {sentTime}
+                          </Typography>
+                          <Typography
+                            component="span"
+                            sx={{
+                              color: isYell
+                                ? '#ff4d4d'
+                                : isEmote
+                                  ? '#ffd64a'
+                                  : '#f8fbff',
+                              fontSize: 12,
+                              fontWeight: isYell || isEmote ? 900 : 500,
+                              lineHeight: 1.2,
+                              minWidth: 0,
+                              textShadow: '0 1px 2px rgba(0, 0, 0, 0.85)',
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word',
+                            }}
+                          >
+                            {isYell ? (
+                              <>
+                                <Box
+                                  component="span"
+                                  sx={{ color: authorColor, fontWeight: 900 }}
+                                >
+                                  {authorName} yelled:
+                                </Box>{' '}
+                                {renderLandChatTextParts(message.text)}
+                              </>
+                            ) : isEmote ? (
+                              `${authorName} ${message.text}`
+                            ) : (
+                              <>
+                                <Box
+                                  component="span"
+                                  sx={{ color: authorColor, fontWeight: 900 }}
+                                >
+                                  {authorName}:
+                                </Box>{' '}
+                                {renderLandChatTextParts(message.text)}
+                              </>
+                            )}
+                          </Typography>
+                        </Box>
+                      );
+                    })}
                 </Box>
               </Box>
               <Box
@@ -9855,13 +11605,17 @@ export function QortalLand({
                     }}
                   >
                     {QORTAL_LAND_AVAILABLE_CHAT_EMOJIS.map((emoji) => {
-                      const emojiUrl = qortalLandChatEmojiUrlByFileName.get(emoji.fileName);
+                      const emojiUrl = qortalLandChatEmojiUrlByFileName.get(
+                        emoji.fileName
+                      );
                       if (!emojiUrl) return null;
                       return (
                         <IconButton
                           aria-label={`Insert ${emoji.label}`}
                           key={emoji.key}
-                          onClick={() => insertLandChatEmojiShortcut(emoji.shortcuts[0])}
+                          onClick={() =>
+                            insertLandChatEmojiShortcut(emoji.shortcuts[0])
+                          }
                           onMouseDown={(event) => event.preventDefault()}
                           sx={{
                             border: '1px solid rgba(220, 220, 226, 0.08)',
@@ -9891,7 +11645,9 @@ export function QortalLand({
                   disabled={activeChatTab !== 'local'}
                   error={Boolean(chatError)}
                   inputRef={chatInputRef}
-                  placeholder={activeChatTab === 'local' ? 'Say something...' : ''}
+                  placeholder={
+                    activeChatTab === 'local' ? 'Say something...' : ''
+                  }
                   size="small"
                   value={chatText}
                   variant="filled"
@@ -9911,7 +11667,9 @@ export function QortalLand({
                           }}
                           onMouseDown={(event) => event.preventDefault()}
                           sx={{
-                            color: isEmojiPickerOpen ? '#2cf8ff' : 'rgba(220, 220, 226, 0.6)',
+                            color: isEmojiPickerOpen
+                              ? '#2cf8ff'
+                              : 'rgba(220, 220, 226, 0.6)',
                             height: 28,
                             padding: 0,
                             width: 28,
@@ -9947,7 +11705,10 @@ export function QortalLand({
                   onBlur={() => setIsChatFocused(false)}
                   onChange={(event) => {
                     recordLandActivity();
-                    const next = event.target.value.slice(0, LAND_CHAT_MAX_INPUT_CHARS);
+                    const next = event.target.value.slice(
+                      0,
+                      LAND_CHAT_MAX_INPUT_CHARS
+                    );
                     setChatText(next);
                     if (chatError) setChatError('');
                     wakeLandChatPanel();
@@ -10010,7 +11771,10 @@ export function QortalLand({
             color: '#f8fbff',
             display: 'grid',
             gap: { xs: 1.5, md: 2 },
-            gridTemplateColumns: { xs: '1fr', md: 'minmax(275px, 0.9fr) minmax(290px, 1fr)' },
+            gridTemplateColumns: {
+              xs: '1fr',
+              md: 'minmax(275px, 0.9fr) minmax(290px, 1fr)',
+            },
             left: '50%',
             maxHeight: 'min(520px, calc(100% - 76px))',
             overflowY: 'auto',
@@ -10040,20 +11804,45 @@ export function QortalLand({
             },
           }}
         >
-          <Box sx={{ display: 'grid', gap: 1.35, position: 'relative', zIndex: 1 }}>
+          <Box
+            sx={{ display: 'grid', gap: 1.35, position: 'relative', zIndex: 1 }}
+          >
             <Box>
-              <Typography sx={{ color: '#f8fbff', fontSize: 16, fontWeight: 900 }}>
+              <Typography
+                sx={{ color: '#f8fbff', fontSize: 16, fontWeight: 900 }}
+              >
                 Character
               </Typography>
-              <Typography sx={{ color: 'rgba(44, 248, 255, 0.64)', fontSize: 10, fontWeight: 800, letterSpacing: 0 }}>
+              <Typography
+                sx={{
+                  color: 'rgba(44, 248, 255, 0.64)',
+                  fontSize: 10,
+                  fontWeight: 800,
+                  letterSpacing: 0,
+                }}
+              >
                 Loadout Console
               </Typography>
             </Box>
-            {([
-              ['hair', 'Hair', QORTAL_LAND_CHARACTER_CUSTOMIZATION_OPTIONS.hair],
-              ['face', 'Face', QORTAL_LAND_CHARACTER_CUSTOMIZATION_OPTIONS.face],
-              ['clothes', 'Clothes', QORTAL_LAND_CHARACTER_CUSTOMIZATION_OPTIONS.clothes],
-            ] as const).map(([field, label, options]) => (
+            {(
+              [
+                [
+                  'hair',
+                  'Hair',
+                  QORTAL_LAND_CHARACTER_CUSTOMIZATION_OPTIONS.hair,
+                ],
+                [
+                  'face',
+                  'Face',
+                  QORTAL_LAND_CHARACTER_CUSTOMIZATION_OPTIONS.face,
+                ],
+                [
+                  'clothes',
+                  'Clothes',
+                  QORTAL_LAND_CHARACTER_CUSTOMIZATION_OPTIONS.clothes,
+                ],
+              ] as const
+            ).map(([field, label, options]) => (
               <Box
                 key={field}
                 sx={{
@@ -10066,10 +11855,23 @@ export function QortalLand({
                   padding: '9px 10px 10px',
                 }}
               >
-                <Typography sx={{ color: 'rgba(248, 251, 255, 0.58)', fontSize: 10, fontWeight: 800 }}>
+                <Typography
+                  sx={{
+                    color: 'rgba(248, 251, 255, 0.58)',
+                    fontSize: 10,
+                    fontWeight: 800,
+                  }}
+                >
                   {label}
                 </Typography>
-                <Box sx={{ alignItems: 'center', display: 'grid', gap: 0.7, gridTemplateColumns: '34px 1fr 34px' }}>
+                <Box
+                  sx={{
+                    alignItems: 'center',
+                    display: 'grid',
+                    gap: 0.7,
+                    gridTemplateColumns: '34px 1fr 34px',
+                  }}
+                >
                   <IconButton
                     aria-label={`Previous ${label}`}
                     size="small"
@@ -10106,9 +11908,10 @@ export function QortalLand({
                         backgroundColor: 'rgba(7, 12, 28, 0.88)',
                         borderRadius: '6px',
                       },
-                      '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                        borderColor: 'rgba(44, 248, 255, 0.56)',
-                      },
+                      '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline':
+                        {
+                          borderColor: 'rgba(44, 248, 255, 0.56)',
+                        },
                       '& .MuiSvgIcon-root': {
                         color: 'rgba(248, 251, 255, 0.62)',
                       },
@@ -10138,7 +11941,14 @@ export function QortalLand({
                 </Box>
               </Box>
             ))}
-            <Box sx={{ display: 'grid', gap: 1, gridTemplateColumns: '1fr 1fr', marginTop: 0.5 }}>
+            <Box
+              sx={{
+                display: 'grid',
+                gap: 1,
+                gridTemplateColumns: '1fr 1fr',
+                marginTop: 0.5,
+              }}
+            >
               <Button
                 size="small"
                 variant="outlined"
@@ -10203,7 +12013,8 @@ export function QortalLand({
                 backgroundPosition: `0% ${characterPreviewRowPercent}`,
                 backgroundRepeat: 'no-repeat',
                 backgroundSize: `${LAND_CHARACTER_FRAMES_PER_DIRECTION * 100}% 300%`,
-                filter: 'drop-shadow(0 22px 24px rgba(0, 0, 0, 0.54)) drop-shadow(0 0 16px rgba(44, 248, 255, 0.14))',
+                filter:
+                  'drop-shadow(0 22px 24px rgba(0, 0, 0, 0.54)) drop-shadow(0 0 16px rgba(44, 248, 255, 0.14))',
                 height: 320,
                 marginTop: { xs: 1, md: 2 },
                 transform: `scale(${characterPreviewScaleX}, 0.96)`,
@@ -10308,7 +12119,9 @@ export function QortalLand({
             select
             size="small"
             value={selectedDevRoomId}
-            onChange={(event) => selectDevelopmentRoom(event.target.value as LandRoomId)}
+            onChange={(event) =>
+              selectDevelopmentRoom(event.target.value as LandRoomId)
+            }
             sx={{
               '& .MuiInputLabel-root': {
                 color: 'rgba(248, 251, 255, 0.58)',
@@ -10356,7 +12169,10 @@ export function QortalLand({
             }}
           >
             {editableDevPlacementsForSelectedRoom.map((placement) => (
-              <MenuItem key={placement.defaultPlacement.id} value={placement.defaultPlacement.id}>
+              <MenuItem
+                key={placement.defaultPlacement.id}
+                value={placement.defaultPlacement.id}
+              >
                 {placement.label}
               </MenuItem>
             ))}
@@ -10380,7 +12196,9 @@ export function QortalLand({
             <Button
               size="small"
               variant={proceduralClubShellEnabled ? 'outlined' : 'contained'}
-              onClick={() => setProceduralClubShellVisible(!proceduralClubShellEnabled)}
+              onClick={() =>
+                setProceduralClubShellVisible(!proceduralClubShellEnabled)
+              }
               sx={{
                 borderColor: 'rgba(255, 43, 214, 0.38)',
                 borderRadius: '6px',
@@ -10414,8 +12232,12 @@ export function QortalLand({
           <Box sx={{ display: 'grid', gap: 1, gridTemplateColumns: '1fr 1fr' }}>
             <Button
               size="small"
-              variant={developmentLookSettings.enabled ? 'contained' : 'outlined'}
-              onClick={() => setDevelopmentLookEnabled(!developmentLookSettings.enabled)}
+              variant={
+                developmentLookSettings.enabled ? 'contained' : 'outlined'
+              }
+              onClick={() =>
+                setDevelopmentLookEnabled(!developmentLookSettings.enabled)
+              }
               sx={{
                 borderColor: 'rgba(44, 248, 255, 0.38)',
                 borderRadius: '6px',
@@ -10443,12 +12265,14 @@ export function QortalLand({
             </Button>
           </Box>
           <Box sx={{ display: 'grid', gap: 1, gridTemplateColumns: '1fr 1fr' }}>
-            {([
-              ['brightness', 'Brightness', 0.01],
-              ['contrast', 'Contrast', 0.01],
-              ['saturation', 'Saturation', 0.01],
-              ['shadow', 'Shadow', 0.01],
-            ] as const).map(([field, label, step]) => (
+            {(
+              [
+                ['brightness', 'Brightness', 0.01],
+                ['contrast', 'Contrast', 0.01],
+                ['saturation', 'Saturation', 0.01],
+                ['shadow', 'Shadow', 0.01],
+              ] as const
+            ).map(([field, label, step]) => (
               <TextField
                 key={field}
                 label={label}
@@ -10472,34 +12296,45 @@ export function QortalLand({
                   '& .MuiOutlinedInput-notchedOutline': {
                     borderColor: 'rgba(248, 251, 255, 0.16)',
                   },
-                  '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'rgba(44, 248, 255, 0.38)',
-                  },
+                  '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline':
+                    {
+                      borderColor: 'rgba(44, 248, 255, 0.38)',
+                    },
                 }}
               />
             ))}
           </Box>
-          <Typography sx={{ color: 'rgba(248, 251, 255, 0.62)', fontSize: 11, lineHeight: 1.35 }}>
-            {qortalLandDevelopmentPngAssetById.has(selectedDevPlacementMeta.defaultPlacement.assetId)
+          <Typography
+            sx={{
+              color: 'rgba(248, 251, 255, 0.62)',
+              fontSize: 11,
+              lineHeight: 1.35,
+            }}
+          >
+            {qortalLandDevelopmentPngAssetById.has(
+              selectedDevPlacementMeta.defaultPlacement.assetId
+            )
               ? `Loaded: ${selectedDevPlacementMeta.sourceLabel}`
               : `Missing: ${selectedDevPlacementMeta.sourceLabel}`}
           </Typography>
           <Box sx={{ display: 'grid', gap: 1, gridTemplateColumns: '1fr 1fr' }}>
-            {([
-              ['x', 'X', 1],
-              ['y', 'Y', 1],
-              ...(selectedDevPlacementMeta.allowSeparateScale
-                ? [
-                    ['scaleX', 'Scale X', 0.01],
-                    ['scaleY', 'Scale Y', 0.01],
-                  ]
-                : [['scale', 'Scale', 0.01]]),
-              ['depth', 'Depth', 1],
-              ['originX', 'Origin X', 0.001],
-              ['originY', 'Origin Y', 0.001],
-              ['alpha', 'Alpha', 0.01],
-              ['angle', 'Angle', 1],
-            ] as const).map(([field, label, step]) => (
+            {(
+              [
+                ['x', 'X', 1],
+                ['y', 'Y', 1],
+                ...(selectedDevPlacementMeta.allowSeparateScale
+                  ? [
+                      ['scaleX', 'Scale X', 0.01],
+                      ['scaleY', 'Scale Y', 0.01],
+                    ]
+                  : [['scale', 'Scale', 0.01]]),
+                ['depth', 'Depth', 1],
+                ['originX', 'Origin X', 0.001],
+                ['originY', 'Origin Y', 0.001],
+                ['alpha', 'Alpha', 0.01],
+                ['angle', 'Angle', 1],
+              ] as const
+            ).map(([field, label, step]) => (
               <TextField
                 key={field}
                 label={label}
@@ -10507,10 +12342,15 @@ export function QortalLand({
                 type="number"
                 value={
                   field === 'scaleX'
-                    ? selectedDevPlacement.scaleX ?? selectedDevPlacement.scale ?? ''
+                    ? (selectedDevPlacement.scaleX ??
+                      selectedDevPlacement.scale ??
+                      '')
                     : field === 'scaleY'
-                      ? selectedDevPlacement.scaleY ?? selectedDevPlacement.scale ?? ''
-                      : selectedDevPlacement[field] ?? (field === 'alpha' ? 1 : '')
+                      ? (selectedDevPlacement.scaleY ??
+                        selectedDevPlacement.scale ??
+                        '')
+                      : (selectedDevPlacement[field] ??
+                        (field === 'alpha' ? 1 : ''))
                 }
                 onChange={(event) =>
                   updateSelectedDevelopmentPlacement(field, event.target.value)
@@ -10529,31 +12369,43 @@ export function QortalLand({
                   '& .MuiOutlinedInput-notchedOutline': {
                     borderColor: 'rgba(248, 251, 255, 0.16)',
                   },
-                  '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'rgba(44, 248, 255, 0.38)',
-                  },
+                  '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline':
+                    {
+                      borderColor: 'rgba(44, 248, 255, 0.38)',
+                    },
                 }}
               />
             ))}
           </Box>
           {selectedDevPlacementMeta.allowGroupControls && (
             <>
-              <Typography sx={{ color: '#f8fbff', fontSize: 12, fontWeight: 800 }}>
+              <Typography
+                sx={{ color: '#f8fbff', fontSize: 12, fontWeight: 800 }}
+              >
                 Group
               </Typography>
-              <Box sx={{ display: 'grid', gap: 1, gridTemplateColumns: '1fr 1fr' }}>
-                {([
-                  ['count', 'Count', 1],
-                  ['spacing', 'Spacing', 1],
-                ] as const).map(([field, label, step]) => (
+              <Box
+                sx={{ display: 'grid', gap: 1, gridTemplateColumns: '1fr 1fr' }}
+              >
+                {(
+                  [
+                    ['count', 'Count', 1],
+                    ['spacing', 'Spacing', 1],
+                  ] as const
+                ).map(([field, label, step]) => (
                   <TextField
                     key={field}
                     label={label}
                     size="small"
                     type="number"
-                    value={selectedDevPlacement[field] ?? (field === 'count' ? 1 : 0)}
+                    value={
+                      selectedDevPlacement[field] ?? (field === 'count' ? 1 : 0)
+                    }
                     onChange={(event) =>
-                      updateSelectedDevelopmentPlacement(field, event.target.value)
+                      updateSelectedDevelopmentPlacement(
+                        field,
+                        event.target.value
+                      )
                     }
                     inputProps={{ step }}
                     sx={{
@@ -10569,9 +12421,10 @@ export function QortalLand({
                       '& .MuiOutlinedInput-notchedOutline': {
                         borderColor: 'rgba(248, 251, 255, 0.16)',
                       },
-                      '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                        borderColor: 'rgba(44, 248, 255, 0.38)',
-                      },
+                      '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline':
+                        {
+                          borderColor: 'rgba(44, 248, 255, 0.38)',
+                        },
                     }}
                   />
                 ))}
@@ -10580,20 +12433,26 @@ export function QortalLand({
           )}
           {selectedDevPlacementMeta.allowWarp && (
             <>
-              <Typography sx={{ color: '#f8fbff', fontSize: 12, fontWeight: 800 }}>
+              <Typography
+                sx={{ color: '#f8fbff', fontSize: 12, fontWeight: 800 }}
+              >
                 Warp
               </Typography>
-              <Box sx={{ display: 'grid', gap: 1, gridTemplateColumns: '1fr 1fr' }}>
-                {([
-                  ['tlX', 'TL X'],
-                  ['tlY', 'TL Y'],
-                  ['trX', 'TR X'],
-                  ['trY', 'TR Y'],
-                  ['brX', 'BR X'],
-                  ['brY', 'BR Y'],
-                  ['blX', 'BL X'],
-                  ['blY', 'BL Y'],
-                ] as const).map(([field, label]) => (
+              <Box
+                sx={{ display: 'grid', gap: 1, gridTemplateColumns: '1fr 1fr' }}
+              >
+                {(
+                  [
+                    ['tlX', 'TL X'],
+                    ['tlY', 'TL Y'],
+                    ['trX', 'TR X'],
+                    ['trY', 'TR Y'],
+                    ['brX', 'BR X'],
+                    ['brY', 'BR Y'],
+                    ['blX', 'BL X'],
+                    ['blY', 'BL Y'],
+                  ] as const
+                ).map(([field, label]) => (
                   <TextField
                     key={field}
                     label={label}
@@ -10617,9 +12476,10 @@ export function QortalLand({
                       '& .MuiOutlinedInput-notchedOutline': {
                         borderColor: 'rgba(248, 251, 255, 0.16)',
                       },
-                      '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                        borderColor: 'rgba(44, 248, 255, 0.38)',
-                      },
+                      '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline':
+                        {
+                          borderColor: 'rgba(44, 248, 255, 0.38)',
+                        },
                     }}
                   />
                 ))}
@@ -10671,7 +12531,14 @@ export function QortalLand({
               zIndex: 5,
             }}
           >
-            <Box sx={{ alignItems: 'flex-start', display: 'flex', gap: 1, justifyContent: 'space-between' }}>
+            <Box
+              sx={{
+                alignItems: 'flex-start',
+                display: 'flex',
+                gap: 1,
+                justifyContent: 'space-between',
+              }}
+            >
               <Box
                 sx={{
                   alignItems: 'center',
@@ -10686,7 +12553,9 @@ export function QortalLand({
                       ? 'Change character skin'
                       : `${actionTargetName} character`
                   }
-                  component={actionTarget.authorAddress === myAddress ? 'button' : 'div'}
+                  component={
+                    actionTarget.authorAddress === myAddress ? 'button' : 'div'
+                  }
                   onClick={
                     actionTarget.authorAddress === myAddress
                       ? () => {
@@ -10747,7 +12616,8 @@ export function QortalLand({
                         justifyContent: 'center',
                         position: 'absolute',
                         right: -3,
-                        transition: 'background-color 140ms ease, color 140ms ease',
+                        transition:
+                          'background-color 140ms ease, color 140ms ease',
                         width: 24,
                       }}
                     >
@@ -10791,7 +12661,9 @@ export function QortalLand({
                       aria-label="Copy Qortal address"
                       onClick={(event) => {
                         event.stopPropagation();
-                        void navigator.clipboard?.writeText(actionTarget.authorAddress);
+                        void navigator.clipboard?.writeText(
+                          actionTarget.authorAddress
+                        );
                       }}
                       size="small"
                       sx={{
@@ -10871,10 +12743,7 @@ export function QortalLand({
                 const coolingDown = socialActionCooldownUntil > Date.now();
                 const moodCardColor =
                   LAND_SOCIAL_ACTION_CARD_COLORS[socialAction.type];
-                const disabled =
-                  reticulumReady !== true ||
-                  busy ||
-                  coolingDown;
+                const disabled = reticulumReady !== true || busy || coolingDown;
                 return (
                   <Button
                     aria-label={`Send ${socialAction.label} effect`}
@@ -10917,7 +12786,9 @@ export function QortalLand({
                         lineHeight: 1,
                       }}
                     >
-                      {sendingSocialAction === socialAction.type ? '· · ·' : socialAction.symbol}
+                      {sendingSocialAction === socialAction.type
+                        ? '· · ·'
+                        : socialAction.symbol}
                     </Box>
                     {socialAction.label}
                   </Button>
@@ -10925,7 +12796,10 @@ export function QortalLand({
               })}
             </Box>
             {socialActionError && (
-              <Typography role="alert" sx={{ color: theme.palette.error.light, fontSize: 10, mb: 1 }}>
+              <Typography
+                role="alert"
+                sx={{ color: theme.palette.error.light, fontSize: 10, mb: 1 }}
+              >
                 {socialActionError}
               </Typography>
             )}
@@ -10942,7 +12816,8 @@ export function QortalLand({
                 fontWeight: 800,
                 justifyContent: 'flex-start',
                 textTransform: 'none',
-                display: actionTarget.authorAddress === myAddress ? 'none' : 'flex',
+                display:
+                  actionTarget.authorAddress === myAddress ? 'none' : 'flex',
                 '&:hover': {
                   backgroundColor: alpha('#ffcf5a', 0.23),
                 },
@@ -10956,21 +12831,31 @@ export function QortalLand({
               startIcon={<CallRoundedIcon fontSize="small" />}
               onClick={() => startLandCall(actionTarget)}
               sx={{
-                backgroundColor: actionTargetInCall || actionTargetInGame || actionTargetDnd ? alpha('#fff', 0.05) : alpha('#2cf8ff', 0.12),
+                backgroundColor:
+                  actionTargetInCall || actionTargetInGame || actionTargetDnd
+                    ? alpha('#fff', 0.05)
+                    : alpha('#2cf8ff', 0.12),
                 border: `1px solid ${actionTargetInCall || actionTargetInGame || actionTargetDnd ? alpha('#fff', 0.1) : alpha('#2cf8ff', 0.3)}`,
                 borderRadius: '8px',
-                color: actionTargetInCall || actionTargetInGame || actionTargetDnd ? alpha(theme.palette.text.secondary, 0.9) : '#9ffcff',
+                color:
+                  actionTargetInCall || actionTargetInGame || actionTargetDnd
+                    ? alpha(theme.palette.text.secondary, 0.9)
+                    : '#9ffcff',
                 fontSize: 12,
                 fontWeight: 800,
                 justifyContent: 'flex-start',
                 marginTop: 1,
                 textTransform: 'none',
-                display: actionTarget.authorAddress === myAddress ? 'none' : 'flex',
+                display:
+                  actionTarget.authorAddress === myAddress ? 'none' : 'flex',
                 '&:hover': {
                   backgroundColor: alpha('#2cf8ff', 0.2),
                 },
                 '&.Mui-disabled': {
-                  color: actionTargetInCall || actionTargetInGame || actionTargetDnd ? alpha('#ffcf5a', 0.72) : alpha('#fff', 0.32),
+                  color:
+                    actionTargetInCall || actionTargetInGame || actionTargetDnd
+                      ? alpha('#ffcf5a', 0.72)
+                      : alpha('#fff', 0.32),
                 },
               }}
             >
@@ -10997,7 +12882,8 @@ export function QortalLand({
                 justifyContent: 'flex-start',
                 marginTop: 1,
                 textTransform: 'none',
-                display: actionTarget.authorAddress === myAddress ? 'none' : 'flex',
+                display:
+                  actionTarget.authorAddress === myAddress ? 'none' : 'flex',
               }}
             >
               {actionTargetDnd
@@ -11008,28 +12894,46 @@ export function QortalLand({
             </Button>
             {showGamePicker && actionTarget.authorAddress !== myAddress && (
               <Box sx={{ mt: 0.5 }}>
-                {(['connect-four', 'checkers', 'chess'] as const).map((game) => (
-                  <Button
-                    disabled={!canStartLandGame}
-                    fullWidth
-                    key={game}
-                    onClick={() => {
-                      const target = resolveCurrentLandActionTarget(actionTarget);
-                      if (!target?.destinationHash) return;
-                      setActionTarget(null);
-                      setShowGamePicker(false);
-                      void landGame.challenge({
-                        address: target.authorAddress,
-                        sessionId: target.sessionId,
-                        destinationHash: target.destinationHash,
-                        name: displayNameForAddress(target.authorAddress, primaryNameCacheRef.current),
-                      }, game);
-                    }}
-                    sx={{ color: '#f8fbff', fontSize: 12, justifyContent: 'flex-start', textTransform: 'none' }}
-                  >
-                    {game === 'connect-four' ? 'Qonnect Four' : game === 'checkers' ? 'Checkers' : 'Chess'}
-                  </Button>
-                ))}
+                {(['connect-four', 'checkers', 'chess'] as const).map(
+                  (game) => (
+                    <Button
+                      disabled={!canStartLandGame}
+                      fullWidth
+                      key={game}
+                      onClick={() => {
+                        const target =
+                          resolveCurrentLandActionTarget(actionTarget);
+                        if (!target?.destinationHash) return;
+                        setActionTarget(null);
+                        setShowGamePicker(false);
+                        void landGame.challenge(
+                          {
+                            address: target.authorAddress,
+                            sessionId: target.sessionId,
+                            destinationHash: target.destinationHash,
+                            name: displayNameForAddress(
+                              target.authorAddress,
+                              primaryNameCacheRef.current
+                            ),
+                          },
+                          game
+                        );
+                      }}
+                      sx={{
+                        color: '#f8fbff',
+                        fontSize: 12,
+                        justifyContent: 'flex-start',
+                        textTransform: 'none',
+                      }}
+                    >
+                      {game === 'connect-four'
+                        ? 'Qonnect Four'
+                        : game === 'checkers'
+                          ? 'Checkers'
+                          : 'Chess'}
+                    </Button>
+                  )
+                )}
               </Box>
             )}
           </Box>
@@ -11177,10 +13081,21 @@ export function QortalLand({
             <CallRoundedIcon fontSize="small" />
           </Box>
           <Box sx={{ minWidth: 0 }}>
-            <Typography sx={{ color: theme.palette.text.primary, fontSize: 13, fontWeight: 800 }}>
+            <Typography
+              sx={{
+                color: theme.palette.text.primary,
+                fontSize: 13,
+                fontWeight: 800,
+              }}
+            >
               {activeLandCallPeerName || 'QortalLand call'}
             </Typography>
-            <Typography sx={{ color: alpha(theme.palette.text.secondary, 0.92), fontSize: 11 }}>
+            <Typography
+              sx={{
+                color: alpha(theme.palette.text.secondary, 0.92),
+                fontSize: 11,
+              }}
+            >
               {activeLandCallSubtitle}
             </Typography>
           </Box>
@@ -11230,8 +13145,12 @@ export function QortalLand({
         >
           <PaidRoundedIcon sx={{ color: '#ffcf5a' }} />
           <Box>
-            <Typography sx={{ fontSize: 17, fontWeight: 800 }}>Send QORT</Typography>
-            <Typography sx={{ color: theme.palette.text.secondary, fontSize: 12 }}>
+            <Typography sx={{ fontSize: 17, fontWeight: 800 }}>
+              Send QORT
+            </Typography>
+            <Typography
+              sx={{ color: theme.palette.text.secondary, fontSize: 12 }}
+            >
               To {sendQortTargetName || 'player'}
             </Typography>
           </Box>
@@ -11246,18 +13165,32 @@ export function QortalLand({
               padding: '10px 12px',
             }}
           >
-            <Typography sx={{ color: theme.palette.text.secondary, fontSize: 11 }}>
+            <Typography
+              sx={{ color: theme.palette.text.secondary, fontSize: 11 }}
+            >
               Recipient
             </Typography>
             <Typography sx={{ fontSize: 14, fontWeight: 800 }}>
               {sendQortTargetName || '-'}
             </Typography>
-            <Typography sx={{ color: alpha(theme.palette.text.secondary, 0.85), fontSize: 11 }}>
+            <Typography
+              sx={{
+                color: alpha(theme.palette.text.secondary, 0.85),
+                fontSize: 11,
+              }}
+            >
               {sendQortTarget?.authorAddress || ''}
             </Typography>
           </Box>
-          <Typography sx={{ color: theme.palette.text.secondary, fontSize: 12, marginBottom: 1 }}>
-            Balance: <Box component="span" sx={{ color: '#ffe59b', fontWeight: 800 }}>
+          <Typography
+            sx={{
+              color: theme.palette.text.secondary,
+              fontSize: 12,
+              marginBottom: 1,
+            }}
+          >
+            Balance:{' '}
+            <Box component="span" sx={{ color: '#ffe59b', fontWeight: 800 }}>
               {formatQortAmount(qortBalance)} QORT
             </Box>
           </Typography>
@@ -11270,10 +13203,16 @@ export function QortalLand({
                   if (sendQortError) setSendQortError('');
                 }}
                 sx={{
-                  backgroundColor: sendQortAmount === amount ? alpha('#ffcf5a', 0.24) : alpha('#fff', 0.06),
+                  backgroundColor:
+                    sendQortAmount === amount
+                      ? alpha('#ffcf5a', 0.24)
+                      : alpha('#fff', 0.06),
                   border: `1px solid ${sendQortAmount === amount ? alpha('#ffcf5a', 0.52) : alpha('#fff', 0.1)}`,
                   borderRadius: '8px',
-                  color: sendQortAmount === amount ? '#ffe59b' : theme.palette.text.primary,
+                  color:
+                    sendQortAmount === amount
+                      ? '#ffe59b'
+                      : theme.palette.text.primary,
                   flex: 1,
                   fontWeight: 800,
                   minWidth: 0,
@@ -11292,7 +13231,9 @@ export function QortalLand({
                 if (sendQortError) setSendQortError('');
               }}
               sx={{
-                backgroundColor: !['1', '5', '10'].includes(sendQortAmount) ? alpha('#2cf8ff', 0.12) : alpha('#fff', 0.06),
+                backgroundColor: !['1', '5', '10'].includes(sendQortAmount)
+                  ? alpha('#2cf8ff', 0.12)
+                  : alpha('#fff', 0.06),
                 border: `1px solid ${!['1', '5', '10'].includes(sendQortAmount) ? alpha('#2cf8ff', 0.34) : alpha('#fff', 0.1)}`,
                 borderRadius: '8px',
                 color: theme.palette.text.primary,
@@ -11315,7 +13256,9 @@ export function QortalLand({
             type="number"
             value={sendQortAmount}
             InputProps={{
-              endAdornment: <InputAdornment position="end">QORT</InputAdornment>,
+              endAdornment: (
+                <InputAdornment position="end">QORT</InputAdornment>
+              ),
             }}
             onChange={(event) => {
               setSendQortAmount(event.target.value);
@@ -11325,12 +13268,15 @@ export function QortalLand({
           />
           <Typography
             sx={{
-              color: sendQortError ? theme.palette.error.light : theme.palette.text.secondary,
+              color: sendQortError
+                ? theme.palette.error.light
+                : theme.palette.text.secondary,
               fontSize: 12,
               lineHeight: 1.45,
             }}
           >
-            {sendQortError || 'Click Send QORT to submit the payment. The room animation is sent after it succeeds.'}
+            {sendQortError ||
+              'Click Send QORT to submit the payment. The room animation is sent after it succeeds.'}
           </Typography>
         </DialogContent>
         <DialogActions sx={{ padding: '12px 20px 18px' }}>
@@ -11388,14 +13334,24 @@ export function QortalLand({
         >
           <CallRoundedIcon sx={{ color: '#9ffcff' }} />
           <Box>
-            <Typography sx={{ fontSize: 17, fontWeight: 800 }}>Incoming Call</Typography>
-            <Typography sx={{ color: theme.palette.text.secondary, fontSize: 12 }}>
+            <Typography sx={{ fontSize: 17, fontWeight: 800 }}>
+              Incoming Call
+            </Typography>
+            <Typography
+              sx={{ color: theme.palette.text.secondary, fontSize: 12 }}
+            >
               {incomingLandCallName || 'QortalLand player'}
             </Typography>
           </Box>
         </DialogTitle>
         <DialogContent sx={{ padding: '10px 20px 4px' }}>
-          <Typography sx={{ color: theme.palette.text.secondary, fontSize: 13, lineHeight: 1.45 }}>
+          <Typography
+            sx={{
+              color: theme.palette.text.secondary,
+              fontSize: 13,
+              lineHeight: 1.45,
+            }}
+          >
             Accept this QortalLand voice call?
           </Typography>
         </DialogContent>
@@ -11447,7 +13403,9 @@ export function QortalLand({
             zIndex: 3,
           }}
         >
-          <Typography sx={{ color: theme.palette.text.secondary, fontSize: 14 }}>
+          <Typography
+            sx={{ color: theme.palette.text.secondary, fontSize: 14 }}
+          >
             Reticulum chat is disabled
           </Typography>
         </Box>

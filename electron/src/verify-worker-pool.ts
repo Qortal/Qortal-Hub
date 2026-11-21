@@ -17,7 +17,10 @@ const WORKER_FILENAME = 'ed25519-verify.worker.js';
 export function resolveEd25519WorkerPath(): string {
   const inAsar = __dirname.includes('app.asar');
   if (inAsar) {
-    const unpackedDir = __dirname.replace(/app\.asar(\/|\\)/, 'app.asar.unpacked$1');
+    const unpackedDir = __dirname.replace(
+      /app\.asar(\/|\\)/,
+      'app.asar.unpacked$1'
+    );
     const unpackedPath = path.join(unpackedDir, WORKER_FILENAME);
     if (fs.existsSync(unpackedPath)) return unpackedPath;
   }
@@ -152,7 +155,10 @@ export class VerifyWorkerPool {
     const idx = this.workers.indexOf(w);
     if (idx >= 0) this.workers.splice(idx, 1);
     if (code !== 0) {
-      loggerError(`[VerifyPool:${this.label}] Worker exited abnormally, code:`, code);
+      loggerError(
+        `[VerifyPool:${this.label}] Worker exited abnormally, code:`,
+        code
+      );
     }
     if (this.workers.length === 0 && this.pending.size > 0) {
       loggerLog(

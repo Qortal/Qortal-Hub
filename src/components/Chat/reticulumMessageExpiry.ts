@@ -58,9 +58,10 @@ function normalizeMessageExpiryOption(value: unknown): number | undefined {
 }
 
 export function resolveReticulumPreferredMessageExpiryDurationMs(
-  preferredDurationMs: number | undefined,
+  preferredDurationMs: number | null | undefined,
   channelExpiryDurationMs?: number
-): number | undefined {
+): number | null | undefined {
+  if (preferredDurationMs === null) return null;
   const preferredDuration = normalizeMessageExpiryOption(preferredDurationMs);
   return preferredDuration !== undefined &&
     isReticulumMessageExpiryOptionAllowed(
@@ -73,7 +74,8 @@ export function resolveReticulumPreferredMessageExpiryDurationMs(
 
 export function reticulumMessageExpiryPreferenceStorageKey(
   accountAddress: string,
-  groupId: number | string
+  groupId: number | string,
+  channelId?: string
 ): string | null {
   const normalizedAddress = String(accountAddress || '')
     .trim()
@@ -86,26 +88,35 @@ export function reticulumMessageExpiryPreferenceStorageKey(
   ) {
     return null;
   }
+  const channelSuffix = channelId
+    ? `:${encodeURIComponent(String(channelId).toLowerCase())}`
+    : '';
   return `${RETICULUM_EXPIRY_PREFERENCE_STORAGE_PREFIX}:${encodeURIComponent(
     normalizedAddress
-  )}:${normalizedGroupId}`;
+  )}:${normalizedGroupId}${channelSuffix}`;
 }
+
+const RETICULUM_EXPIRY_PREFERENCE_SENTINEL_NULL = '__null__';
 
 export function loadReticulumMessageExpiryPreference(
   accountAddress: string,
   groupId: number | string,
+  channelId?: string,
   storage?: Pick<Storage, 'getItem'>
-): number | undefined {
+): number | null | undefined {
   const key = reticulumMessageExpiryPreferenceStorageKey(
     accountAddress,
-    groupId
+    groupId,
+    channelId
   );
   if (!key) return undefined;
   try {
     const resolvedStorage =
       storage ??
       (typeof window === 'undefined' ? undefined : window.localStorage);
-    return normalizeMessageExpiryOption(resolvedStorage?.getItem(key));
+    const raw = resolvedStorage?.getItem(key);
+    if (raw === RETICULUM_EXPIRY_PREFERENCE_SENTINEL_NULL) return null;
+    return normalizeMessageExpiryOption(raw);
   } catch {
     return undefined;
   }
@@ -114,12 +125,14 @@ export function loadReticulumMessageExpiryPreference(
 export function saveReticulumMessageExpiryPreference(
   accountAddress: string,
   groupId: number | string,
-  durationMs: number | undefined,
+  durationMs: number | null | undefined,
+  channelId?: string,
   storage?: Pick<Storage, 'removeItem' | 'setItem'>
 ): boolean {
   const key = reticulumMessageExpiryPreferenceStorageKey(
     accountAddress,
-    groupId
+    groupId,
+    channelId
   );
   if (!key) return false;
   try {
@@ -127,11 +140,15 @@ export function saveReticulumMessageExpiryPreference(
       storage ??
       (typeof window === 'undefined' ? undefined : window.localStorage);
     if (!resolvedStorage) return false;
-    const normalizedDuration = normalizeMessageExpiryOption(durationMs);
-    if (normalizedDuration === undefined) {
-      resolvedStorage.removeItem(key);
+    if (durationMs === null) {
+      resolvedStorage.setItem(key, RETICULUM_EXPIRY_PREFERENCE_SENTINEL_NULL);
     } else {
-      resolvedStorage.setItem(key, String(normalizedDuration));
+      const normalizedDuration = normalizeMessageExpiryOption(durationMs);
+      if (normalizedDuration === undefined) {
+        resolvedStorage.removeItem(key);
+      } else {
+        resolvedStorage.setItem(key, String(normalizedDuration));
+      }
     }
     return true;
   } catch {
@@ -175,9 +192,10 @@ export function isReticulumMessageExpiryOptionAllowed(
 }
 
 export function resolveReticulumMessageExpiryDurationMs(
-  selectedDurationMs: number | undefined,
+  selectedDurationMs: number | null | undefined,
   channelExpiryDurationMs?: number
-): number | undefined {
+): number | null | undefined {
+  if (selectedDurationMs === null) return null;
   if (selectedDurationMs === undefined) return undefined;
   return isReticulumMessageExpiryOptionAllowed(
     selectedDurationMs,
@@ -188,9 +206,10 @@ export function resolveReticulumMessageExpiryDurationMs(
 }
 
 export function buildReticulumMessageExpiryPayload(
-  selectedDurationMs: number | undefined,
+  selectedDurationMs: number | null | undefined,
   channelExpiryDurationMs?: number
 ): { expiryDurationMs?: number } {
+  if (selectedDurationMs === null) return { expiryDurationMs: 0 };
   const expiryDurationMs = resolveReticulumMessageExpiryDurationMs(
     selectedDurationMs,
     channelExpiryDurationMs

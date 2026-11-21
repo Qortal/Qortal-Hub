@@ -8,7 +8,7 @@ This document captures **long-horizon** work referenced by the group audio quali
 
 **Directions to evaluate:**
 
-1. **Opaque relay earlier:** Forward encrypted media frames without decode on the hot path where policy allows, so the forwarder’s decode budget scales with *local* playback only.
+1. **Opaque relay earlier:** Forward encrypted media frames without decode on the hot path where policy allows, so the forwarder’s decode budget scales with _local_ playback only.
 2. **Hierarchical topology:** For larger rooms, rely on cluster forwarders so no single peer fans out to the entire mesh (see existing hierarchical topology for 11–50 participants).
 3. **Standby promotion:** Ensure promotion/demotion minimizes unnecessary media session resets (metrics: `clusterForwarderDemotionCount`, etc.).
 

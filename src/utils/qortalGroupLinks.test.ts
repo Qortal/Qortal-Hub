@@ -7,9 +7,7 @@ import {
 describe('Qortal use-group links', () => {
   it('preserves the existing group join format', () => {
     expect(
-      parseQortalUseGroupLink(
-        'qortal://use-group/action-join/groupid-1143'
-      )
+      parseQortalUseGroupLink('qortal://use-group/action-join/groupid-1143')
     ).toEqual({ action: 'join', groupId: 1143 });
   });
 

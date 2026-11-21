@@ -21,6 +21,16 @@
     "sign_failed": "无法签名 Reticulum 聊天事件",
     "welcome_failed": "Reticulum 欢迎消息发布失败"
   },
+  "context_menu": {
+    "clipboard_permission_denied": "无法访问剪贴板",
+    "copy": "复制",
+    "copy_shortcut": "复制\tCtrl+C",
+    "cut": "剪切",
+    "cut_shortcut": "剪切\tCtrl+X",
+    "no_suggestions": "无建议",
+    "paste": "粘贴",
+    "paste_shortcut": "粘贴\tCtrl+V"
+  },
   "copy_invite_link": "复制邀请链接",
   "discussion": {
     "choose_emoji": "choose emoji",
@@ -118,6 +128,10 @@
     "enter_qortal_land": "进入 Qortal Land",
     "return_to_chat": "返回聊天"
   },
+  "notification": {
+    "someone": "有人",
+    "welcome_joined": "{{name}}加入了{{groupName}}群组"
+  },
   "onboarding": {
     "find_communities": "寻找社区",
     "invite_error_invalid": "这似乎不是有效的 Qortal 群组邀请链接。",
@@ -203,15 +217,20 @@
     "nav": {
       "mentions": "提及",
       "messages": "消息",
+      "notifications": "Notifications",
       "text_size": "文字大小",
       "threads": "Threads"
     },
     "notifications": {
+      "apply_button": "Apply to All Groups",
+      "delivery_ephemeral_tooltip": "Ephemeral notifications are gone forever after the preview disappears.",
+      "delivery_native_tooltip": "Push notifications go into your OS Notification Manager after the preview disappears.",
       "description": "在 Hub 通知面板中显示 Reticulum Q-Chat 的提及。普通未读消息不会产生 Hub 通知。",
       "mentions": {
         "description": "当有人在频道中提及我时通知我。",
         "label": "提及通知"
       },
+      "revert_button": "Revert to Defaults",
       "title": "通知"
     },
     "text_size": {

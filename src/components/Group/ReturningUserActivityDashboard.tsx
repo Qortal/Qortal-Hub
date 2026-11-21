@@ -16,13 +16,18 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { getBaseApiReact } from '../../App';
-import { groupsOwnerNamesAtom } from '../../atoms/global';
+import {
+  groupsOwnerNamesAtom,
+  notificationSettingsCacheAtom,
+  globalNotificationFormAtom,
+} from '../../atoms/global';
 import {
   orderReticulumGroups,
   readReticulumGroupOrder,
   subscribeToReticulumGroupOrder,
 } from './reticulumGroupRail';
 import { QChatWhatsNewDialog } from './QChatWhatsNewDialog';
+import { getGroupUnreadCountConsideringMute } from '../../utils/qChatNotificationSettings';
 
 const RETICULUM_NOTIFICATION_RED = '#f23f42';
 const RETICULUM_UNREAD_BLUE = '#168bff';
@@ -236,6 +241,8 @@ export function ReturningUserActivityDashboard({
     string,
     string | undefined
   >;
+  const muteCache = useAtomValue(notificationSettingsCacheAtom);
+  const globalNotifForm = useAtomValue(globalNotificationFormAtom);
   const [manualGroupOrder, setManualGroupOrder] = useState(
     readReticulumGroupOrder
   );
@@ -251,7 +258,16 @@ export function ReturningUserActivityDashboard({
         const groupId = String(group?.groupId ?? '');
         if (!groupId || groupId === '0') return null;
         const summary = group?.reticulumChatSummary;
-        const newMessageCount = Math.max(0, Number(summary?.unreadCount) || 0);
+        const groupSettings = muteCache[groupId];
+        const newMessageCount = Math.max(
+          0,
+          getGroupUnreadCountConsideringMute(
+            groupSettings,
+            summary,
+            0,
+            globalNotifForm
+          )
+        );
         const mentionCount = Math.max(0, Number(summary?.mentionCount) || 0);
         if (newMessageCount === 0 && mentionCount === 0) return null;
         const name =

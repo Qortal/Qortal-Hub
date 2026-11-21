@@ -21,6 +21,16 @@
     "sign_failed": "Impossible de signer l'événement du chat Reticulum",
     "welcome_failed": "Échec de la publication du message de bienvenue Reticulum"
   },
+  "context_menu": {
+    "clipboard_permission_denied": "Impossible d'accéder au presse-papiers",
+    "copy": "Copier",
+    "copy_shortcut": "Copier\tCtrl+C",
+    "cut": "Couper",
+    "cut_shortcut": "Couper\tCtrl+X",
+    "no_suggestions": "Aucune suggestion",
+    "paste": "Coller",
+    "paste_shortcut": "Coller\tCtrl+V"
+  },
   "copy_invite_link": "copier le lien d'invitation",
   "discussion": {
     "choose_emoji": "choose emoji",
@@ -118,6 +128,10 @@
     "enter_qortal_land": "Entrer dans Qortal Land",
     "return_to_chat": "Retour au chat"
   },
+  "notification": {
+    "someone": "quelqu'un",
+    "welcome_joined": "{{name}} a rejoint le groupe {{groupName}}"
+  },
   "onboarding": {
     "find_communities": "Trouver des communautés",
     "invite_error_invalid": "Cela ne ressemble pas à un lien d'invitation de groupe Qortal valide.",
@@ -203,15 +217,20 @@
     "nav": {
       "mentions": "Mentions",
       "messages": "Messages",
+      "notifications": "Notifications",
       "text_size": "Taille du texte",
       "threads": "Threads"
     },
     "notifications": {
+      "apply_button": "Apply to All Groups",
+      "delivery_ephemeral_tooltip": "Ephemeral notifications are gone forever after the preview disappears.",
+      "delivery_native_tooltip": "Push notifications go into your OS Notification Manager after the preview disappears.",
       "description": "Afficher les mentions de Reticulum Q-Chat dans le panneau de notifications du Hub. Les messages non lus ordinaires ne créent pas de notifications du Hub.",
       "mentions": {
         "description": "M'alerter lorsque quelqu'un me mentionne dans un canal.",
         "label": "Notifications de mention"
       },
+      "revert_button": "Revert to Defaults",
       "title": "Notifications"
     },
     "text_size": {

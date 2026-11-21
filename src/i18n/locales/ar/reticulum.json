@@ -21,6 +21,16 @@
     "sign_failed": "تعذّر توقيع حدث دردشة Reticulum",
     "welcome_failed": "فشل نشر ترحيب Reticulum"
   },
+  "context_menu": {
+    "clipboard_permission_denied": "تعذر الوصول إلى الحافظة",
+    "copy": "نسخ",
+    "copy_shortcut": "نسخ\tCtrl+C",
+    "cut": "قص",
+    "cut_shortcut": "قص\tCtrl+X",
+    "no_suggestions": "لا توجد اقتراحات",
+    "paste": "لصق",
+    "paste_shortcut": "لصق\tCtrl+V"
+  },
   "copy_invite_link": "نسخ رابط الدعوة",
   "discussion": {
     "choose_emoji": "choose emoji",
@@ -118,6 +128,10 @@
     "enter_qortal_land": "ادخل إلى Qortal Land",
     "return_to_chat": "العودة إلى المحادثة"
   },
+  "notification": {
+    "someone": "أحد الأعضاء",
+    "welcome_joined": "انضم {{name}} إلى مجموعة {{groupName}}"
+  },
   "onboarding": {
     "find_communities": "اكتشف المجتمعات",
     "invite_error_invalid": "لا يبدو أن هذا رابط دعوة صالح إلى جروب Qortal.",
@@ -203,15 +217,20 @@
     "nav": {
       "mentions": "الإشارات",
       "messages": "الرسائل",
+      "notifications": "Notifications",
       "text_size": "حجم النص",
       "threads": "Threads"
     },
     "notifications": {
+      "apply_button": "Apply to All Groups",
+      "delivery_ephemeral_tooltip": "Ephemeral notifications are gone forever after the preview disappears.",
+      "delivery_native_tooltip": "Push notifications go into your OS Notification Manager after the preview disappears.",
       "description": "إظهار إشارات Reticulum Q-Chat في لوحة إشعارات Hub. الرسائل غير المقروءة العادية لا تنشئ إشعارات في Hub.",
       "mentions": {
         "description": "نبّهني عندما يشير إليّ أحد في قناة.",
         "label": "إشعارات الإشارات"
       },
+      "revert_button": "Revert to Defaults",
       "title": "الإشعارات"
     },
     "text_size": {
