@@ -29,6 +29,7 @@ import { getFee } from '../background/background.ts';
 import { QORTAL_PROTOCOL } from '../constants/constants.ts';
 import { CustomizedSnackbars } from './Snackbar/Snackbar';
 import { GroupScoreBadge } from './Group/ReticulumGroupLevel';
+import { replyFailureMessage } from './Group/messageChannelReply';
 import { NotificationSettingsSubmenu } from './NotificationSettingsSubmenu';
 import { MuteSubmenu } from './MuteSubmenu';
 import { SortGroupsSubmenu } from './Group/SortGroupsSubmenu';
@@ -284,15 +285,10 @@ export const ContextMenu = ({
         groupId: displayedGroupInfo.groupId,
       });
       // A failed payload arrives as `{ error: undefined, message }`. Testing for
-      // the key path only read that as success and threw Error(undefined). Match
-      // the message path the rest of the codebase uses.
-      const failed = response as
-        | { error?: string; message?: string }
-        | null
-        | undefined;
-      if (failed && (failed.error || failed.message)) {
-        throw new Error(failed.error || failed.message);
-      }
+      // the key path alone read that as success and threw Error(undefined); the
+      // shared helper checks both and is tested.
+      const failure = replyFailureMessage(response);
+      if (failure) throw new Error(failure);
       setTxList((previous) => [
         {
           ...(typeof response === 'object' && response ? response : {}),

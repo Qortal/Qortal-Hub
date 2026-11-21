@@ -91,7 +91,7 @@ import {
   groupHasUnreadConsideringMute,
   getGroupUnreadCountConsideringMute,
   getWelcomeUnreadCount,
-  resolveEffectiveWelcomeUnread,
+  shouldShowMentionBadge,
   DEFAULT_NOTIFICATION_SETTINGS,
   applyNotificationSettingsToAllGroups,
   setGlobalNotificationSettings,
@@ -2132,20 +2132,16 @@ const GroupItem = memo(
     // Welcome posts nobody has read must not mask a real @mention. Subtracting
     // the welcome count by hand is wrong at the boundary: one stale welcome id
     // from another device makes `1 - 1 > 0` false and the mention badge
-    // disappears. `resolveEffectiveWelcomeUnread` is the clamp the rest of the
-    // codebase uses: it answers 0 when the welcome set covers everything, so
-    // nothing is subtracted and the mention survives.
-    const effectiveWelcomeUnread = resolveEffectiveWelcomeUnread(
+    // disappears. The decision lives in `shouldShowMentionBadge` so it can be
+    // tested without mounting the row; it applies the same clamp the rest of the
+    // codebase uses.
+    const hasReticulumMention = shouldShowMentionBadge({
+      hasUnreadMention: group?.reticulumChatSummary?.hasUnreadMention,
+      mentionCount: group?.reticulumChatSummary?.mentionCount,
+      notifyOnWelcomePosts,
       welcomeUnreadCount,
-      Number(group?.reticulumChatSummary?.unreadCount || 0)
-    );
-    const hasReticulumMention =
-      (group?.reticulumChatSummary?.hasUnreadMention === true ||
-        (group?.reticulumChatSummary?.mentionCount ?? 0) > 0) &&
-      (notifyOnWelcomePosts ||
-        (group?.reticulumChatSummary?.mentionCount ?? 0) -
-          effectiveWelcomeUnread >
-          0);
+      unreadCount: group?.reticulumChatSummary?.unreadCount,
+    });
     // `isGroupMuted` used to be computed here and never read. It also called
     // isScopeMuted + groupHasUnreadConsideringMute on every row, on every
     // render, for a value nothing consumed — which defeated `memo` on this item.

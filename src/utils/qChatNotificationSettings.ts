@@ -950,6 +950,37 @@ export function resolveEffectiveWelcomeUnread(
  * Determines whether a group should show its red unread dot, considering
  * per-channel mute state.
  */
+/**
+ * Whether a group's row should show its @mention badge.
+ *
+ * This is the decision `GroupList`'s rail makes, lifted out so it can be tested
+ * without mounting the row. It exists because the row used to subtract the
+ * welcome count by hand (`mentionCount - welcomeUnreadCount > 0`), which is
+ * wrong at the boundary: one stale welcome id from another device makes
+ * `1 - 1 > 0` false and a real mention badge disappears. Use the shared clamp.
+ *
+ * When welcome posts are meant to notify, the welcome set is irrelevant and any
+ * unread mention counts. When they are muted, only the mentions beyond the
+ * welcome set count.
+ */
+export function shouldShowMentionBadge(input: {
+  hasUnreadMention?: boolean;
+  mentionCount?: number;
+  notifyOnWelcomePosts?: boolean;
+  welcomeUnreadCount?: number;
+  unreadCount?: number;
+}): boolean {
+  const hasMention =
+    input?.hasUnreadMention === true || Number(input?.mentionCount ?? 0) > 0;
+  if (!hasMention) return false;
+  if (input?.notifyOnWelcomePosts !== false) return true;
+  const effectiveWelcome = resolveEffectiveWelcomeUnread(
+    input?.welcomeUnreadCount,
+    Number(input?.unreadCount ?? 0)
+  );
+  return Number(input?.mentionCount ?? 0) - effectiveWelcome > 0;
+}
+
 export function groupHasUnreadConsideringMute(
   groupStore: GroupNotificationStore | undefined,
   summary: any,

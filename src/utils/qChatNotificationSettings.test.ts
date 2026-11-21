@@ -29,6 +29,7 @@ import {
   getEffectiveUnreadCount,
   reconcileWelcomeUnreadForGroup,
   resolveEffectiveWelcomeUnread,
+  shouldShowMentionBadge,
   DEFAULT_NOTIFICATION_SETTINGS,
   GLOBAL_SETTINGS_KEY,
   type EffectiveNotificationSettings,
@@ -1418,5 +1419,86 @@ describe('resolveEffectiveWelcomeUnread', () => {
 
   it('never returns a negative number', () => {
     expect(resolveEffectiveWelcomeUnread(-3, 5)).toBe(0);
+  });
+});
+
+describe('shouldShowMentionBadge', () => {
+  // The decision GroupList's rail row makes. It has to use the same clamp as the
+  // rest of the codebase: hand-rolled subtraction of the welcome count is wrong
+  // at the boundary, where one stale welcome id from another device makes
+  // `1 - 1 > 0` false and a real @mention badge disappears.
+  const noWelcome = 0;
+
+  it('shows for a real mention when welcome posts notify', () => {
+    expect(
+      shouldShowMentionBadge({
+        hasUnreadMention: true,
+        mentionCount: 1,
+        notifyOnWelcomePosts: true,
+        welcomeUnreadCount: noWelcome,
+        unreadCount: 1,
+      })
+    ).toBe(true);
+  });
+
+  it('shows a real mention even when a stale welcome id covers the total', () => {
+    // The defect: mentionCount 1, unreadCount 1, one welcome id -> hand-rolled
+    // `1 - 1 > 0` is false, so the mention badge vanished. The clamp answers 0,
+    // nothing is subtracted, and the mention survives.
+    expect(
+      shouldShowMentionBadge({
+        hasUnreadMention: true,
+        mentionCount: 1,
+        notifyOnWelcomePosts: false,
+        welcomeUnreadCount: 1,
+        unreadCount: 1,
+      })
+    ).toBe(true);
+  });
+
+  it('hides when the mention is inside the welcome set and welcome posts are muted', () => {
+    // A welcome id is set below the total unread, so it is unambiguous: the
+    // clamp subtracts it, the single mention is that welcome post, and the user
+    // asked not to be told about welcome posts.
+    expect(
+      shouldShowMentionBadge({
+        hasUnreadMention: true,
+        mentionCount: 1,
+        notifyOnWelcomePosts: false,
+        welcomeUnreadCount: 1,
+        unreadCount: 3,
+      })
+    ).toBe(false);
+  });
+
+  it('still shows when the welcome set covers everything, because that reading is ambiguous', () => {
+    // welcomeCount >= totalUnread cannot be told apart from a stale welcome id
+    // masking a real mention, so the clamp subtracts nothing and the badge
+    // shows. Erring the other way is the bug this function exists to prevent.
+    expect(
+      shouldShowMentionBadge({
+        hasUnreadMention: true,
+        mentionCount: 1,
+        notifyOnWelcomePosts: false,
+        welcomeUnreadCount: 2,
+        unreadCount: 2,
+      })
+    ).toBe(true);
+  });
+
+  it('is false with no mention at all', () => {
+    expect(
+      shouldShowMentionBadge({
+        hasUnreadMention: false,
+        mentionCount: 0,
+        notifyOnWelcomePosts: true,
+        welcomeUnreadCount: noWelcome,
+        unreadCount: 3,
+      })
+    ).toBe(false);
+  });
+
+  it('tolerates missing fields', () => {
+    expect(shouldShowMentionBadge({})).toBe(false);
   });
 });
