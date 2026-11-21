@@ -14,13 +14,7 @@ import {
   toSavedBookmarks,
   toSavedLauncherSettings,
 } from './launcherQdn';
-import {
-  applySavedLauncher,
-  hasUnsavedPins,
-  type LauncherSyncStores,
-  revertToSavedLauncher,
-  type SavedLauncherState,
-} from './launcherQdnSync';
+import { applySavedLauncher, type LauncherSyncStores } from './launcherQdnSync';
 
 const ADDRESS = 'Qaddress';
 
@@ -65,18 +59,6 @@ const savedOf = (
 ): SavedLauncher => ({
   bookmarks: toSavedBookmarks(data(folders, bookmarks)),
   order,
-});
-
-/** What the settings on QDN were last seen to hold. */
-const savedState = (
-  launcher: SavedLauncher | null,
-  savedAt = 100,
-  address: string | null = ADDRESS
-): SavedLauncherState => ({
-  address,
-  status: launcher ? 'saved' : 'none',
-  launcher,
-  savedAt,
 });
 
 /** The stores, with what they were asked to keep. */
@@ -326,105 +308,5 @@ describe('taking in the launcher saved on QDN', () => {
 
     expect(result.use).toBe('merge');
     expect(saved.mark?.unsaved).toBe(false);
-  });
-});
-
-describe('putting the launcher back to what was saved', () => {
-  it('puts back the bookmarks, the folders and the arrangement', async () => {
-    const { saved, stores } = makeStores({
-      local: data([folder('f2', 'Tools')], [bookmark('b2', 'Q-Mail', 'f2')]),
-      view: { order: ['folder:f2'], openFolders: ['f2'] },
-    });
-    const launcher = savedOf(
-      [folder('f1', 'Media')],
-      [bookmark('b1', 'Q-Tube', 'f1')],
-      ['folder:f1']
-    );
-
-    expect(await revertToSavedLauncher(ADDRESS, savedState(launcher), stores)) //
-      .toBe(true);
-
-    expect(saved.bookmarks?.folders.map((entry) => entry.name)).toEqual([
-      'Media',
-    ]);
-    expect(saved.bookmarks?.bookmarks.map((entry) => entry.id)).toEqual(['b1']);
-    expect(saved.view).toEqual({ order: ['folder:f1'], openFolders: ['f2'] });
-    // Back to what is saved: nothing of this device's own is left.
-    expect(saved.mark).toEqual({
-      savedAt: 100,
-      localAt: 999,
-      order: ['folder:f1'],
-      unsaved: false,
-    });
-  });
-
-  it('leaves what is here when the settings hold no launcher', async () => {
-    const { stores } = makeStores({
-      local: data([folder('f2', 'Tools')], []),
-    });
-
-    expect(await revertToSavedLauncher(ADDRESS, savedState(null), stores)) //
-      .toBe(false);
-    expect(stores.saveBookmarks).not.toHaveBeenCalled();
-    expect(stores.setView).not.toHaveBeenCalled();
-  });
-
-  it("leaves what is here when the saved one is another account's", async () => {
-    const { stores } = makeStores();
-    const launcher = savedOf([folder('f1', 'Media')], []);
-
-    expect(
-      await revertToSavedLauncher(
-        ADDRESS,
-        savedState(launcher, 100, 'Qother'),
-        stores
-      )
-    ).toBe(false);
-    expect(stores.saveBookmarks).not.toHaveBeenCalled();
-  });
-});
-
-describe('whether the pins are saved', () => {
-  const pins = [{ name: 'Q-Tube', service: 'APP' }];
-
-  it('is true for a pin list changed since it was saved', () => {
-    expect(
-      hasUnsavedPins({
-        oldPinnedApps: [],
-        pinnedApps: pins,
-        settingsLocalLastUpdated: 200,
-        settingsQdnLastUpdated: 100,
-      })
-    ).toBe(true);
-  });
-
-  it('is false for the same list, or an older local change', () => {
-    expect(
-      hasUnsavedPins({
-        oldPinnedApps: pins,
-        pinnedApps: pins,
-        settingsLocalLastUpdated: 200,
-        settingsQdnLastUpdated: 100,
-      })
-    ).toBe(false);
-    expect(
-      hasUnsavedPins({
-        oldPinnedApps: [],
-        pinnedApps: pins,
-        settingsLocalLastUpdated: 100,
-        settingsQdnLastUpdated: 200,
-      })
-    ).toBe(false);
-  });
-
-  it('is false while the saved settings could not be read', () => {
-    expect(
-      hasUnsavedPins({
-        oldPinnedApps: [],
-        pinnedApps: pins,
-        settingsLocalLastUpdated: 200,
-        settingsQdnLastUpdated: -100,
-      })
-    ).toBe(false);
   });
 });

@@ -1,55 +1,17 @@
-import { useCallback, useMemo } from 'react';
-import { atom, useAtomValue, useSetAtom } from 'jotai';
-import isEqual from 'lodash/isEqual';
-import {
-  oldPinnedAppsAtom,
-  settingsLocalLastUpdatedAtom,
-  settingsQDNLastUpdatedAtom,
-  sortablePinnedAppsAtom,
-} from '../../../atoms/global';
-import {
-  type PinnedApp,
-  serializePinnedAppsForQdn,
-} from '../../../utils/pinnedAppsSettings';
-import {
-  loadBookmarksForAddress,
-  saveBookmarksForAddress,
-} from '../AppBookmarks/bookmarkStorage';
+import { useCallback } from 'react';
+import { atom, useSetAtom } from 'jotai';
 import type { AppBookmarksForAddress } from '../AppBookmarks/bookmarkTypes';
-import { type LauncherView, loadLauncherView } from './launcherItems';
+import type { LauncherView } from './launcherItems';
 import {
   chooseSavedLauncherUse,
   currentSavedLauncher,
   fromSavedBookmarks,
   type LauncherSyncMark,
-  loadLauncherSyncMark,
   mergeSavedLauncher,
   readSavedLauncher,
   sameSavedLauncher,
   type SavedLauncher,
-  saveLauncherSyncMark,
 } from './launcherQdn';
-import { useLauncherView, useSetLauncherViewOf } from './useLauncherView';
-
-/** What the account's settings on QDN hold for the launcher, as last seen. */
-export type SavedLauncherState = {
-  address: string | null;
-  /**
-   * `unknown` until the settings were read; `none` when there are none, or
-   * they hold no launcher; `saved` with what they hold.
-   */
-  status: 'unknown' | 'none' | 'saved';
-  launcher: SavedLauncher | null;
-  /** The time of those settings on QDN, or 0. */
-  savedAt: number;
-};
-
-export const savedLauncherAtom = atom<SavedLauncherState>({
-  address: null,
-  status: 'unknown',
-  launcher: null,
-  savedAt: 0,
-});
 
 /** How many changes were made on the launcher in this session. */
 export const launcherEditsAtom = atom<{
@@ -89,9 +51,11 @@ export type TakeInResult = {
 };
 
 /**
- * Takes in the launcher part of the account's QDN settings: this device keeps
- * what it has, puts the saved launcher in its place, or merges the two, as
- * `chooseSavedLauncherUse` decides.
+ * Takes in the launcher part of the account's QDN settings (#374's fields):
+ * this device keeps what it has, puts the saved launcher in its place, or
+ * merges the two, as `chooseSavedLauncherUse` decides. Since saved apps
+ * (savedAppsSync.ts) this runs once per account and device, at its first
+ * take-in.
  */
 export async function applySavedLauncher(
   address: string,
@@ -133,178 +97,3 @@ export async function applySavedLauncher(
   });
   return { use, launcher };
 }
-
-/**
- * Puts the launcher back to what the account's settings on QDN hold: the
- * bookmarks, the folders and where the tiles stand. Settings that hold no
- * launcher leave this device's own alone — there is nothing to go back to,
- * since the Hub that saved them did not know about them.
- */
-export async function revertToSavedLauncher(
-  address: string,
-  saved: SavedLauncherState,
-  stores: LauncherSyncStores
-): Promise<boolean> {
-  if (
-    saved.address !== address ||
-    saved.status !== 'saved' ||
-    !saved.launcher
-  ) {
-    return false;
-  }
-  const { launcher } = saved;
-  const view = stores.loadView(address);
-  const stored = await stores.saveBookmarks(
-    address,
-    fromSavedBookmarks(launcher.bookmarks, stores.now())
-  );
-  stores.setView(address, { ...view, order: launcher.order });
-  stores.saveMark(address, {
-    savedAt: saved.savedAt,
-    localAt: stored.updatedAt,
-    order: launcher.order,
-    unsaved: false,
-  });
-  return true;
-}
-
-// One at a time: the login read, a save and Revert all write these stores.
-let running: Promise<unknown> = Promise.resolve();
-
-const oneAtATime = <T>(work: () => Promise<T>): Promise<T> => {
-  const run = running.then(work);
-  running = run.catch(() => undefined);
-  return run;
-};
-
-/** The stores the launcher really uses; tests hand in their own. */
-const liveStores = (
-  setView: (address: string, view: LauncherView) => void
-): LauncherSyncStores => ({
-  loadBookmarks: loadBookmarksForAddress,
-  saveBookmarks: saveBookmarksForAddress,
-  loadView: (account) => loadLauncherView(account),
-  setView,
-  loadMark: (account) => loadLauncherSyncMark(account),
-  saveMark: (account, mark) => saveLauncherSyncMark(account, mark),
-  now: Date.now,
-});
-
-/**
- * Takes in what the account's QDN settings hold for the launcher, and keeps
- * it as what is saved. `found` is null when the account has no settings.
- */
-export const useTakeInSavedLauncher = () => {
-  const setSavedLauncher = useSetAtom(savedLauncherAtom);
-  const setViewOf = useSetLauncherViewOf();
-  const stores = useMemo(() => liveStores(setViewOf), [setViewOf]);
-
-  return useCallback(
-    async (
-      address: string,
-      found: { settings: unknown; savedAt: number } | null
-    ) => {
-      let launcher: SavedLauncher | null = null;
-      const savedAt = found?.savedAt ?? 0;
-      if (found) {
-        ({ launcher } = await oneAtATime(() =>
-          applySavedLauncher(address, found.settings, savedAt, stores)
-        ));
-      }
-      setSavedLauncher((state) =>
-        // Saved here since: QDN may not show it yet.
-        state.address === address && state.savedAt > savedAt
-          ? state
-          : {
-              address,
-              status: launcher ? 'saved' : 'none',
-              launcher,
-              savedAt,
-            }
-      );
-    },
-    [setSavedLauncher, stores]
-  );
-};
-
-/**
- * Puts the launcher back to what is saved on QDN, for Revert. It answers
- * whether there was a saved launcher to go back to.
- */
-export const useRevertSavedLauncher = () => {
-  const saved = useAtomValue(savedLauncherAtom);
-  const setViewOf = useSetLauncherViewOf();
-  const stores = useMemo(() => liveStores(setViewOf), [setViewOf]);
-
-  return useCallback(
-    async (address: string | null | undefined) =>
-      address
-        ? oneAtATime(() => revertToSavedLauncher(address, saved, stores))
-        : false,
-    [saved, stores]
-  );
-};
-
-/** The rule the Save button has always used for the pin list. */
-export const hasUnsavedPins = ({
-  oldPinnedApps,
-  pinnedApps,
-  settingsLocalLastUpdated,
-  settingsQdnLastUpdated,
-}: {
-  oldPinnedApps: PinnedApp[];
-  pinnedApps: PinnedApp[];
-  settingsLocalLastUpdated: number;
-  settingsQdnLastUpdated: number;
-}) =>
-  settingsQdnLastUpdated !== -100 &&
-  settingsQdnLastUpdated < settingsLocalLastUpdated &&
-  !isEqual(
-    serializePinnedAppsForQdn(pinnedApps),
-    serializePinnedAppsForQdn(oldPinnedApps)
-  );
-
-/**
- * Whether the pinned apps, the bookmarks and folders, or the order of the
- * launcher's tiles differ from what is saved on QDN. The bookmarks are those
- * the caller has read; while they are not read, only the pins count.
- */
-export const useHasUnsavedLauncher = (
-  address: string | null | undefined,
-  bookmarks: AppBookmarksForAddress | null
-) => {
-  const pinnedApps = useAtomValue(sortablePinnedAppsAtom);
-  const oldPinnedApps = useAtomValue(oldPinnedAppsAtom);
-  const settingsLocalLastUpdated = useAtomValue(settingsLocalLastUpdatedAtom);
-  const settingsQdnLastUpdated = useAtomValue(settingsQDNLastUpdatedAtom);
-  const saved = useAtomValue(savedLauncherAtom);
-  const [view] = useLauncherView(address);
-
-  return useMemo(() => {
-    const pinsChanged = hasUnsavedPins({
-      oldPinnedApps,
-      pinnedApps,
-      settingsLocalLastUpdated,
-      settingsQdnLastUpdated,
-    });
-    const isKnown =
-      !!address && saved.address === address && saved.status !== 'unknown';
-    const launcherChanged =
-      isKnown &&
-      !!bookmarks &&
-      !sameSavedLauncher(
-        currentSavedLauncher(bookmarks, view.order),
-        saved.launcher
-      );
-    return pinsChanged || launcherChanged;
-  }, [
-    address,
-    bookmarks,
-    oldPinnedApps,
-    pinnedApps,
-    saved,
-    settingsLocalLastUpdated,
-    settingsQdnLastUpdated,
-    view.order,
-  ]);
-};
