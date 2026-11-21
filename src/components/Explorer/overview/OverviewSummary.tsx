@@ -1,9 +1,10 @@
 /**
  * The Overview's first line: the account in one line of facts, "Level 7 ·
  * Minter Admin, in MINTER · owns 3 names · first seen May 2025 · last sent
- * a transaction 3 days ago". Facts still loading show as a short skeleton
- * at the end; a fact that failed is left out here (its own section says
- * so, with Retry). An account that never sent anything has no "last sent".
+ * a transaction 3 days ago". "Owns 3 names" opens the Names tab. Facts
+ * still loading show as a short skeleton at the end; a fact that failed is
+ * left out here (its own section says so, with Retry). An account that
+ * never sent anything has no "last sent".
  */
 import { Fragment } from 'react';
 import { Box, Skeleton, Typography } from '@mui/material';
@@ -16,7 +17,7 @@ import {
 } from '../../../lib/explorer/format';
 import type { BlockAt, LastSent, NamesOf } from '../../../lib/explorer/reads';
 import type { MinterStanding } from '../../../lib/explorer/rules';
-import { cap } from '../parts';
+import { cap, InlineLink } from '../parts';
 
 /** undefined while loading, null when it failed or doesn't apply. */
 type Part<T> = T | null | undefined;
@@ -27,16 +28,19 @@ export function OverviewSummary({
   names,
   firstSeen,
   lastSent,
+  onShowNames,
 }: {
   level: number;
   standing: Part<MinterStanding>;
   names: Part<NamesOf>;
   firstSeen: Part<BlockAt>;
   lastSent: Part<LastSent>;
+  /** Open the Names tab: "owns 3 names" is its link. */
+  onShowNames?: () => void;
 }) {
   const { t, i18n } = useTranslation(['core', 'explorer']);
   const language = i18n.language;
-  const parts: Array<{ key: string; text: string }> = [
+  const parts: Array<{ key: string; text: string; onClick?: () => void }> = [
     {
       key: 'level',
       text: t('core:account_lookup.chip_level', { level, ...cap }),
@@ -60,6 +64,7 @@ export function OverviewSummary({
                 : 'explorer:summary.owns_names',
               { count, shown: formatCount(count, language) }
             ),
+      onClick: count > 0 ? onShowNames : undefined,
     });
   }
   if (firstSeen?.timestamp)
@@ -87,7 +92,13 @@ export function OverviewSummary({
       {parts.map((part, index) => (
         <Fragment key={part.key}>
           {index > 0 ? ' · ' : null}
-          {part.text}
+          {part.onClick ? (
+            <InlineLink type="button" onClick={part.onClick}>
+              {part.text}
+            </InlineLink>
+          ) : (
+            part.text
+          )}
         </Fragment>
       ))}
       {loading ? (

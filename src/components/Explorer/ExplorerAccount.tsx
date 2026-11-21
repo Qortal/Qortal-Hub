@@ -8,7 +8,8 @@
  * is a step of its own: ExplorerWindow opens it in TxView.)
  *
  * An account's page is its header, the trail, then its tabs (AccountTabs):
- * Overview and Transactions. Each tab reads what it shows when it opens.
+ * Overview, Transactions and Names. Each tab reads what it shows when it
+ * opens.
  * Read-only: nothing here writes (Send QORT and Block hand over to Hub's
  * own windows and lists).
  */
@@ -68,6 +69,7 @@ import { MinterSection, MintingSection } from './overview/MinterAndMinting';
 import { NotesSection } from './overview/NotesSection';
 import { LatestTransactions } from './overview/LatestTransactions';
 import { OverviewSummary } from './overview/OverviewSummary';
+import { NamesTab } from './names/NamesTab';
 import {
   cap,
   CopyButton,
@@ -221,6 +223,7 @@ function OverviewTab({
   groups,
   online,
   onShowTransactions,
+  onShowNames,
 }: {
   account: AccountInfo;
   primary: string | null | undefined;
@@ -228,6 +231,7 @@ function OverviewTab({
   groups: ReadState<GroupOf[]>;
   online: ReadState<OnlineShare[]>;
   onShowTransactions: () => void;
+  onShowNames: () => void;
 }) {
   const { address, publicKey } = account;
   const firstSeen = useExplorerRead(firstSeenRead(address));
@@ -244,6 +248,7 @@ function OverviewTab({
         names={part(names)}
         firstSeen={part(firstSeen)}
         lastSent={publicKey ? part(lastSent) : null}
+        onShowNames={onShowNames}
       />
       <AtAGlance
         account={account}
@@ -261,7 +266,9 @@ function OverviewTab({
       <NotesSection
         address={address}
         penalty={account.blocksMintedPenalty}
-        primary={primary ?? null}
+        primary={primary}
+        names={names.data}
+        onShowNames={onShowNames}
       />
       <LatestTransactions address={address} onShowAll={onShowTransactions} />
     </>
@@ -306,6 +313,8 @@ function AccountView({
         render={(tab, open) =>
           tab === 'transactions' ? (
             <TransactionsTab address={address} publicKey={publicKey} />
+          ) : tab === 'names' ? (
+            <NamesTab address={address} names={names} primary={primary} />
           ) : (
             <OverviewTab
               account={account}
@@ -317,6 +326,7 @@ function AccountView({
                 setTxFilter(ALL_TRANSACTIONS);
                 open('transactions');
               }}
+              onShowNames={() => open('names')}
             />
           )
         }

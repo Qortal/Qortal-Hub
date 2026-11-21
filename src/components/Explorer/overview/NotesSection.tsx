@@ -1,18 +1,25 @@
 /**
  * The Overview's notes, only when there are any: a minting penalty the
- * node recorded, and how its primary name is written (like an address,
+ * node recorded, how its primary name is written (like an address,
  * starting or ending like its own address, holding characters a reader
- * can't see). Facts about the spelling, never a judgement of the person.
+ * can't see), and how many of its other names have such notes, as a link
+ * to the Names tab, which shows them. Facts about the spelling, never a
+ * judgement of the person.
  */
 import { Box, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { formatCount } from '../../../lib/explorer/format';
 import {
+  namesWithNotes,
+  type NamesWithNotes,
+} from '../../../lib/explorer/names';
+import type { NamesOf } from '../../../lib/explorer/reads';
+import {
   nameNotes,
   visibleName,
   type NameNote,
 } from '../../../lib/explorer/rules';
-import { cap, isolate, panelSx, Section } from '../parts';
+import { cap, InlineLink, isolate, panelSx, Section } from '../parts';
 
 function noteText(
   note: NameNote,
@@ -49,18 +56,54 @@ function noteText(
   }
 }
 
+/** "2 of its 29 other names have notes", "Its other name has notes", … */
+function otherNamesText(
+  found: NamesWithNotes,
+  t: (key: string, options?: Record<string, unknown>) => string,
+  language: string
+): string {
+  if (found.total === 1)
+    return t(
+      found.besidePrimary
+        ? 'explorer:notes.other_name_only'
+        : 'explorer:notes.only_name',
+      cap
+    );
+  const key = found.besidePrimary
+    ? found.listed
+      ? 'explorer:notes.other_names_listed'
+      : 'explorer:notes.other_names'
+    : found.listed
+      ? 'explorer:notes.names_listed'
+      : 'explorer:notes.names';
+  return t(key, {
+    count: found.withNotes,
+    shown: formatCount(found.withNotes, language),
+    total: formatCount(found.total, language),
+    ...cap,
+  });
+}
+
 export function NotesSection({
   address,
   penalty,
   primary,
+  names,
+  onShowNames,
 }: {
   address: string;
   penalty: number;
-  primary: string | null;
+  /** Its primary name: undefined while it isn't known, null for none. */
+  primary: string | null | undefined;
+  /** Its names, once read. */
+  names: NamesOf | undefined;
+  /** Open the Names tab. */
+  onShowNames: () => void;
 }) {
   const { t, i18n } = useTranslation(['explorer']);
   const notes = primary ? nameNotes(primary, address) : [];
-  if (!penalty && !notes.length) return null;
+  const others = names ? namesWithNotes(names, primary, address) : null;
+  if (!penalty && !notes.length && !others) return null;
   return (
     <Section id="explorer-notes" title={t('explorer:notes.title', cap)}>
       <Box sx={panelSx}>
@@ -93,6 +136,15 @@ export function NotesSection({
                 </li>
               ))
             : null}
+          {others ? (
+            <li>
+              <Typography>
+                <InlineLink type="button" onClick={onShowNames}>
+                  {otherNamesText(others, t, i18n.language)}
+                </InlineLink>
+              </Typography>
+            </li>
+          ) : null}
         </Box>
       </Box>
     </Section>

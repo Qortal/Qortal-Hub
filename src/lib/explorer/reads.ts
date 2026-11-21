@@ -160,9 +160,35 @@ export interface NameData {
   /** The name as registered: the node matches names ignoring case and look-alike letters. */
   name: string;
   owner: string;
+  /** When it was registered (kept through sales and renames), when the record says. */
+  registered?: number;
+  /** When it last changed hands or was updated, when the record says. */
+  updated?: number;
+  /** Listed for sale now. */
+  isForSale?: boolean;
+  /** Its price while for sale (the record keeps the last one after a sale). */
+  salePrice?: string;
 }
 
-/** A name's owner, or null when no one has it. */
+/** A name's record as Core sends it (`/names/<name>`, a row of `/names/search`). */
+function nameRecord(body: unknown): NameData | null {
+  const row = (body ?? {}) as Record<string, unknown>;
+  const name = str(row.name);
+  const owner = str(row.owner);
+  if (!name || !owner) return null;
+  return {
+    name,
+    owner,
+    ...(typeof row.registered === 'number'
+      ? { registered: row.registered }
+      : {}),
+    ...(typeof row.updated === 'number' ? { updated: row.updated } : {}),
+    ...(typeof row.isForSale === 'boolean' ? { isForSale: row.isForSale } : {}),
+    ...(str(row.salePrice) ? { salePrice: row.salePrice as string } : {}),
+  };
+}
+
+/** A name's record (its owner, when it was registered and updated, whether it is for sale), or null when no one has it. */
 export const nameDataRead = (name: string): ReadSpec<NameData | null> => ({
   key: `name:${name}`,
   ttlMs: 10 * MINUTE,
@@ -179,18 +205,13 @@ export const nameDataRead = (name: string): ReadSpec<NameData | null> => ({
           typeof row?.name === 'string' &&
           row.name.toLowerCase() === name.toLowerCase()
       );
-      const owner = str(found?.owner);
-      return found && owner ? { name: found.name, owner } : null;
+      return found ? nameRecord(found) : null;
     }
     try {
-      const body = await getJson<{ name?: unknown; owner?: unknown }>(
-        `/names/${seg(name)}`
-      );
-      const registered = str(body?.name);
-      const owner = str(body?.owner);
-      if (!registered || !owner)
-        throw new CoreHttpError(200, JSON.stringify(body));
-      return { name: registered, owner };
+      const body = await getJson<unknown>(`/names/${seg(name)}`);
+      const record = nameRecord(body);
+      if (!record) throw new CoreHttpError(200, JSON.stringify(body));
+      return record;
     } catch (error) {
       if (isCoreError(error, 404, NAME_UNKNOWN)) return null;
       throw error;

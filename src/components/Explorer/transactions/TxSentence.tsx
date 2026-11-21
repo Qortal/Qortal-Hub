@@ -2,10 +2,10 @@
  * A transaction's sentence on screen, in the reader's language
  * (sentenceText.ts splits the translated sentence at its slots): accounts
  * by their name (or short address) as links that open them in the
- * Explorer, a step on the trail; names, groups and people's own texts
- * isolated (`<bdi>`), so a name written right to left or looking like a
- * label can't change how the line reads; amounts in bold; a transaction it
- * points at as a link to it.
+ * Explorer, a step on the trail; a registered name as a link to its whole
+ * history; names, groups and people's own texts isolated (`<bdi>`), so a
+ * name written right to left or looking like a label can't change how the
+ * line reads; amounts in bold; a transaction it points at as a link to it.
  *
  * `quiet` keeps the links out of the Tab order, for a sentence laid over a
  * list row's button (TxListRow): the row's opened details have the same
@@ -33,6 +33,7 @@ import {
   type TxSlot,
 } from '../../../lib/explorer/txWords';
 import { useExplorer, useExplorerRead } from '../ExplorerContext';
+import { InlineLink } from '../parts';
 import {
   amountText,
   marker,
@@ -61,29 +62,6 @@ export function useAccountName(
   const name = useNearRead(spec, near);
   return address && isAtAddress(address) ? null : name;
 }
-
-/** A link inside a sentence, written like the words around it (in the theme's link colour). */
-const InlineLink = styled('button')(({ theme }) => ({
-  background: 'none',
-  border: 0,
-  color: theme.palette.primary.main,
-  cursor: 'pointer',
-  display: 'inline',
-  font: 'inherit',
-  fontWeight: 600,
-  margin: 0,
-  overflowWrap: 'anywhere',
-  padding: 0,
-  // Over a list row's button, whose words let presses through to it.
-  pointerEvents: 'auto',
-  textAlign: 'inherit',
-  '&:hover': { textDecoration: 'underline' },
-  '&:focus-visible': {
-    borderRadius: 2,
-    outline: `2px solid ${theme.palette.primary.main}`,
-  },
-  '&[data-tx]': { fontFamily: 'monospace', textDecoration: 'underline' },
-}));
 
 /** Someone's own words in a sentence: isolated, in bold. */
 const Isolated = styled('bdi')({ display: 'inline', fontWeight: 600 });
@@ -147,6 +125,25 @@ function GroupSlot({
           ? '?'
           : `#${groupId}`;
   return <Isolated dir="auto">{text}</Isolated>;
+}
+
+/** A registered name, as a link to its whole history (the name step). */
+function NameSlotLink({ name, mode }: { name: string; mode: SentenceMode }) {
+  const { openName } = useExplorer();
+  // Nothing to open: the transaction names none.
+  if (!name) return null;
+  return (
+    <InlineLink
+      type="button"
+      tabIndex={mode === 'quiet' ? -1 : undefined}
+      onClick={(event: MouseEvent) => {
+        event.stopPropagation();
+        openName(name);
+      }}
+    >
+      <bdi dir="auto">{visibleName(name)}</bdi>
+    </InlineLink>
+  );
 }
 
 function TxSlotLink({
@@ -241,6 +238,7 @@ export function SlotView({
     case 'tx':
       return <TxSlotLink signature={slot.signature} mode={mode} />;
     case 'name':
+      return <NameSlotLink name={slot.name} mode={mode} />;
     case 'text':
     case 'asset':
       return <Isolated dir="auto">{slotText(slot, t, i18n.language)}</Isolated>;

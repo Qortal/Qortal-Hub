@@ -20,14 +20,16 @@ step of the trail. A Q-App's `OPEN_USER_LOOKUP` request sends the same event.
 - **An account:** its picture and name, chips (level, Minter Admin or MINTER
   member, Dev Admin, minting now, a minting penalty, blocked), its address and
   public key with Copy, Send QORT and Block (as User search had them), the trail
-  of accounts opened one from another, then its tabs: Overview and
-  Transactions.
+  of accounts opened one from another, then its tabs: Overview, Transactions
+  and Names.
 - **Its Overview:** one line of facts (level, MINTER, names, first seen, last
   sent), At a glance (level and progress, blocks minted, balance, first seen,
   groups, QORT received / sent), its groups, MINTER (with a button to
   Q-Mintership), minting now and the last block it signed, notes on how its
-  primary name is written, and its latest transactions (the newest 5, with a
-  link to the Transactions tab).
+  primary name is written and how many of its other names have such notes, and
+  its latest transactions (the newest 5, with a link to the Transactions tab).
+  "Owns 3 names" in the first line and the line on its other names open the
+  Names tab.
 - **Its Transactions:** everything it did, newest first, each as a sentence
   told from its side ("Sent 15 QORT to Publisher", "Received 2 QORT from
   Second"), with when and in which block. Filters by kind (Payments, Names,
@@ -35,6 +37,16 @@ step of the trail. A Q-App's `OPEN_USER_LOOKUP` request sends the same event.
   kind. What it sent that waits for a block is shown apart. Each row opens to
   its fields, the accounts involved, its raw API answer and "Open
   transaction".
+- **Its Names:** every name it owns, as cards or a list, its primary name
+  first (or in another order: newest or oldest registered, A to Z, Z to A,
+  latest activity), each with its record (when it was registered and last
+  updated, whether it is for sale and at what price), notes on how it is
+  written, what this account did with it, and "Its whole history". Below, the
+  names it had: sold, or renamed to something else, each with who has it now.
+- **A name's whole history** (from a name on the Names tab or in any
+  sentence): its record and owner, then every change to it since it was
+  registered, by every account that had it, each row opening to its fields and
+  the accounts involved.
 - **One transaction** (by its signature): its type, its sentence, its block and
   time (or that it waits for one), the fee, its group approval when it needs
   one, its signature with Copy, the accounts involved, for a group approval the
@@ -111,6 +123,60 @@ as User search showed it.
 - **Names in a row are read once the row nears the screen,** so a long list
   doesn't read every account's name at once.
 
+## Names
+
+- **Its names** are read 100 at a time, up to 500
+  (`/names/address/<address>`, in the order they were registered), shared with
+  the header; past 500 the tab says "500+ names; the first 500 are listed". The
+  tab shows 20 names at first, and "Show more" 20 more (the keyboard goes to
+  the first one added). Each name's record (`/names/<name>`) is read once its
+  card nears the screen. The order, how many are shown and a history shown in
+  full belong to the history step; grid or list is kept on this device
+  (`explorer-names-view`).
+- **Each name's history** comes from the account's name transactions: the
+  Transactions tab's Names kind, one list in the window's cache, so the two
+  never disagree and neither reads it twice. When that list stops short (100
+  at a time, up to 1,000), the tab says so once, over the names, with how many
+  of the names show none for that reason, and reads 100 older on request. A
+  rename belongs to both its old and its new name. "Its whole history" is left
+  out only for a name whose transactions, read in full, are just its
+  registration.
+- **No primary name** says so, with Core's rule: an account gets a primary name
+  when it registers, buys or renames a name while it has none. A primary name
+  past the first 500 listed still comes first. A primary name that couldn't be
+  read says that, with Retry; the names still show, in the node's order.
+- **The names it had** (in its history, not owned now) show only when every
+  name it owns is listed; when its name transactions weren't all read, the
+  section says how many were. Each says what it is now, from its record (the
+  node matches names ignoring case and look-alike letters): no one has it,
+  another account has it, it goes on under another spelling (a rename that
+  changed only its case), or it was registered again since (its record is
+  newer than this account's last transaction about it: another registration).
+  Its whole history is offered only while the registration it had is someone's
+  now: not when no one has it, nor when it was registered again since.
+- **Refresh** reads the names' records and whole histories again too, under
+  any spelling, since names change hands and spelling.
+- **A name's whole history** (`src/lib/explorer/nameLife.ts`) is walked back
+  from its record, since Core has no history by name: the owner's name
+  transactions down to how it got the name (bought it: the seller's come next;
+  renamed an earlier name to it: the same account's, under that name;
+  registered it: the end). Each account is read a page at a time only as far
+  as it takes, at most 1,000 of its name transactions, and an account met
+  again goes on from what was read of it; at most 12 owners and spellings. The
+  page says where it stops short and why, and when the registration found
+  isn't the one the record gives. A name renamed away and registered again is
+  a new registration (Core keeps no link). The walk starts from the name as
+  registered: a name opened as "maple" walks "Maple", and the page says the
+  node matched it. It is one cache entry (`namelife:<name>`), so Refresh on
+  the name's page reads the record and all of it again; the walk and the page
+  share one read of the record.
+- **A name no one has now** has a page of its own ("No one has the name … now",
+  and that a name renamed since goes on under its new name); a failed read of
+  it says so with Retry. "." and ".." are never asked about.
+- **Names in sentences are links** to their whole history, a step of the
+  window; an account opened from a name's page goes on from the trail it was
+  opened from.
+
 ## Rules
 
 - **Read-only.** Public GETs to the node Hub uses, no API key. Send QORT and
@@ -142,12 +208,13 @@ as User search showed it.
 
 ## Code
 
-| Where                                   | What                                                                                                                                                                                                                     |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/lib/explorer/`                     | the reads (`reads.ts`, `accountTx.ts`), the cache, the small rules (`rules.ts`), the transactions' words, kinds and services (`txWords.ts`, `txFamilies.ts`, `qdnServices.ts`, `rawTx.ts`), recent explorations, formats |
-| `src/components/Explorer/`              | the window, start page, account page, header, trail, tabs (`AccountTabs.tsx`) and Overview sections                                                                                                                      |
-| `src/components/Explorer/transactions/` | the Transactions tab, its rows and their sentences, one transaction's page                                                                                                                                               |
-| `src/i18n/locales/<lang>/explorer.json` | its text, in all 12 languages                                                                                                                                                                                            |
+| Where                                   | What                                                                                                                                                                                                                                                                                    |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/explorer/`                     | the reads (`reads.ts`, `accountTx.ts`), the cache, the small rules (`rules.ts`), the transactions' words, kinds and services (`txWords.ts`, `txFamilies.ts`, `qdnServices.ts`, `rawTx.ts`), names (`names.ts`) and a name's whole history (`nameLife.ts`), recent explorations, formats |
+| `src/components/Explorer/`              | the window, start page, account page, header, trail, tabs (`AccountTabs.tsx`) and Overview sections                                                                                                                                                                                     |
+| `src/components/Explorer/transactions/` | the Transactions tab, its rows and their sentences, one transaction's page                                                                                                                                                                                                              |
+| `src/components/Explorer/names/`        | the Names tab, a name's parts and history, a name's own page (`NameLifeView.tsx`)                                                                                                                                                                                                       |
+| `src/i18n/locales/<lang>/explorer.json` | its text, in all 12 languages                                                                                                                                                                                                                                                           |
 
 A later part adds its tab as one more entry of `ACCOUNT_TABS` (with `shown` for
 a tab only some viewers see). The levels' maths are Hub's Minting window's

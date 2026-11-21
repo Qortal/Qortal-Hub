@@ -37,6 +37,8 @@ export interface ExplorerContextValue {
   openAccount: (who: string, options?: OpenAccountOptions) => void;
   /** Open one transaction, as a step from what is on screen. */
   openTransaction: (signature: string) => void;
+  /** Open a name's whole history, as a step from what is on screen. */
+  openName: (name: string) => void;
   /** Read what is about `scope` (an address, a signature) again from the node. */
   refresh: (scope: string) => void;
   /** Close the Explorer window. */

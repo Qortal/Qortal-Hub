@@ -1,7 +1,7 @@
 /**
- * An account page's tabs: Overview · Transactions. They are a list, so a
- * later part adds its tab (Names, Connections, Trades, Assets) as one more
- * entry, and a tab only some viewers see says so in `shown`.
+ * An account page's tabs: Overview · Transactions · Names. They are a
+ * list, so a later part adds its tab (Connections, Trades, Assets) as one
+ * more entry, and a tab only some viewers see says so in `shown`.
  *
  * The tab belongs to the history step (useStepState): switching tabs
  * changes the step in place, never adds one, and Back and Forward show the
@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useStepState } from './ExplorerContext';
 import { cap } from './parts';
 
-export type AccountTabId = 'overview' | 'transactions';
+export type AccountTabId = 'overview' | 'transactions' | 'names';
 
 /** What a page is: a personal account, or an AT (a program on the chain). */
 export type AccountPage = 'account' | 'at';
@@ -42,6 +42,7 @@ export const ACCOUNT_TABS: readonly AccountTabDef[] = [
     label: 'explorer:tabs.transactions',
     pages: ['account', 'at'],
   },
+  { id: 'names', label: 'explorer:tabs.names', pages: ['account'] },
 ];
 
 /** The tabs a page shows. */

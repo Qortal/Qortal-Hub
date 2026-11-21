@@ -18,6 +18,7 @@ import {
   decomposeColor,
   hslToRgb,
   recomposeColor,
+  styled,
   type Theme,
 } from '@mui/material/styles';
 import { visuallyHidden } from '@mui/utils';
@@ -101,6 +102,32 @@ export const tileSx = (theme: Theme) => ({
   minWidth: 0,
   p: 1.5,
 });
+
+/**
+ * A link in a line of text (a sentence's account, the Overview's "owns 3
+ * names"), written like the words around it, in the theme's link colour.
+ */
+export const InlineLink = styled('button')(({ theme }) => ({
+  background: 'none',
+  border: 0,
+  color: theme.palette.primary.main,
+  cursor: 'pointer',
+  display: 'inline',
+  font: 'inherit',
+  fontWeight: 600,
+  margin: 0,
+  overflowWrap: 'anywhere',
+  padding: 0,
+  // Over a list row's button, whose words let presses through to it.
+  pointerEvents: 'auto',
+  textAlign: 'inherit',
+  '&:hover': { textDecoration: 'underline' },
+  '&:focus-visible': {
+    borderRadius: 2,
+    outline: `2px solid ${theme.palette.primary.main}`,
+  },
+  '&[data-tx]': { fontFamily: 'monospace', textDecoration: 'underline' },
+}));
 
 export function Panel({ children }: { children: ReactNode }) {
   return <Box sx={panelSx}>{children}</Box>;

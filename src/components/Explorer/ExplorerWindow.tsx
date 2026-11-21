@@ -8,10 +8,11 @@
  * The window keeps what it read (its own cache) until it closes or Hub's
  * signed-in account changes; then it starts again from its start page.
  *
- * Its history is a list of steps: the start page, an account, or one
+ * Its history is a list of steps: the start page, an account, one
  * transaction (a signature typed, sent by the event, or opened from a
- * row). Each step keeps what it showed (the tab, a filter: useStepState),
- * so Back and Forward show it as it was left.
+ * row), or a name's whole history (opened from a name on the Names tab or
+ * in a sentence). Each step keeps what it showed (the tab, a filter:
+ * useStepState), so Back and Forward show it as it was left.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -65,6 +66,7 @@ import {
 } from './ExplorerContext';
 import { ExplorerSearchField } from './ExplorerSearchField';
 import { ExplorerStart } from './ExplorerStart';
+import { NameLifeView } from './names/NameLifeView';
 import { cap, mutedText } from './parts';
 import { TxView } from './transactions/TxView';
 
@@ -89,6 +91,15 @@ type View =
       /** The trail it was opened from: an account opened from it goes on from there. */
       trail: string[];
       state: StepState;
+    }
+  | {
+      kind: 'name';
+      id: number;
+      /** The name as it was linked (the node matches it ignoring case and look-alike letters). */
+      name: string;
+      /** The trail it was opened from: an account opened from it goes on from there. */
+      trail: string[];
+      state: StepState;
     };
 
 interface History {
@@ -105,7 +116,7 @@ const START: History = {
 const trailOf = (view: View | undefined): string[] =>
   view?.kind === 'account'
     ? (view.trail ?? [])
-    : view?.kind === 'tx'
+    : view?.kind === 'tx' || view?.kind === 'name'
       ? view.trail
       : [];
 
@@ -221,6 +232,30 @@ export function ExplorerWindow({
     [openAccount]
   );
 
+  // A name's whole history: a step from what is on screen, the name as it was linked.
+  const openName = useCallback((name: string) => {
+    if (typeof name !== 'string' || !name) return;
+    setMenuAnchor(null);
+    lastId.current += 1;
+    const id = lastId.current;
+    setHistory((current) => {
+      const here = current.views[current.index];
+      // Already on screen: not a step more.
+      if (here?.kind === 'name' && here.name === name) return current;
+      const next: View = {
+        kind: 'name',
+        id,
+        name,
+        trail: trailOf(here),
+        state: {},
+      };
+      const views = [...current.views.slice(0, current.index + 1), next].slice(
+        -HISTORY_MAX
+      );
+      return { views, index: views.length - 1 };
+    });
+  }, []);
+
   // A step's own state (its tab, a filter), changed in place: never a step more.
   const setStepState = useCallback(
     (stepId: number, key: string, value: unknown) =>
@@ -269,7 +304,13 @@ export function ExplorerWindow({
     (scope: string) => {
       cache.forget(
         (key) =>
-          key.endsWith(`:${scope}`) || key === 'online' || key === 'nodetiming'
+          key.endsWith(`:${scope}`) ||
+          key === 'online' ||
+          key === 'nodetiming' ||
+          // Names change hands and spelling: what a page shows of its names (their
+          // records, a name's whole history, under any spelling) is read again too.
+          key.startsWith('name:') ||
+          key.startsWith('namelife:')
       );
       setVersion((n) => n + 1);
     },
@@ -305,10 +346,20 @@ export function ExplorerWindow({
       viewer,
       openAccount,
       openTransaction,
+      openName,
       refresh,
       close,
     }),
-    [cache, version, viewer, openAccount, openTransaction, refresh, close]
+    [
+      cache,
+      version,
+      viewer,
+      openAccount,
+      openTransaction,
+      openName,
+      refresh,
+      close,
+    ]
   );
   const step = useMemo(
     () => ({ stepId: view.id, state: view.state, setState: setStepState }),
@@ -333,14 +384,16 @@ export function ExplorerWindow({
     setMenuAnchor(null);
   };
 
-  /** What Refresh reads again: the account or AT on screen, or the transaction. */
+  /** What Refresh reads again: the account or AT on screen, the transaction, or the name. */
   const refreshScope =
     view.kind === 'account' &&
     (isQortAddress(view.who) || isAtAddress(view.who))
       ? view.who
       : view.kind === 'tx'
         ? view.signature
-        : null;
+        : view.kind === 'name'
+          ? view.name
+          : null;
 
   return (
     <Dialog
@@ -551,6 +604,8 @@ export function ExplorerWindow({
                   <ExplorerStart recent={recent} onClearRecent={forgetRecent} />
                 ) : view.kind === 'tx' ? (
                   <TxView key={view.id} signature={view.signature} />
+                ) : view.kind === 'name' ? (
+                  <NameLifeView key={view.id} name={view.name} />
                 ) : (
                   <ExplorerAccount
                     key={`${view.id}:${view.who}`}
