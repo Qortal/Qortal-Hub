@@ -68,11 +68,18 @@ export type TxSlot =
   /** What a QDN publish was, in words: `explorer:tx.service.<key>`. */
   | { kind: 'service'; key: string }
   /** A transaction type, by its name in words (`explorer:tx_type`). */
-  | { kind: 'type'; type: string };
+  | { kind: 'type'; type: string }
+  /**
+   * When something happened: one day, or the months from `first` to
+   * `last` ("Mar–May 2025"), in the reader's language.
+   */
+  | { kind: 'span'; first: number; last: number };
 
 export interface TxSentenceSpec {
-  /** Its key under `explorer:tx.say`, such as `transfer.out`. */
+  /** Its key under `base`, such as `transfer.out`. */
   key: string;
+  /** Where its key is: `explorer:tx.say` unless said (`explorer:connections.say`). */
+  base?: string;
   slots: Record<string, TxSlot>;
   /** Picks the plural form of a counted sentence. */
   count?: number;
@@ -153,7 +160,8 @@ export function toAtomic(value: unknown): bigint | null {
   return BigInt(match[1]) * ATOMIC + BigInt((match[2] ?? '').padEnd(8, '0'));
 }
 
-function fromAtomic(value: bigint): string {
+/** 150000000n → "1.50000000": atomic units back to Core's decimal text. */
+export function fromAtomic(value: bigint): string {
   return `${value / ATOMIC}.${(value % ATOMIC).toString().padStart(8, '0')}`;
 }
 
@@ -170,7 +178,11 @@ function str(value: unknown): string {
  * The asset of `id`. An amount without an asset is QORT (a PAYMENT names
  * none); an asset a transaction is about, without its number, has none yet.
  */
-function assetOf(id: unknown, name?: unknown, missingIsQort = true): AssetRef {
+export function assetOf(
+  id: unknown,
+  name?: unknown,
+  missingIsQort = true
+): AssetRef {
   const missing = id === undefined || id === null || id === '';
   const n = missing ? (missingIsQort ? 0 : NaN) : Number(id);
   return {

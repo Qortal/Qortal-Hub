@@ -229,7 +229,8 @@ export type ChipKind =
   | 'minting'
   | 'penalty'
   | 'blocked'
-  | 'owner';
+  | 'owner'
+  | 'exchange';
 
 /** `color` with its hue set to `hue` (degrees), keeping its saturation and lightness. */
 export function withHue(color: string, hue: number): string {
@@ -268,6 +269,8 @@ export function chipAccent(theme: Theme, kind: ChipKind): string {
       return p.error.main;
     case 'owner':
       return withHue(p.info.main, 45);
+    case 'exchange':
+      return withHue(p.info.main, 22);
   }
 }
 

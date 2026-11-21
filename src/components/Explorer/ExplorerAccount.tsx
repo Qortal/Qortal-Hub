@@ -8,8 +8,10 @@
  * is a step of its own: ExplorerWindow opens it in TxView.)
  *
  * An account's page is its header, the trail, then its tabs (AccountTabs):
- * Overview, Transactions and Names. Each tab reads what it shows when it
- * opens.
+ * Overview, Connections, Transactions and Names. Each tab reads what it
+ * shows when it opens. Connections and the Overview's Direct links are
+ * detailed parts: only for a viewer the level 5+ rule lets see them
+ * (lib/explorer/access.ts), and nothing of them is read for anyone else.
  * Read-only: nothing here writes (Send QORT and Block hand over to Hub's
  * own windows and lists).
  */
@@ -70,6 +72,9 @@ import { NotesSection } from './overview/NotesSection';
 import { LatestTransactions } from './overview/LatestTransactions';
 import { OverviewSummary } from './overview/OverviewSummary';
 import { NamesTab } from './names/NamesTab';
+import { ConnectionsTab } from './connections/ConnectionsTab';
+import { DirectLinksPreview } from './overview/DirectLinksPreview';
+import { useExplorerAccess } from './useExplorerAccess';
 import {
   cap,
   CopyButton,
@@ -224,6 +229,7 @@ function OverviewTab({
   online,
   onShowTransactions,
   onShowNames,
+  onShowConnections,
 }: {
   account: AccountInfo;
   primary: string | null | undefined;
@@ -232,6 +238,8 @@ function OverviewTab({
   online: ReadState<OnlineShare[]>;
   onShowTransactions: () => void;
   onShowNames: () => void;
+  /** Open the Connections tab: null for a viewer who doesn't see it. */
+  onShowConnections: (() => void) | null;
 }) {
   const { address, publicKey } = account;
   const firstSeen = useExplorerRead(firstSeenRead(address));
@@ -250,6 +258,9 @@ function OverviewTab({
         lastSent={publicKey ? part(lastSent) : null}
         onShowNames={onShowNames}
       />
+      {onShowConnections ? (
+        <DirectLinksPreview address={address} onShowAll={onShowConnections} />
+      ) : null}
       <AtAGlance
         account={account}
         firstSeen={firstSeen}
@@ -293,6 +304,7 @@ function AccountView({
   const devAdmins = useExplorerRead(devAdminsRead());
   // The Transactions tab's filter, kept by the step: "All transactions" shows every kind.
   const [, setTxFilter] = useStepState<TxFilter>('txFilter', ALL_TRANSACTIONS);
+  const full = useExplorerAccess();
 
   const standing = groups.data ? minterStandingOf(groups.data) : undefined;
   return (
@@ -309,9 +321,12 @@ function AccountView({
       />
       <ExplorerTrail trail={trail} />
       <TabsView
-        tabs={tabsFor({ page: 'account' })}
+        tabs={tabsFor({ page: 'account', full })}
         render={(tab, open) =>
-          tab === 'transactions' ? (
+          // The tab list leaves Connections out unless `full`; checked here too.
+          tab === 'connections' && full ? (
+            <ConnectionsTab account={account} />
+          ) : tab === 'transactions' ? (
             <TransactionsTab address={address} publicKey={publicKey} />
           ) : tab === 'names' ? (
             <NamesTab address={address} names={names} primary={primary} />
@@ -327,6 +342,7 @@ function AccountView({
                 open('transactions');
               }}
               onShowNames={() => open('names')}
+              onShowConnections={full ? () => open('connections') : null}
             />
           )
         }
@@ -381,7 +397,7 @@ function AtView({ address, trail }: { address: string; trail: string[] }) {
       </Box>
       <ExplorerTrail trail={trail} />
       <TabsView
-        tabs={tabsFor({ page: 'at' })}
+        tabs={tabsFor({ page: 'at', full: false })}
         render={() => <TransactionsTab address={address} publicKey={null} />}
       />
     </Box>

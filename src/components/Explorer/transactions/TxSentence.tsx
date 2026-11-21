@@ -34,6 +34,7 @@ import {
 } from '../../../lib/explorer/txWords';
 import { useExplorer, useExplorerRead } from '../ExplorerContext';
 import { InlineLink } from '../parts';
+import { useExchangeName } from '../useExplorerAccess';
 import {
   amountText,
   marker,
@@ -86,6 +87,7 @@ function AccountSlot({
   const { t } = useTranslation(['explorer']);
   const { openAccount } = useExplorer();
   const name = useAccountName(address, near);
+  const exchange = useExchangeName(address);
   if (!address) return <>{t('explorer:tx.unknown_account')}</>;
   return (
     <InlineLink
@@ -96,7 +98,9 @@ function AccountSlot({
         openAccount(address, { fromExplorer: true });
       }}
     >
-      <bdi dir="auto">{name ? visibleName(name) : shortAddress(address)}</bdi>
+      <bdi dir="auto">
+        {name ? visibleName(name) : (exchange ?? shortAddress(address))}
+      </bdi>
     </InlineLink>
   );
 }

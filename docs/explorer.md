@@ -21,7 +21,8 @@ step of the trail. A Q-App's `OPEN_USER_LOOKUP` request sends the same event.
   member, Dev Admin, minting now, a minting penalty, blocked), its address and
   public key with Copy, Send QORT and Block (as User search had them), the trail
   of accounts opened one from another, then its tabs: Overview, Transactions
-  and Names.
+  and Names, and Connections for a viewer the level 5+ rule lets see it (see
+  below).
 - **Its Overview:** one line of facts (level, MINTER, names, first seen, last
   sent), At a glance (level and progress, blocks minted, balance, first seen,
   groups, QORT received / sent), its groups, MINTER (with a button to
@@ -29,7 +30,9 @@ step of the trail. A Q-App's `OPEN_USER_LOOKUP` request sends the same event.
   primary name is written and how many of its other names have such notes, and
   its latest transactions (the newest 5, with a link to the Transactions tab).
   "Owns 3 names" in the first line and the line on its other names open the
-  Names tab.
+  Names tab. For a viewer the rule lets in, Direct links come right after the
+  first line: the first three things Connections recorded, and "All
+  connections (n)", which opens that tab.
 - **Its Transactions:** everything it did, newest first, each as a sentence
   told from its side ("Sent 15 QORT to Publisher", "Received 2 QORT from
   Second"), with when and in which block. Filters by kind (Payments, Names,
@@ -64,6 +67,127 @@ First seen is the oldest confirmed transaction involving the account. The level
 progress and the blocks to the next level are measured as in Hub's Minting
 window and Home, and Total blocks minted includes the adjustment Core records,
 as User search showed it.
+
+## The level 5+ rule
+
+Some parts of the Explorer are detailed parts: the Connections tab, the
+Overview's Direct links, and exchanges' accounts named as such. They show only
+to the signed-in Hub account when it is a Minter Admin (an admin of MINTER,
+group 694), a MINTER member at level 5 or above, or a Dev Admin (an admin of
+group 1), the same rule as Q-Mintership+'s (`src/lib/explorer/access.ts`).
+
+This hides parts of Hub's screen; it doesn't protect data. Everything the
+detailed parts show is public on the chain: any node answers anyone who asks,
+and Hub is open source. Like Q-Mintership+, it only keeps chain-analysis tools
+out of everyone's way.
+
+- **Reads:** the viewer's account (its level, `/addresses/<viewer>`) and its
+  groups (`/groups/member/<viewer>`); the Dev Admins
+  (`/groups/members/1?onlyAdmins=true`) only when those two don't settle it. A
+  Minter Admin is settled by its groups alone. They go through the window's
+  cache, so the viewer's own account page and every page's Dev Admin mark share
+  them.
+- **When:** read when the window opens, and kept about a minute for that Hub
+  account (`ACCESS_TTL_MS`): reopening within it reads nothing again. Another
+  Hub account starts again; an answer for the last one that arrives late is
+  dropped. Nothing polls.
+- **Fail closed:** while it is being read, and when a read fails, the detailed
+  parts stay out, and a failed read is never kept, so reopening the window
+  reads it again. Nothing flashes in and out.
+- **Silent:** for everyone else, the Connections tab isn't in the tab list,
+  the Overview has no Direct links, and nothing says anything is left out.
+- **Every way in:** the tab list (`AccountTabs.tsx`, `shown`) and the account
+  page check it; Direct links (and its "All connections") show only with it; a
+  step whose tab was Connections shows the Overview when the rule doesn't let
+  the viewer in (and the window starts again when the Hub account changes, so
+  Back never returns to one); the trail and links in sentences open accounts on
+  their Overview; a Q-App's `OPEN_USER_LOOKUP` opens an account on its Overview
+  whatever else it sends.
+- **Nothing of a detailed part is read** for a viewer who doesn't see it: the
+  parts that read are mounted only for viewers the rule lets in.
+
+## Connections
+
+How the account is linked to other accounts, by its own transactions, as
+evidence: each link a sentence with numbers, a date and a block, opening to the
+transactions behind it (as the Transactions tab's rows). Never a verdict.
+
+- **QORT sent to exchanges, or got from them**, at the top: what it paid each
+  known exchange (`KNOWN_EXCHANGES`: TradeOgre, nonkyc.io) and got from it,
+  read exactly by sender and recipient (`/transactions/payments/between`, 100
+  a read, up to 1,000 a way; one more row then says whether there are older
+  ones), and it says so. On a node without that read, from the payments the
+  lists below read, saying so; when those lists stopped short, each line says
+  there may be older payments (never that there are). An exchange's row under
+  Payments counts only the
+  payments read there, and says that every QORT payment with it is added up at
+  the top, so the two totals never read as one claim. On an exchange's own
+  account it says whose it is.
+- **Recorded between them:**
+  - minting level moved (to the recipient read from the raw bytes, or from
+    the account that sent it, with that account's level now);
+  - reward shares: its sponsor (the first account that made it a reward
+    share, and how many blocks that ran), minting with another account now
+    (its active shares in the online list; when that list couldn't be read, it
+    says so, with Retry), and the accounts it sponsored ("48+" when its Minting
+    list stopped short);
+  - names bought or sold;
+  - Q-Asset trades, by the other account: its orders filled at least in part
+    (`/assets/orders/<address>`, three reads for Core's exact filters), each
+    one's trades and who placed the other order, the newest 100 filled orders
+    at most, and up to 1,000 trades an order (one more says whether an order
+    had more, and the tab says how many were cut off); the two order
+    transactions behind a trade are read when its row opens. Trades with itself
+    or with an order the node doesn't know aren't listed, and it says how many,
+    never "nothing found";
+  - payments, Q-Asset transfers and multi-payments by the other account, Sent
+    to or Received from, with how much (added exactly, in atomic units) and how
+    many, sorted by most payments, most QORT, the latest or the earliest; 20
+    accounts at a time, AT addresses after them.
+- **In common:** where its first QORT came from (the transaction that first
+  gave it something, by the reference chain as Q-Mintership+ finds it:
+  `/transactions/creator/<key>` oldest first, `/transactions/signature/…`,
+  then the first QORT payment it received), worded by its kind (a
+  multi-payment: all the QORT it paid this account); and the
+  sponsor it shares with others ("Also sponsored by A (47 others)", from the
+  sponsor's own Minting list, "47+" when that stops short).
+- **What it checked:** "Also checked, nothing found: …" lists only what was
+  read in full; what was read only in part is said apart ("In what was read
+  so far, nothing found: …"). Below, what was read of each list ("its newest
+  100 payments and asset transfers", "all 12 of its minting transactions"; a
+  list that couldn't be read is named in it) and Read older, which reads 100
+  more of each list that stopped short, up to 1,000; Retry after a Read older
+  that failed reads only the lists that failed.
+- **The search** narrows every list to the rows that show what was typed
+  (every word, ignoring case and accents; "1200" finds "1,200"): a name, an
+  address, an amount, a tag, a date. While it is typed, the primary names of
+  the accounts in the rows are read (4 at a time), so a name finds its rows:
+  for the first 300 accounts in the order the tab lists them, and the line
+  says so when there are more. A line says how many rows match; it never says
+  "nothing matches" while a list is still being read ("Looking for …"), nor
+  beyond what it could look in: a list or names that couldn't be read stay in
+  sight with Retry, and the line says "nothing matches in what could be
+  searched".
+- **Reads:** its Payments, Minting and Names lists are the Transactions tab's
+  kinds (`accountTx.ts`), one cache entry each, so the tabs never disagree and
+  nothing is read twice; when its Minting list stops short, its level moves are
+  read on their own, so a level move is never left out. A list that couldn't
+  be read is named with Retry, and what it would show isn't claimed as checked;
+  a Refresh that couldn't read a list again keeps its rows and says "Couldn't
+  check for newer transactions", with Retry. More than one sponsor: which one
+  Core counts (`/addresses/sponsorship/<address>/sponsor`), as a tag.
+- **Direct links** on the Overview read its Payments, Minting and Names lists
+  (100 rows each) and the online list, never its Q-Asset trades (about two
+  reads per filled order): those only the Connections tab reads, and Direct
+  links show them once it has. Opening Connections then reads its Q-Asset
+  trades, where its first QORT came from, its payments with exchanges and its
+  sponsor's Minting list. "All connections (n+)" while anything it counts is
+  still read, failed, or was read only in part, the trades not yet read
+  included.
+- **Exchanges named:** for a viewer the rule lets in, an exchange's deposit
+  account without a name of its own shows the exchange's name wherever an
+  account shows (sentences, the people of a transaction, the trail, the start
+  page, its header with an "exchange" chip); for anyone else, its address.
 
 ## Transactions
 
@@ -208,13 +332,14 @@ as User search showed it.
 
 ## Code
 
-| Where                                   | What                                                                                                                                                                                                                                                                                    |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/lib/explorer/`                     | the reads (`reads.ts`, `accountTx.ts`), the cache, the small rules (`rules.ts`), the transactions' words, kinds and services (`txWords.ts`, `txFamilies.ts`, `qdnServices.ts`, `rawTx.ts`), names (`names.ts`) and a name's whole history (`nameLife.ts`), recent explorations, formats |
-| `src/components/Explorer/`              | the window, start page, account page, header, trail, tabs (`AccountTabs.tsx`) and Overview sections                                                                                                                                                                                     |
-| `src/components/Explorer/transactions/` | the Transactions tab, its rows and their sentences, one transaction's page                                                                                                                                                                                                              |
-| `src/components/Explorer/names/`        | the Names tab, a name's parts and history, a name's own page (`NameLifeView.tsx`)                                                                                                                                                                                                       |
-| `src/i18n/locales/<lang>/explorer.json` | its text, in all 12 languages                                                                                                                                                                                                                                                           |
+| Where                                   | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/explorer/`                     | the reads (`reads.ts`, `accountTx.ts`), the cache, the small rules (`rules.ts`), the transactions' words, kinds and services (`txWords.ts`, `txFamilies.ts`, `qdnServices.ts`, `rawTx.ts`), names (`names.ts`) and a name's whole history (`nameLife.ts`), recent explorations, formats; the level 5+ rule (`access.ts`) and what Connections reads and says (`connections.ts`, `findings.ts`, `money.ts`, `exchanges.ts`, `assetTrades.ts`, `connectionReads.ts`, `rowSearch.ts`) |
+| `src/components/Explorer/`              | the window, start page, account page, header, trail, tabs (`AccountTabs.tsx`) and Overview sections                                                                                                                                                                                                                                                                                                                                                                                |
+| `src/components/Explorer/transactions/` | the Transactions tab, its rows and their sentences, one transaction's page                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `src/components/Explorer/names/`        | the Names tab, a name's parts and history, a name's own page (`NameLifeView.tsx`)                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `src/components/Explorer/connections/`  | the Connections tab, its rows, payments, In common and the exchange notice; `useExplorerAccess.ts` runs the rule in the window; the Overview's Direct links (`overview/DirectLinksPreview.tsx`)                                                                                                                                                                                                                                                                                    |
+| `src/i18n/locales/<lang>/explorer.json` | its text, in all 12 languages                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 A later part adds its tab as one more entry of `ACCOUNT_TABS` (with `shown` for
 a tab only some viewers see). The levels' maths are Hub's Minting window's

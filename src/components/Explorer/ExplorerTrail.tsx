@@ -10,6 +10,7 @@ import { visibleName } from '../../lib/explorer/rules';
 import { useExplorer, useExplorerRead } from './ExplorerContext';
 import { ExplorerAvatar } from './ExplorerSearchField';
 import { cap } from './parts';
+import { useExchangeName } from './useExplorerAccess';
 
 const CRUMB_SX = {
   alignItems: 'center',
@@ -32,11 +33,12 @@ const LABEL_SX = {
 function Crumb({ address, current }: { address: string; current: boolean }) {
   const { openAccount } = useExplorer();
   const name = useExplorerRead(primaryNameRead(address)).data ?? null;
+  const exchange = useExchangeName(address);
   const content = (
     <>
       <ExplorerAvatar name={name} size={20} />
       <Box component="bdi" dir="auto" sx={LABEL_SX}>
-        {name ? visibleName(name) : shortAddress(address)}
+        {name ? visibleName(name) : (exchange ?? shortAddress(address))}
       </Box>
     </>
   );

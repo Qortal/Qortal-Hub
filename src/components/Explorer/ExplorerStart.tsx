@@ -11,6 +11,7 @@ import { visibleName } from '../../lib/explorer/rules';
 import { useExplorer, useExplorerRead } from './ExplorerContext';
 import { ExplorerAvatar, ExplorerSearchField } from './ExplorerSearchField';
 import { cap, mutedText, panelSx, Section } from './parts';
+import { useExchangeName } from './useExplorerAccess';
 
 /** An account to open: its picture, name (or short address) and address. */
 export function AccountRow({
@@ -23,6 +24,7 @@ export function AccountRow({
   const { openAccount } = useExplorer();
   const primary = useExplorerRead(primaryNameRead(address));
   const name = primary.data ?? null;
+  const exchange = useExchangeName(address);
   return (
     <ButtonBase
       onClick={() => openAccount(address, { fromExplorer })}
@@ -54,7 +56,7 @@ export function AccountRow({
           }}
         >
           <bdi dir="auto">
-            {name ? visibleName(name) : shortAddress(address)}
+            {name ? visibleName(name) : (exchange ?? shortAddress(address))}
           </bdi>
         </Typography>
         <Typography
@@ -66,7 +68,7 @@ export function AccountRow({
             fontSize: '0.78rem',
           })}
         >
-          {name ? shortAddress(address) : address}
+          {name || exchange ? shortAddress(address) : address}
         </Typography>
       </Box>
     </ButtonBase>

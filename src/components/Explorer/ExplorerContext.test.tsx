@@ -23,6 +23,7 @@ function contextWith(): ExplorerContextValue {
     cache: createExplorerCache(),
     version: 0,
     viewer: null,
+    access: 'basic',
     openAccount: vi.fn(),
     openTransaction: vi.fn(),
     openName: vi.fn(),

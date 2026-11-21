@@ -69,6 +69,7 @@ import { ExplorerStart } from './ExplorerStart';
 import { NameLifeView } from './names/NameLifeView';
 import { cap, mutedText } from './parts';
 import { TxView } from './transactions/TxView';
+import { useAccessRule } from './useExplorerAccess';
 
 type View =
   | { kind: 'start'; id: number; state: StepState }
@@ -175,6 +176,9 @@ export function ExplorerWindow({
     setRecent(readRecent(viewer));
     setRemember(readRemember(viewer));
   }, [viewer, reset]);
+
+  // The level 5+ rule: read when the window opens, kept a minute for this Hub account.
+  const access = useAccessRule(cache, viewer, isOpenDrawerLookup);
 
   const close = useCallback(() => {
     setIsOpenDrawerLookup(false);
@@ -344,6 +348,7 @@ export function ExplorerWindow({
       cache,
       version,
       viewer,
+      access,
       openAccount,
       openTransaction,
       openName,
@@ -354,6 +359,7 @@ export function ExplorerWindow({
       cache,
       version,
       viewer,
+      access,
       openAccount,
       openTransaction,
       openName,

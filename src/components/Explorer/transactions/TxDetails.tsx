@@ -27,6 +27,7 @@ import type {
 import { useExplorer } from '../ExplorerContext';
 import { ExplorerAvatar } from '../ExplorerSearchField';
 import { cap, mutedText, tileSx } from '../parts';
+import { useExchangeName } from '../useExplorerAccess';
 import { marker, splitMarked } from './sentenceText';
 import { SlotView, TxSentence, useAccountName } from './TxSentence';
 
@@ -219,6 +220,7 @@ function Person({ address, maker }: { address: string; maker: string | null }) {
   const { openAccount } = useExplorer();
   const at = isAtAddress(address);
   const name = useAccountName(address, true);
+  const exchange = useExchangeName(address);
   const notes = [
     address === maker ? t('explorer:tx.creator', cap) : null,
     at ? t('explorer:tx.field.at', cap) : null,
@@ -255,7 +257,7 @@ function Person({ address, maker }: { address: string; maker: string | null }) {
             whiteSpace: 'nowrap',
           })}
         >
-          {name ? visibleName(name) : shortAddress(address)}
+          {name ? visibleName(name) : (exchange ?? shortAddress(address))}
         </Box>
         {notes.length ? (
           <Typography

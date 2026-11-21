@@ -1,7 +1,9 @@
 /**
- * An account page's tabs: Overview · Transactions · Names. They are a
- * list, so a later part adds its tab (Connections, Trades, Assets) as one
- * more entry, and a tab only some viewers see says so in `shown`.
+ * An account page's tabs: Overview · Connections · Transactions · Names.
+ * They are a list, so a later part adds its tab (Trades, Assets) as one
+ * more entry, and a tab only some viewers see says so in `shown`:
+ * Connections only for a viewer who sees the detailed parts (the level 5+
+ * rule, lib/explorer/access.ts), and nothing says it is left out.
  *
  * The tab belongs to the history step (useStepState): switching tabs
  * changes the step in place, never adds one, and Back and Forward show the
@@ -15,13 +17,19 @@ import { useTranslation } from 'react-i18next';
 import { useStepState } from './ExplorerContext';
 import { cap } from './parts';
 
-export type AccountTabId = 'overview' | 'transactions' | 'names';
+export type AccountTabId =
+  | 'overview'
+  | 'connections'
+  | 'transactions'
+  | 'names';
 
 /** What a page is: a personal account, or an AT (a program on the chain). */
 export type AccountPage = 'account' | 'at';
 
 export interface AccountTabContext {
   page: AccountPage;
+  /** The viewer sees the detailed parts (the level 5+ rule): known, not guessed. */
+  full: boolean;
 }
 
 export interface AccountTabDef {
@@ -37,6 +45,12 @@ export interface AccountTabDef {
 /** Every tab, in order. */
 export const ACCOUNT_TABS: readonly AccountTabDef[] = [
   { id: 'overview', label: 'explorer:tabs.overview', pages: ['account'] },
+  {
+    id: 'connections',
+    label: 'explorer:tabs.connections',
+    pages: ['account'],
+    shown: ({ full }) => full,
+  },
   {
     id: 'transactions',
     label: 'explorer:tabs.transactions',

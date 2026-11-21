@@ -44,6 +44,33 @@ export const formatDay = (timestamp: number, language: string): string =>
     language
   ).format(new Date(timestamp));
 
+/** A date format that can also say a range (Intl's `formatRange`, newer than this project's TypeScript library list). */
+type RangeFormat = Intl.DateTimeFormat & {
+  formatRange?: (from: Date, to: Date) => string;
+};
+
+/**
+ * When something happened: its day ("18 May 2025") for one moment, else
+ * the months it covers ("Mar – May 2025", "May 2023 – Mar 2025"), in the
+ * language's own way of saying a range.
+ */
+export function formatSpan(
+  first: number,
+  last: number,
+  language: string
+): string {
+  const [from, to] = first <= last ? [first, last] : [last, first];
+  if (from === to) return formatDay(from, language);
+  const months: RangeFormat = safe(
+    (lang) =>
+      new Intl.DateTimeFormat(lang, { month: 'short', year: 'numeric' }),
+    language
+  );
+  return typeof months.formatRange === 'function'
+    ? months.formatRange(new Date(from), new Date(to))
+    : `${months.format(from)} – ${months.format(to)}`;
+}
+
 /** "18 May 2025, 14:05". */
 export const formatDayTime = (timestamp: number, language: string): string =>
   safe(

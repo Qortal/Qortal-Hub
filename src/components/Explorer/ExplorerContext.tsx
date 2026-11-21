@@ -9,11 +9,13 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
 import type { ExplorerCache } from '../../lib/explorer/cache';
 import type { ReadSpec } from '../../lib/explorer/reads';
+import type { AccessState } from './useExplorerAccess';
 
 export interface OpenAccountOptions {
   /**
@@ -30,6 +32,11 @@ export interface ExplorerContextValue {
   version: number;
   /** The signed-in Hub account's address, or null. */
   viewer: string | null;
+  /**
+   * Whether it sees the detailed parts (the level 5+ rule,
+   * lib/explorer/access.ts); read it through useExplorerAccess().
+   */
+  access: AccessState;
   /**
    * Open an account by its address or by one of its names (a transaction
    * signature opens that transaction).
@@ -168,6 +175,176 @@ export function useExplorerRead<T>(spec: ReadSpec<T> | null): ReadState<T> {
     data: kept,
     error: undefined,
     status: key === null ? 'idle' : kept !== undefined ? 'ready' : 'loading',
+    retry,
+  };
+}
+
+/**
+ * What the window's cache keeps for `key`, without ever reading it: for a
+ * part that shows what another part read (the Overview's Direct links and
+ * the Connections tab's Q-Asset trades). A new answer for it shows here too.
+ */
+export function useExplorerKept<T>(key: string | null): T | undefined {
+  // The context changes on Refresh too, so this renders again then.
+  const { cache } = useExplorer();
+  const [, setSeen] = useState(0);
+  useEffect(() => {
+    if (key === null) return undefined;
+    return cache.subscribe(key, () => setSeen((n) => n + 1));
+  }, [cache, key]);
+  return key === null ? undefined : cache.peek<T>(key);
+}
+
+// ---- Several reads at once ---------------------------------------------------------------
+
+export interface ReadsState<T> {
+  /** The answers read so far, by key. */
+  data: ReadonlyMap<string, T>;
+  /** The keys whose read failed: never an answer, each with Retry. */
+  failed: readonly string[];
+  /** Some are still being read. */
+  loading: boolean;
+  /** Read the failed ones again. */
+  retry: () => void;
+}
+
+interface ReadsShown<T> {
+  joined: string;
+  data: Map<string, T>;
+  failed: Set<string>;
+}
+
+/** How many keys `joined` holds. */
+const keyCount = (joined: string) => (joined ? joined.split('\n').length : 0);
+
+/**
+ * Read several specs through the window's cache (null or none reads
+ * nothing), at most `concurrency` at a time: the level-move recipients,
+ * the levels and the names a list needs. Each answer shows as it comes,
+ * one that is kept shows at once, and one read by another part (its
+ * Retry) shows here too. Answers that come back after the keys changed,
+ * the window refreshed, or the part went are dropped; a failure is kept
+ * apart, never an answer.
+ */
+export function useExplorerReads<T>(
+  specs: readonly ReadSpec<T>[] | null,
+  { concurrency = Number.POSITIVE_INFINITY }: { concurrency?: number } = {}
+): ReadsState<T> {
+  const { cache, version } = useExplorer();
+  const joined = (specs ?? []).map((spec) => spec.key).join('\n');
+  const specsRef = useRef(specs);
+  specsRef.current = specs;
+  const run = useRef(0);
+  const [shown, setShown] = useState<ReadsShown<T>>({
+    joined: '',
+    data: new Map(),
+    failed: new Set(),
+  });
+
+  const start = useCallback(
+    (forced: ReadonlySet<string>) => {
+      const list = specsRef.current ?? [];
+      const id = ++run.current;
+      const keysOf = list.map((spec) => spec.key).join('\n');
+      const data = new Map<string, T>();
+      const todo: ReadSpec<T>[] = [];
+      for (const spec of list) {
+        const kept = forced.has(spec.key) ? undefined : cache.peek<T>(spec.key);
+        if (kept !== undefined) data.set(spec.key, kept);
+        else todo.push(spec);
+      }
+      setShown({ joined: keysOf, data, failed: new Set() });
+      let next = 0;
+      const settle = (patch: (was: ReadsShown<T>) => ReadsShown<T>) =>
+        setShown((was) => (was.joined === keysOf ? patch(was) : was));
+      const lane = async () => {
+        while (next < todo.length) {
+          const spec = todo[next++];
+          try {
+            const value = await cache.read(spec.key, spec.load, {
+              ttlMs: spec.ttlMs,
+              force: forced.has(spec.key),
+            });
+            if (run.current !== id) return;
+            settle((was) =>
+              was.data.get(spec.key) === value
+                ? was
+                : { ...was, data: new Map(was.data).set(spec.key, value) }
+            );
+          } catch {
+            if (run.current !== id) return;
+            settle((was) =>
+              was.data.has(spec.key)
+                ? was
+                : { ...was, failed: new Set(was.failed).add(spec.key) }
+            );
+          }
+        }
+      };
+      const lanes = Math.min(Math.max(1, concurrency), todo.length);
+      for (let lane_ = 0; lane_ < lanes; lane_++) void lane();
+    },
+    [cache, concurrency]
+  );
+
+  useEffect(() => {
+    start(new Set());
+  }, [joined, version, start]);
+
+  // A new answer for one of the keys, read by another part: show it here too.
+  useEffect(() => {
+    const keys = joined ? joined.split('\n') : [];
+    const stops = keys.map((key) =>
+      cache.subscribe(key, () => {
+        const kept = cache.peek<T>(key);
+        if (kept === undefined) return;
+        setShown((was) => {
+          if (was.joined !== joined || was.data.get(key) === kept) return was;
+          const failed = new Set(was.failed);
+          failed.delete(key);
+          return { ...was, data: new Map(was.data).set(key, kept), failed };
+        });
+      })
+    );
+    return () => stops.forEach((stop) => stop());
+  }, [cache, joined]);
+
+  // Anything still on its way when the part goes is dropped.
+  useEffect(
+    () => () => {
+      run.current += 1;
+    },
+    []
+  );
+
+  const failedJoined =
+    shown.joined === joined ? [...shown.failed].join('\n') : '';
+  // The same list while the same keys failed: parts memoized on it stay put.
+  const failedKeys = useMemo(
+    () => (failedJoined ? failedJoined.split('\n') : []),
+    [failedJoined]
+  );
+  const retry = useCallback(() => {
+    if (failedJoined) start(new Set(failedJoined.split('\n')));
+  }, [start, failedJoined]);
+
+  if (shown.joined === joined)
+    return {
+      data: shown.data,
+      failed: failedKeys,
+      loading: shown.data.size + shown.failed.size < keyCount(joined),
+      retry,
+    };
+  // The keys changed and their reads haven't started yet: what the cache has.
+  const data = new Map<string, T>();
+  for (const spec of specs ?? []) {
+    const kept = cache.peek<T>(spec.key);
+    if (kept !== undefined) data.set(spec.key, kept);
+  }
+  return {
+    data,
+    failed: failedKeys,
+    loading: data.size < (specs ?? []).length,
     retry,
   };
 }

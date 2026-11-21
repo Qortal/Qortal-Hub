@@ -17,6 +17,7 @@ import {
   formatCount,
   formatList,
   formatPercent,
+  formatSpan,
 } from '../../../lib/explorer/format';
 import { isTxType } from '../../../lib/explorer/txFamilies';
 import {
@@ -42,7 +43,7 @@ export type SentencePiece =
 
 /** The key of a sentence, in the explorer namespace. */
 export const sayKey = (sentence: TxSentenceSpec) =>
-  `explorer:tx.say.${sentence.key}`;
+  `${sentence.base ?? 'explorer:tx.say'}.${sentence.key}`;
 
 /** Text with markers split into its text and its slots (a slot the sentence doesn't hold is left out). */
 export function splitMarked(
@@ -164,6 +165,8 @@ export function slotText(
       return String(t(`explorer:tx.service.${slot.key}`));
     case 'type':
       return typeTitle(slot.type, t);
+    case 'span':
+      return formatSpan(slot.first, slot.last, language);
   }
 }
 

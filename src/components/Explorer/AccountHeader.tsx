@@ -4,7 +4,8 @@
  * whether you blocked it, then its address and public key with Copy, a
  * note when it was opened by a name, and what User search offered: Send
  * QORT and Block. The chips' colours say what kind of fact each is, never
- * good or bad.
+ * good or bad. For a viewer who sees the detailed parts, an exchange's
+ * deposit account is named as the exchange, with a chip saying so.
  */
 import { useState } from 'react';
 import { Box, Button, Tooltip, Typography } from '@mui/material';
@@ -28,6 +29,7 @@ import {
 } from '../../lib/explorer/rules';
 import { useExplorer } from './ExplorerContext';
 import { ExplorerAvatar } from './ExplorerSearchField';
+import { useExchangeName } from './useExplorerAccess';
 import {
   cap,
   CopyButton,
@@ -120,6 +122,7 @@ export function AccountHeader({
   const own = viewer === address;
   const blocked = isUserBlocked(address);
   const name = primary ?? null;
+  const exchange = useExchangeName(address);
 
   const say = (type: 'success' | 'error', message: string) => {
     setInfoSnack({ compact: true, duration: 3200, message, type });
@@ -176,6 +179,15 @@ export function AccountHeader({
       kind: 'member',
       label: t('explorer:chip.minter_member'),
       explanation: t('explorer:chip.minter_member_explained', cap),
+    });
+  if (exchange)
+    chips.push({
+      kind: 'exchange',
+      label: t('explorer:chip.exchange'),
+      explanation: t('explorer:chip.exchange_explained', {
+        exchange: isolate(exchange),
+        ...cap,
+      }),
     });
   if (devAdmin)
     chips.push({
@@ -240,7 +252,7 @@ export function AccountHeader({
             }}
           >
             <bdi dir="auto">
-              {name ? visibleName(name) : shortAddress(address)}
+              {name ? visibleName(name) : (exchange ?? shortAddress(address))}
             </bdi>
           </Typography>
           {onRetryPrimary ? (

@@ -386,7 +386,12 @@ export interface TxRow {
   amount?: string;
   assetId?: number | string;
   atAddress?: string;
-  payments?: Array<{ recipient?: string; amount?: string; assetId?: unknown }>;
+  payments?: Array<{
+    recipient?: string;
+    amount?: string;
+    assetId?: unknown;
+    assetName?: string;
+  }>;
   [field: string]: unknown;
 }
 
