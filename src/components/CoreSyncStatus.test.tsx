@@ -1,5 +1,5 @@
 import { ThemeProvider } from '@mui/material/styles';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Initialises the shared i18n instance so useTranslation resolves real strings.
@@ -12,7 +12,11 @@ import {
 import { darkTheme } from '../styles/theme-dark';
 import { CoreSyncStatus } from './CoreSyncStatus';
 
-const renderPanel = (url: string, status: Record<string, unknown>) => {
+const renderPanel = (
+  url: string,
+  status: Record<string, unknown>,
+  onOpenNodeManager?: () => void
+) => {
   const store = createStore();
   store.set(selectedNodeInfoAtom, { url } as never);
   store.set(nodeInfosAtom, status);
@@ -20,7 +24,7 @@ const renderPanel = (url: string, status: Record<string, unknown>) => {
   render(
     <Provider store={store}>
       <ThemeProvider theme={darkTheme}>
-        <CoreSyncStatus panelOnly />
+        <CoreSyncStatus onOpenNodeManager={onOpenNodeManager} panelOnly />
       </ThemeProvider>
     </Provider>
   );
@@ -72,5 +76,25 @@ describe('CoreSyncStatus panel', () => {
     expect(screen.getByText('Using a public node')).toBeInTheDocument();
     expect(screen.getByText('Synchronizing (80%)...')).toBeInTheDocument();
     expect(screen.getByText('Not minting')).toBeInTheDocument();
+  });
+
+  it('opens the Node Manager from its foot, when asked to', () => {
+    const onOpenNodeManager = vi.fn();
+    renderPanel(
+      'https://127.0.0.1:12391',
+      { syncPercent: 100 },
+      onOpenNodeManager
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Node Manager' }));
+
+    expect(onOpenNodeManager).toHaveBeenCalledTimes(1);
+  });
+
+  it('has no Node Manager button where nobody asked for one', () => {
+    renderPanel('https://127.0.0.1:12391', { syncPercent: 100 });
+    expect(
+      screen.queryByRole('button', { name: 'Open Node Manager' })
+    ).toBeNull();
   });
 });

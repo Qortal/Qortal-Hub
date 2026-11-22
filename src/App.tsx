@@ -106,6 +106,7 @@ import { NotAuthenticated } from './components/NotAuthenticated.tsx';
 import { useFetchResources } from './hooks/useFetchResources.tsx';
 import { useHandleUserInfo } from './hooks/useHandleUserInfo.tsx';
 import { Minting } from './components/Minting/Minting';
+import { NodeManagerHost } from './components/NodeManager/NodeManager';
 import { isRunningGateway } from './qortal/qortal-requests.ts';
 import { useBlockedAddressesLoader } from './hooks/useBlockUsers.tsx';
 import { UserLookup } from './components/UserLookup.tsx/UserLookup';
@@ -2048,6 +2049,8 @@ function App() {
         />
         <BuyQortInformation balance={balance} />
       </QORTAL_APP_CONTEXT.Provider>
+
+      {isAuthenticated && isMainWindow && <NodeManagerHost />}
 
       {isOpenMinting && (
         <Minting

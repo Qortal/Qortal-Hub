@@ -3,7 +3,7 @@ import syncedImg from '../assets/syncStatus/synced.webp';
 import syncedMintingImg from '../assets/syncStatus/synced_minting.webp';
 import syncingImg from '../assets/syncStatus/syncing.webp';
 import '../styles/CoreSyncStatus.css';
-import { Box, Chip, Typography, useTheme } from '@mui/material';
+import { Box, Button, Chip, Typography, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import qortalLogoOfficial from '../assets/sidebar/qortal-logo-official.webp';
 import qortalLogoMinting from '../assets/sidebar/qortal-logo-official-minting.webp';
@@ -41,6 +41,7 @@ export const CoreSyncStatus = ({
   useExternalTooltip = false,
   panelOnly = false,
   iconOnly = false,
+  onOpenNodeManager,
 }: {
   renderIcon?: React.ReactNode;
   useExternalTooltip?: boolean;
@@ -48,6 +49,8 @@ export const CoreSyncStatus = ({
   panelOnly?: boolean;
   /** Only the icon: the information shows elsewhere (a tooltip of its own). */
   iconOnly?: boolean;
+  /** Shows "Open Node Manager" at the panel's foot. */
+  onOpenNodeManager?: () => void;
 }) => {
   const nodeInfos = useAtomValue(nodeInfosAtom);
   const selectedNode = useAtomValue(selectedNodeInfoAtom);
@@ -67,7 +70,13 @@ export const CoreSyncStatus = ({
 
   const nodeBase = selectedNode?.url || HTTPS_EXT_NODE_QORTAL_LINK;
   const isUsingGateway = nodeBase?.includes('ext-node.qortal.link') ?? false;
-  const { t, i18n } = useTranslation(['auth', 'core', 'group', 'question']);
+  const { t, i18n } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'node',
+    'question',
+  ]);
   const theme = useTheme();
 
   const applyReticulumStatus = useCallback(
@@ -427,6 +436,18 @@ export const CoreSyncStatus = ({
             </Fragment>
           ))}
         </Box>
+
+        {onOpenNodeManager ? (
+          <Button
+            fullWidth
+            onClick={onOpenNodeManager}
+            size="small"
+            sx={{ mt: 1.25 }}
+            variant="outlined"
+          >
+            {t('node:manager.open', capitalize)}
+          </Button>
+        ) : null}
       </Box>
     );
 

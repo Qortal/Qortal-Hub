@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Initialises the shared i18n instance so useTranslation resolves real strings.
 import '../../i18n/i18n';
 import { userInfoAtom } from '../../atoms/global';
+import { nodeManagerOpenAtom } from '../NodeManager/nodeManagerEvents';
 import { darkTheme } from '../../styles/theme-dark';
 import { executeEvent } from '../../utils/events';
 import { DesktopSideBar } from './DesktopLeftSideBar';
@@ -38,12 +39,13 @@ vi.mock('../../utils/events', async (importOriginal) => ({
 
 const ALICE = 'QaliceAddress00000000000000000000';
 
-const renderPanel = (settings?: unknown) => {
+const renderPanel = (settings?: unknown, { nodeManagerOpen = false } = {}) => {
   if (settings) {
     localStorage.setItem(sidePanelStorageKey(ALICE), JSON.stringify(settings));
   }
   const store = createStore();
   store.set(userInfoAtom, { address: ALICE, name: 'alice' });
+  store.set(nodeManagerOpenAtom, nodeManagerOpen);
   render(
     <Provider store={store}>
       <ThemeProvider theme={darkTheme}>
@@ -107,7 +109,7 @@ describe('DesktopSideBar', () => {
       ],
     });
     expect(screen.getByText('Home')).toBeInTheDocument();
-    expect(screen.queryByText('Info')).toBeNull();
+    expect(screen.queryByText('Node')).toBeNull();
     expect(screen.queryByText('language selector')).toBeNull();
     expect(screen.queryByText('theme selector')).toBeNull();
     // Out of sight, it still keeps the P2P health others read.
@@ -323,6 +325,47 @@ describe('DesktopSideBar', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('opens the Node Manager from the Qortal logo', () => {
+    renderPanel({ items: [{ kind: 'home' }, { kind: 'info' }] });
+
+    fireEvent.click(screen.getByText('Node'));
+
+    expect(executeEvent).toHaveBeenCalledWith('openNodeManager', {
+      section: 'overview',
+    });
+  });
+
+  it("shows the node's information on hover, but not over the Node Manager", async () => {
+    renderPanel({ items: [{ kind: 'home' }, { kind: 'info' }] });
+    fireEvent.mouseOver(screen.getByText('Node'));
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+    cleanup();
+
+    renderPanel(
+      { items: [{ kind: 'home' }, { kind: 'info' }] },
+      { nodeManagerOpen: true }
+    );
+    fireEvent.mouseOver(screen.getByText('Node'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
+  it('opens the Node Manager from the half circle too', () => {
+    renderPanel({ items: [{ kind: 'home' }, { kind: 'info' }], layout: 'arc' });
+    const logo = document.querySelector(
+      '[data-side-panel-slot="info"] [data-node-state]'
+    );
+    expect(logo).not.toBeNull();
+
+    fireEvent.click(logo as Element);
+
+    expect(executeEvent).toHaveBeenCalledWith('openNodeManager', {
+      section: 'overview',
+    });
   });
 
   it('opens its editor', () => {
