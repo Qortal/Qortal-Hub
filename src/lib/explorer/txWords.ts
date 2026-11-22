@@ -151,17 +151,28 @@ function isAccount(value: unknown): value is string {
 
 const ATOMIC = 100_000_000n;
 
-/** "1.5" → 150000000n (8 decimals); null for anything that isn't an amount. */
+/**
+ * "1.5" → 150000000n (8 decimals); null for anything that isn't an amount
+ * (or has more than 8 decimals that aren't zeros). Also the way Core's
+ * balance writes a small amount: "0E-8" (none), "1E-8", "1.0E-7".
+ */
 export function toAtomic(value: unknown): bigint | null {
   const match = String(value ?? '')
     .trim()
-    .match(/^(\d+)(?:\.(\d{1,8}))?$/);
+    .match(/^(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d{1,2}))?$/);
   if (!match) return null;
-  return BigInt(match[1]) * ATOMIC + BigInt((match[2] ?? '').padEnd(8, '0'));
+  const [, whole, fraction = '', exponent = '0'] = match;
+  const digits = BigInt(`${whole}${fraction}`);
+  // digits × 10^(exponent − decimals) QORT, and 1 QORT is 10^8 atomic units.
+  const power = 8 + Number(exponent) - fraction.length;
+  if (power >= 0) return digits * 10n ** BigInt(power);
+  const cut = 10n ** BigInt(-power);
+  return digits % cut === 0n ? digits / cut : null;
 }
 
-/** 150000000n → "1.50000000": atomic units back to Core's decimal text. */
+/** 150000000n → "1.50000000": atomic units back to Core's decimal text ("-1.50000000" below 0). */
 export function fromAtomic(value: bigint): string {
+  if (value < 0n) return `-${fromAtomic(-value)}`;
   return `${value / ATOMIC}.${(value % ATOMIC).toString().padStart(8, '0')}`;
 }
 

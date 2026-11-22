@@ -1,5 +1,6 @@
 import { act, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { DEFAULT_ACTIVITY_SETTINGS } from '../../lib/explorer/activitySettings';
 import { createExplorerCache } from '../../lib/explorer/cache';
 import type { ReadSpec } from '../../lib/explorer/reads';
 import {
@@ -29,6 +30,8 @@ function contextWith(): ExplorerContextValue {
     openName: vi.fn(),
     refresh: vi.fn(),
     close: vi.fn(),
+    activity: DEFAULT_ACTIVITY_SETTINGS,
+    openActivitySettings: vi.fn(),
   };
 }
 

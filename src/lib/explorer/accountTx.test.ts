@@ -5,15 +5,26 @@ vi.mock('../../App', () => ({
 }));
 
 import {
+  ACCOUNT_HISTORY_MAX,
   ACCOUNT_TX_MAX,
   ACCOUNT_TX_PAGE,
   accountTxKey,
   atCeiling,
   canReadMore,
+  canReadOn,
   fromFirstPage,
+  historyAtCeiling,
+  listedPart,
+  maxOf,
+  mergeChecked,
   mergeNewest,
   mergeOlderAt,
+  moreShown,
+  needsCheck,
   readTxPage,
+  shownCount,
+  SHOWN_STEP,
+  withCeiling,
   type AccountTxList,
 } from './accountTx';
 import { CoreHttpError } from './core';
@@ -257,5 +268,185 @@ describe('merging pages', () => {
     expect(more.nextOffset).toBe(ACCOUNT_TX_MAX);
     expect(more.done).toBe(false);
     expect(atCeiling(more)).toBe(true);
+  });
+});
+
+describe('a whole history, asked for', () => {
+  const held: AccountTxList = {
+    rows: rows(1, ACCOUNT_TX_MAX),
+    nextOffset: ACCOUNT_TX_MAX,
+    done: false,
+    epoch: 0,
+  };
+
+  it('raises the list’s own ceiling, never past 20,000 and never lower', () => {
+    expect(maxOf(held)).toBe(ACCOUNT_TX_MAX);
+    const raised = withCeiling(held, 5000);
+    expect(maxOf(raised)).toBe(5000);
+    expect(maxOf(withCeiling(held, 1_000_000))).toBe(ACCOUNT_HISTORY_MAX);
+    expect(withCeiling(raised, 2000)).toBe(raised);
+    expect(withCeiling(held, 500)).toBe(held);
+  });
+
+  it('reads on up to its own ceiling while the tabs stop at 1,000', () => {
+    const raised = withCeiling(held, 5000);
+    expect(canReadMore(raised)).toBe(false);
+    expect(canReadOn(raised)).toBe(true);
+    expect(canReadOn(held)).toBe(false);
+    const more = mergeOlderAt(raised, rows(1001, 100), 1000, 0);
+    expect(more.rows).toHaveLength(1100);
+    expect(maxOf(more)).toBe(5000);
+  });
+
+  it('keeps its ceiling through Refresh, and when it starts over', () => {
+    const raised = mergeOlderAt(
+      withCeiling(held, 5000),
+      rows(1001, 100),
+      1000,
+      0
+    );
+    const refreshed = mergeNewest(raised, rows(0, 100));
+    expect(refreshed.rows).toHaveLength(1101);
+    expect(maxOf(refreshed)).toBe(5000);
+    expect(maxOf(mergeNewest(raised, rows(-900, 100)))).toBe(5000);
+    expect(maxOf(mergeNewest(raised, rows(1, 40)))).toBe(5000);
+  });
+
+  it('reads on by the rows it holds, not by offsets a transaction arriving meanwhile moved on', () => {
+    // A page read twice after one arrived at the top: 999 held, though the
+    // next offset is 1,000.
+    const shifted: AccountTxList = {
+      rows: rows(1, ACCOUNT_TX_MAX - 1),
+      nextOffset: ACCOUNT_TX_MAX,
+      done: false,
+      epoch: 0,
+      max: ACCOUNT_TX_MAX,
+    };
+    expect(canReadOn(shifted)).toBe(true);
+    const read = mergeOlderAt(shifted, rows(1000, 100), ACCOUNT_TX_MAX, 0);
+    expect(read.rows).toHaveLength(ACCOUNT_TX_MAX);
+    expect(canReadOn(read)).toBe(false);
+    // What was cut is more than it holds: it is known to be longer.
+    expect(read.longer).toBe(true);
+  });
+
+  it('stops at the Explorer’s most only when a read showed more, and says so', () => {
+    const top: AccountTxList = {
+      rows: rows(1, ACCOUNT_HISTORY_MAX),
+      nextOffset: ACCOUNT_HISTORY_MAX,
+      done: false,
+      epoch: 0,
+      max: ACCOUNT_HISTORY_MAX,
+    };
+    // Whether there are more isn't known: one row says.
+    expect(needsCheck(top)).toBe(true);
+    expect(canReadOn(top)).toBe(true);
+    expect(historyAtCeiling(top)).toBe(false);
+    // A row it doesn't hold: longer than the Explorer reads.
+    const longer = mergeChecked(top, [row(30_000)], ACCOUNT_HISTORY_MAX, 0);
+    expect(longer.longer).toBe(true);
+    expect(canReadOn(longer)).toBe(false);
+    expect(historyAtCeiling(longer)).toBe(true);
+    expect(historyAtCeiling({ ...longer, done: true })).toBe(false);
+    // None: exactly that many, its whole history.
+    const exactly = mergeChecked(top, [], ACCOUNT_HISTORY_MAX, 0);
+    expect(exactly.done).toBe(true);
+    expect(historyAtCeiling(exactly)).toBe(false);
+    expect(canReadOn(exactly)).toBe(false);
+    // One it holds (one arrived at the top since): the next check reads one further.
+    const moved = mergeChecked(
+      top,
+      [row(ACCOUNT_HISTORY_MAX)],
+      top.nextOffset,
+      0
+    );
+    expect(moved.nextOffset).toBe(ACCOUNT_HISTORY_MAX + 1);
+    expect(needsCheck(moved)).toBe(true);
+    // A check read for another list, or from elsewhere, is left out.
+    expect(mergeChecked(top, [], ACCOUNT_HISTORY_MAX, 1)).toBe(top);
+    expect(mergeChecked(top, [], ACCOUNT_HISTORY_MAX - 1, 0)).toBe(top);
+    // A Refresh past the most cuts the oldest: known to be longer.
+    const refreshed = mergeNewest(top, rows(-50, 100));
+    expect(refreshed.rows).toHaveLength(ACCOUNT_HISTORY_MAX);
+    expect(historyAtCeiling(refreshed)).toBe(true);
+  });
+
+  it('a history of exactly the Explorer’s most is never said to be longer without a read that shows more', () => {
+    // 20,000 transactions, read in full pages of 100 after Read the rest:
+    // its 201st page would be empty.
+    const page = (offset: number) => rows(offset, ACCOUNT_TX_PAGE);
+    let list = withCeiling(fromFirstPage(page(0)), ACCOUNT_HISTORY_MAX);
+    for (
+      let offset = ACCOUNT_TX_PAGE;
+      offset < ACCOUNT_HISTORY_MAX;
+      offset += ACCOUNT_TX_PAGE
+    )
+      list = mergeOlderAt(list, page(offset), offset, list.epoch);
+    expect(list.rows).toHaveLength(ACCOUNT_HISTORY_MAX);
+    // It reads one more row to know, and doesn't claim the node has more.
+    expect(historyAtCeiling(list)).toBe(false);
+    expect(canReadOn(list)).toBe(true);
+    expect(mergeChecked(list, [], list.nextOffset, list.epoch).done).toBe(true);
+  });
+
+  it('reads one row to check, a page otherwise', async () => {
+    answer = () => ({ body: [] });
+    await readTxPage(ADDRESS, [], ACCOUNT_HISTORY_MAX, 1);
+    await readTxPage(ADDRESS, [], 0);
+    expect(
+      paths.map((path) => new URLSearchParams(path.split('?')[1]).get('limit'))
+    ).toEqual(['1', '100']);
+  });
+
+  it('lets a tab list its newest 1,000, and never call them all when more were read', () => {
+    const raised = mergeOlderAt(
+      withCeiling(held, 5000),
+      rows(1001, 40),
+      1000,
+      0
+    );
+    expect(raised.done).toBe(true);
+    const part = listedPart(raised);
+    expect(part.rows).toHaveLength(ACCOUNT_TX_MAX);
+    expect(part.beyond).toBe(40);
+    expect(part.all).toBe(false);
+    const small = fromFirstPage(rows(1, 7));
+    expect(listedPart(small)).toEqual({
+      rows: small.rows,
+      all: true,
+      beyond: 0,
+    });
+  });
+});
+
+describe('how many a tab shows', () => {
+  const held = rows(1, 1000);
+
+  it('shows the first 100 of what is held until more is asked for', () => {
+    expect(SHOWN_STEP).toBe(100);
+    expect(shownCount(held, undefined)).toBe(100);
+    expect(shownCount(rows(1, 40), undefined)).toBe(40);
+  });
+
+  it('shows the next 100 held without a read, and reads only once all held are shown', () => {
+    const first = moreShown(held, undefined);
+    expect(first).toEqual({ next: { count: 200, top: 'sig1' }, read: false });
+    expect(shownCount(held, first.next)).toBe(200);
+    const end = { count: 1000, top: 'sig1' };
+    expect(shownCount(held, end)).toBe(1000);
+    expect(moreShown(held, end)).toEqual({
+      next: { count: 1100, top: 'sig1' },
+      read: true,
+    });
+    // A read that failed, asked again: still 100 more than are held.
+    expect(moreShown(held, { count: 1100, top: 'sig1' }).next.count).toBe(1100);
+  });
+
+  it('keeps on screen what was shown when a Refresh puts rows above it', () => {
+    const kept = { count: 200, top: 'sig1' };
+    const refreshed = [row(-1), row(0), ...held];
+    expect(shownCount(refreshed, kept)).toBe(202);
+    // The list started over: counted from its new top.
+    expect(shownCount(rows(5000, 300), kept)).toBe(200);
   });
 });

@@ -2,12 +2,15 @@
  * The Overview's facts, each on a tile: its level and how far it is to the
  * next (with Hub's Minting window maths), blocks minted, balance, when it
  * was first seen, how many groups it is in, and the QORT it received and
- * sent in its newest payments (User search's figures, now saying what
- * they cover). Each fact loads, fails and retries on its own.
+ * sent. Each fact loads, fails and retries on its own.
+ *
+ * QORT received / sent is one figure for each viewer (QortFacts.tsx): its
+ * newest 500 payments (User search's figures, now saying what they cover),
+ * or, for a viewer who sees the detailed parts, its whole history in their
+ * place, with QORT minted and QORT purchased / sold. Never both, and
+ * neither while it isn't known yet which one the viewer sees.
  */
-import { type ReactNode } from 'react';
-import { Box, LinearProgress, Tooltip, Typography } from '@mui/material';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import { Box, LinearProgress } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import {
   formatCount,
@@ -15,8 +18,8 @@ import {
   formatQort,
   formatQortExact,
 } from '../../../lib/explorer/format';
+import { balanceRead } from '../../../lib/explorer/qortReads';
 import {
-  balanceRead,
   nodeTimingRead,
   RECENT_PAYMENTS_LIMIT,
   type AccountInfo,
@@ -29,111 +32,17 @@ import {
   levelProgressOf,
   paymentTotals,
 } from '../../../lib/explorer/rules';
+import type { AccessState } from '../useExplorerAccess';
 import { useExplorerRead, type ReadState } from '../ExplorerContext';
+import { cap, LoadingLine, ReadError, Section } from '../parts';
+import { Fact, FactError } from './Fact';
 import {
-  cap,
-  LoadingLine,
-  mutedText,
-  ReadError,
-  Section,
-  tileSx,
-} from '../parts';
-
-function Fact({
-  label,
-  value,
-  detail,
-  info,
-  wide = false,
-}: {
-  label: string;
-  value: ReactNode;
-  detail?: ReactNode;
-  /** What the figure covers, on hover and focus of an (i) beside the label. */
-  info?: string;
-  wide?: boolean;
-}) {
-  return (
-    <Box
-      sx={(theme) => ({
-        ...tileSx(theme),
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 0.5,
-        ...(wide ? { gridColumn: '1 / -1' } : {}),
-      })}
-    >
-      <Typography
-        component="dt"
-        variant="body2"
-        sx={(theme) => ({
-          alignItems: 'center',
-          color: mutedText(theme),
-          display: 'flex',
-          gap: 0.5,
-        })}
-      >
-        {label}
-        {info ? (
-          <Tooltip title={info}>
-            <Box
-              component="span"
-              tabIndex={0}
-              role="img"
-              aria-label={info}
-              sx={{
-                display: 'inline-flex',
-                '&:focus-visible': { outline: '2px solid' },
-              }}
-            >
-              <InfoOutlinedIcon sx={{ fontSize: 15 }} />
-            </Box>
-          </Tooltip>
-        ) : null}
-      </Typography>
-      <Typography
-        component="dd"
-        sx={{
-          fontSize: '1.1rem',
-          fontVariantNumeric: 'tabular-nums',
-          fontWeight: 700,
-          m: 0,
-          overflowWrap: 'anywhere',
-        }}
-      >
-        {value}
-      </Typography>
-      {detail ? (
-        <Typography
-          component="dd"
-          variant="body2"
-          sx={(theme) => ({ color: mutedText(theme), m: 0 })}
-        >
-          {detail}
-        </Typography>
-      ) : null}
-    </Box>
-  );
-}
-
-/** A fact whose read failed: what couldn't load, and Retry, across the row. */
-function FactError({
-  label,
-  message,
-  read,
-}: {
-  label: string;
-  message: string;
-  read: ReadState<unknown>;
-}) {
-  return (
-    <Fact
-      wide
-      label={label}
-      value={<ReadError message={message} onRetry={read.retry} />}
-    />
-  );
-}
+  HistoryNotice,
+  QortFlowsFact,
+  QortMintedFact,
+  QortTradesFact,
+  type QortFigures,
+} from './QortFacts';
 
 function LevelFact({ account }: { account: AccountInfo }) {
   const { t, i18n } = useTranslation(['core', 'explorer']);
@@ -241,7 +150,7 @@ function BalanceFact({ address }: { address: string }) {
       <FactError
         label={label}
         message={t('explorer:facts.balance_failed', cap)}
-        read={balance}
+        onRetry={balance.retry}
       />
     );
   if (balance.data === undefined)
@@ -251,8 +160,8 @@ function BalanceFact({ address }: { address: string }) {
         value={<LoadingLine label={t('core:loading.generic', cap)} />}
       />
     );
-  const short = formatQort(balance.data, i18n.language);
-  const exact = formatQortExact(balance.data, i18n.language);
+  const short = formatQort(balance.data.qort, i18n.language);
+  const exact = formatQortExact(balance.data.qort, i18n.language);
   return (
     <Fact
       label={label}
@@ -274,7 +183,7 @@ function FirstSeenFact({ read }: { read: ReadState<BlockAt | null> }) {
       <FactError
         label={label}
         message={t('explorer:facts.first_seen_failed', cap)}
-        read={read}
+        onRetry={read.retry}
       />
     );
   if (read.data === undefined)
@@ -309,7 +218,7 @@ function GroupsFact({ read }: { read: ReadState<GroupOf[]> }) {
       <FactError
         label={label}
         message={t('explorer:groups.failed', cap)}
-        read={read}
+        onRetry={read.retry}
       />
     );
   if (!read.data)
@@ -350,7 +259,7 @@ function PaymentsFact({
       <FactError
         label={label}
         message={t('explorer:payments.failed', cap)}
-        read={read}
+        onRetry={read.retry}
       />
     );
   if (!read.data)
@@ -410,13 +319,21 @@ export function AtAGlance({
   firstSeen,
   groups,
   payments,
+  access,
+  figures,
 }: {
   account: AccountInfo;
   firstSeen: ReadState<BlockAt | null>;
   groups: ReadState<GroupOf[]>;
+  /** Its newest 500 payments: read only for a viewer who doesn't see the detailed parts. */
   payments: ReadState<RecentPayments>;
+  /** Whether the viewer sees the detailed parts (the level 5+ rule). */
+  access: AccessState;
+  /** Its QORT over its whole history, for a viewer who sees the detailed parts. */
+  figures: QortFigures;
 }) {
-  const { t } = useTranslation(['explorer']);
+  const { t } = useTranslation(['core', 'explorer']);
+  const full = access === 'full';
   return (
     <Section id="explorer-facts" title={t('explorer:facts.title', cap)}>
       <Box sx={{ containerType: 'inline-size' }}>
@@ -440,8 +357,23 @@ export function AtAGlance({
           <BalanceFact address={account.address} />
           <FirstSeenFact read={firstSeen} />
           <GroupsFact read={groups} />
-          <PaymentsFact address={account.address} read={payments} />
+          {full ? (
+            <>
+              <QortFlowsFact figures={figures} />
+              <QortMintedFact figures={figures} />
+              <QortTradesFact figures={figures} />
+            </>
+          ) : access === 'reading' ? (
+            // Which figure the viewer sees isn't known yet: neither, so no figure changes under it.
+            <Fact
+              label={t('explorer:facts.received_sent', cap)}
+              value={<LoadingLine label={t('core:loading.generic', cap)} />}
+            />
+          ) : (
+            <PaymentsFact address={account.address} read={payments} />
+          )}
         </Box>
+        {full ? <HistoryNotice figures={figures} /> : null}
       </Box>
     </Section>
   );

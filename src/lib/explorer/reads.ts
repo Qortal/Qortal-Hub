@@ -86,17 +86,6 @@ export const accountRead = (address: string): ReadSpec<ExploredAccount> => ({
   },
 });
 
-export const balanceRead = (address: string): ReadSpec<number> => ({
-  key: `balance:${address}`,
-  ttlMs: MINUTE,
-  load: async () => {
-    const value = await getJson<unknown>(`/addresses/balance/${seg(address)}`);
-    const balance = typeof value === 'number' ? value : Number(value);
-    if (!Number.isFinite(balance)) throw new CoreHttpError(200, String(value));
-    return balance;
-  },
-});
-
 // ---- Names --------------------------------------------------------------------------
 
 /** Its primary name, or null when it has none. */
@@ -436,12 +425,18 @@ export const lastSentRead = (
   },
 });
 
+/** When the account was first seen, and the transaction it was first seen in. */
+export interface FirstSeen extends BlockAt {
+  signature: string;
+}
+
 /**
  * When the account was first seen: the oldest confirmed transaction
  * involving it (as sender, recipient or otherwise), or null when there is
- * none. One row, oldest first.
+ * none. One row, oldest first; its signature says when a list read from
+ * the newest has reached it.
  */
-export const firstSeenRead = (address: string): ReadSpec<BlockAt | null> => ({
+export const firstSeenRead = (address: string): ReadSpec<FirstSeen | null> => ({
   key: `firstseen:${address}`,
   ttlMs: 30 * MINUTE,
   load: async () => {
@@ -457,7 +452,11 @@ export const firstSeenRead = (address: string): ReadSpec<BlockAt | null> => ({
     );
     const first = rows[0];
     return first && typeof first.blockHeight === 'number'
-      ? { height: first.blockHeight, timestamp: first.timestamp }
+      ? {
+          height: first.blockHeight,
+          timestamp: first.timestamp,
+          signature: first.signature,
+        }
       : null;
   },
 });

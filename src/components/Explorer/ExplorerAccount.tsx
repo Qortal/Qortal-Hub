@@ -9,19 +9,23 @@
  *
  * An account's page is its header, the trail, then its tabs (AccountTabs):
  * Overview, Connections, Transactions and Names. Each tab reads what it
- * shows when it opens. Connections and the Overview's Direct links are
- * detailed parts: only for a viewer the level 5+ rule lets see them
- * (lib/explorer/access.ts), and nothing of them is read for anyone else.
+ * shows when it opens. Connections, the Overview's Direct links, its QORT
+ * figures over the whole history and its Activity are detailed parts: only
+ * for a viewer the level 5+ rule lets see them (lib/explorer/access.ts),
+ * and nothing of them is read for anyone else. An AT's page is its
+ * transactions only: it never mints, and what its QORT does is the trades
+ * it settles, which its traders' pages add up.
  * Read-only: nothing here writes (Send QORT and Block hand over to Hub's
  * own windows and lists).
  */
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Box, ButtonBase, CircularProgress, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import {
   isAtAddress,
   isQortAddress,
   looksLikeAddress,
+  shortAddress,
 } from '../../lib/explorer/addresses';
 import {
   accountRead,
@@ -60,6 +64,7 @@ import {
 import {
   useExplorer,
   useExplorerRead,
+  useNearScreen,
   useStepState,
   type ReadState,
 } from './ExplorerContext';
@@ -74,6 +79,9 @@ import { OverviewSummary } from './overview/OverviewSummary';
 import { NamesTab } from './names/NamesTab';
 import { ConnectionsTab } from './connections/ConnectionsTab';
 import { DirectLinksPreview } from './overview/DirectLinksPreview';
+import { ActivitySection } from './overview/activity/ActivitySection';
+import { useQortFigures } from './overview/QortFacts';
+import { useAccountHistory } from './overview/useAccountHistory';
 import { useExplorerAccess } from './useExplorerAccess';
 import {
   cap,
@@ -220,7 +228,7 @@ const part = <T,>(read: { data: T | undefined; status: string }) =>
       ? null
       : undefined;
 
-/** The Overview: its reads start when it opens. */
+/** The Overview: its reads start when it opens, each part's as it nears the screen. */
 function OverviewTab({
   account,
   primary,
@@ -242,11 +250,37 @@ function OverviewTab({
   onShowConnections: (() => void) | null;
 }) {
   const { address, publicKey } = account;
+  const { access, activity } = useExplorer();
+  const full = access === 'full';
   const firstSeen = useExplorerRead(firstSeenRead(address));
   const lastSent = useExplorerRead(
     publicKey ? lastSentRead(address, publicKey) : null
   );
-  const payments = useExplorerRead(recentPaymentsRead(address));
+  // Its newest 500 payments: the received / sent figure of a viewer who
+  // doesn't see the detailed parts (one who does sees its whole history in
+  // their place), read once that is known.
+  const payments = useExplorerRead(
+    access === 'basic' || access === 'unknown'
+      ? recentPaymentsRead(address)
+      : null
+  );
+  // Its All list, held here for the parts that show it, read as they near the screen.
+  const [glanceNode, setGlanceNode] = useState<HTMLElement | null>(null);
+  const [activityNode, setActivityNode] = useState<HTMLElement | null>(null);
+  const [latestNode, setLatestNode] = useState<HTMLElement | null>(null);
+  const glanceNear = useNearScreen(glanceNode) && full;
+  const activityNear = useNearScreen(activityNode) && full;
+  const latestNear = useNearScreen(latestNode);
+  const history = useAccountHistory(address, {
+    enabled: latestNear || glanceNear || activityNear,
+    deep: glanceNear || activityNear,
+    firstRead: activity.firstRead,
+    firstSignature:
+      firstSeen.status === 'ready'
+        ? (firstSeen.data?.signature ?? null)
+        : undefined,
+  });
+  const figures = useQortFigures(account, history, glanceNear);
   const standing = groups.data ? minterStandingOf(groups.data) : undefined;
   return (
     <>
@@ -261,12 +295,27 @@ function OverviewTab({
       {onShowConnections ? (
         <DirectLinksPreview address={address} onShowAll={onShowConnections} />
       ) : null}
-      <AtAGlance
-        account={account}
-        firstSeen={firstSeen}
-        groups={groups}
-        payments={payments}
-      />
+      <Box ref={setGlanceNode} sx={{ minWidth: 0 }}>
+        <AtAGlance
+          account={account}
+          firstSeen={firstSeen}
+          groups={groups}
+          payments={payments}
+          access={access}
+          figures={figures}
+        />
+      </Box>
+      {full ? (
+        <ActivitySection
+          account={account}
+          label={primary ? visibleName(primary) : shortAddress(address)}
+          history={history}
+          firstSeen={firstSeen}
+          near={activityNear}
+          nodeRef={setActivityNode}
+          onShowNames={onShowNames}
+        />
+      ) : null}
       <GroupsSection address={address} read={groups} />
       <MinterSection read={groups} />
       <MintingSection
@@ -281,7 +330,12 @@ function OverviewTab({
         names={names.data}
         onShowNames={onShowNames}
       />
-      <LatestTransactions address={address} onShowAll={onShowTransactions} />
+      <LatestTransactions
+        address={address}
+        state={history}
+        nodeRef={setLatestNode}
+        onShowAll={onShowTransactions}
+      />
     </>
   );
 }

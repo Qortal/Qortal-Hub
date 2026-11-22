@@ -1,14 +1,20 @@
 /**
  * An account's transactions: the kind and type picked (TxFilterBar), what
  * it sent that waits for a block (when it has a public key: an AT has
- * none), then its confirmed transactions, newest first, read 100 at a time
- * with "Show more" up to 1,000 of each kind. The line under the list says
- * how much of it is on screen, and when the Explorer stopped reading.
+ * none), then its confirmed transactions, newest first, 100 at a time with
+ * "Show more", up to 1,000 of each kind. Show more first shows the next
+ * 100 of the rows already read (the Overview may have read many for its
+ * QORT figures and Activity), and reads 100 more from the node only once
+ * every row read is on screen. The line under the list says how much of it
+ * is on screen, and when the Explorer stopped reading. When the Overview
+ * read more of all of them, the tab lists the newest 1,000 of those, and
+ * says so.
  *
- * What is picked belongs to the history step (useStepState), so Back
- * shows the tab as it was left. Each row opens to its details, its raw API
- * answer, and links on to the accounts involved and the transaction's own
- * page. Read-only.
+ * What is picked, and how many of each kind are shown, belong to the
+ * history step (useStepState), so Back and switching tabs show the tab as
+ * it was left. Each row opens to its details, its raw API answer, and
+ * links on to the accounts involved and the transaction's own page.
+ * Read-only.
  */
 import { useMemo } from 'react';
 import { Box, Button, Typography } from '@mui/material';
@@ -18,6 +24,10 @@ import {
   ACCOUNT_TX_MAX,
   atCeiling,
   canReadMore,
+  listedPart,
+  moreShown,
+  shownCount,
+  type ShownRows,
 } from '../../../lib/explorer/accountTx';
 import { formatCount } from '../../../lib/explorer/format';
 import {
@@ -67,13 +77,32 @@ function ConfirmedList({
   address,
   filter,
   state,
+  shown,
+  onShown,
 }: {
   address: string;
   filter: TxFilter;
   state: AccountTxListState;
+  /** How many rows are shown (none yet: the first 100). */
+  shown: ShownRows | undefined;
+  onShown: (next: ShownRows) => void;
 }) {
   const { t, i18n } = useTranslation(['core', 'explorer']);
   const { list, error, retry, more, showMore } = state;
+  // At most the newest 1,000: the Overview may have read more of all of them.
+  const listed = list ? listedPart(list) : null;
+  // 100 at a time, of the rows read.
+  const visible = listed ? shownCount(listed.rows, shown) : 0;
+  const allShown = Boolean(listed) && visible === listed.rows.length;
+  const canShowMore = Boolean(list) && (!allShown || canReadMore(list));
+  /** The next 100 rows read, or, once all are shown, 100 more from the node. */
+  const onShowMore = () => {
+    if (!list || !listed) return;
+    const { next, read } = moreShown(listed.rows, shown);
+    if (read && !canReadMore(list)) return;
+    onShown(next);
+    if (read) showMore();
+  };
   const filtered = isFiltered(filter);
   const title = filter.type
     ? typeTitle(filter.type, t, true)
@@ -113,7 +142,11 @@ function ConfirmedList({
           </Typography>
         ) : (
           <>
-            <TxList rows={list.rows} viewpoint={address} label={title} />
+            <TxList
+              rows={listed.rows.slice(0, visible)}
+              viewpoint={address}
+              label={title}
+            />
             <Box
               sx={{
                 alignItems: 'center',
@@ -135,22 +168,28 @@ function ConfirmedList({
                 {coverageLine(
                   t,
                   i18n.language,
-                  list.rows.length,
-                  list.done,
+                  visible,
+                  listed.all && allShown,
                   filtered
                 )}
-                {atCeiling(list)
-                  ? ` ${t('explorer:transactions.ceiling', {
+                {listed.beyond
+                  ? ` ${t('explorer:transactions.listed_cap', {
+                      count: list.rows.length,
                       max: formatCount(ACCOUNT_TX_MAX, i18n.language),
+                      shown: formatCount(list.rows.length, i18n.language),
                     })}`
-                  : null}
+                  : atCeiling(list) && allShown
+                    ? ` ${t('explorer:transactions.ceiling', {
+                        max: formatCount(ACCOUNT_TX_MAX, i18n.language),
+                      })}`
+                    : null}
               </Typography>
-              {canReadMore(list) && !more.error ? (
+              {canShowMore && !more.error ? (
                 <Button
                   size="small"
                   variant="outlined"
                   disabled={more.loading}
-                  onClick={showMore}
+                  onClick={onShowMore}
                 >
                   {more.loading
                     ? t('core:loading.generic', cap)
@@ -162,7 +201,7 @@ function ConfirmedList({
               <Box sx={{ mt: 1 }}>
                 <ReadError
                   message={t('explorer:transactions.more_failed', cap)}
-                  onRetry={showMore}
+                  onRetry={onShowMore}
                 />
               </Box>
             ) : null}
@@ -191,7 +230,13 @@ export function TransactionsTab({
     ALL_TRANSACTIONS
   );
   const filter = cleanFilter(kept);
-  const state = useAccountTxList(address, typesToAsk(filter));
+  const types = typesToAsk(filter);
+  const state = useAccountTxList(address, types);
+  // How many of each kind's list are shown, kept with the step like the kind picked.
+  const listKey = types.join(',') || 'all';
+  const [shownByList, setShownByList] = useStepState<
+    Readonly<Record<string, ShownRows>>
+  >('txShown', {});
   // One confirmed since the waiting list was read shows only among the confirmed.
   const confirmed = useMemo(
     () => new Set((state.list?.rows ?? []).map((row) => row.signature)),
@@ -210,7 +255,13 @@ export function TransactionsTab({
           confirmed={confirmed}
         />
       ) : null}
-      <ConfirmedList address={address} filter={filter} state={state} />
+      <ConfirmedList
+        address={address}
+        filter={filter}
+        state={state}
+        shown={shownByList[listKey]}
+        onShown={(next) => setShownByList({ ...shownByList, [listKey]: next })}
+      />
     </Box>
   );
 }

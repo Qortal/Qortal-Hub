@@ -41,6 +41,11 @@ import { useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { userInfoAtom } from '../../atoms/global';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
+import {
+  readActivitySettings,
+  writeActivitySettings,
+  type ActivitySettings,
+} from '../../lib/explorer/activitySettings';
 import { createExplorerCache } from '../../lib/explorer/cache';
 import {
   addRecent,
@@ -67,6 +72,7 @@ import {
 import { ExplorerSearchField } from './ExplorerSearchField';
 import { ExplorerStart } from './ExplorerStart';
 import { NameLifeView } from './names/NameLifeView';
+import { ActivitySettingsDialog } from './overview/activity/ActivitySettingsDialog';
 import { cap, mutedText } from './parts';
 import { TxView } from './transactions/TxView';
 import { useAccessRule } from './useExplorerAccess';
@@ -153,6 +159,10 @@ export function ExplorerWindow({
   const [history, setHistory] = useState<History>(START);
   const [recent, setRecent] = useState<string[]>(() => readRecent(viewer));
   const [remember, setRemember] = useState(() => readRemember(viewer));
+  const [activity, setActivity] = useState<ActivitySettings>(() =>
+    readActivitySettings(viewer)
+  );
+  const [activityOpen, setActivityOpen] = useState(false);
   const [full, setFull] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
 
@@ -165,6 +175,7 @@ export function ExplorerWindow({
     setCache(createExplorerCache());
     setHistory(START);
     setMenuAnchor(null);
+    setActivityOpen(false);
   }, []);
 
   // Another Hub account: its own recent list, and nothing left from the last one.
@@ -175,6 +186,7 @@ export function ExplorerWindow({
     reset();
     setRecent(readRecent(viewer));
     setRemember(readRemember(viewer));
+    setActivity(readActivitySettings(viewer));
   }, [viewer, reset]);
 
   // The level 5+ rule: read when the window opens, kept a minute for this Hub account.
@@ -343,6 +355,16 @@ export function ExplorerWindow({
     return () => unsubscribeFromEvent('openUserLookupDrawer', onOpen);
   }, [openAccount, setIsOpenDrawerLookup]);
 
+  // The Activity settings: only for a viewer who sees the detailed parts.
+  const openActivitySettings = useCallback(() => {
+    setMenuAnchor(null);
+    setActivityOpen(true);
+  }, []);
+  const changeActivity = (next: ActivitySettings) => {
+    setActivity(next);
+    if (viewer) writeActivitySettings(viewer, next);
+  };
+
   const context = useMemo<ExplorerContextValue>(
     () => ({
       cache,
@@ -354,6 +376,8 @@ export function ExplorerWindow({
       openName,
       refresh,
       close,
+      activity,
+      openActivitySettings,
     }),
     [
       cache,
@@ -365,6 +389,8 @@ export function ExplorerWindow({
       openName,
       refresh,
       close,
+      activity,
+      openActivitySettings,
     ]
   );
   const step = useMemo(
@@ -654,7 +680,24 @@ export function ExplorerWindow({
           <MenuItem disabled={!recent.length} onClick={forgetRecent}>
             <ListItemText>{t('explorer:start.clear_recent', cap)}</ListItemText>
           </MenuItem>
+          {access === 'full'
+            ? [
+                <Divider key="activity-divider" />,
+                <MenuItem key="activity" onClick={openActivitySettings}>
+                  <ListItemText
+                    primary={t('explorer:settings.activity', cap)}
+                    secondary={t('explorer:settings.activity_hint', cap)}
+                  />
+                </MenuItem>,
+              ]
+            : null}
         </Menu>
+        <ActivitySettingsDialog
+          open={activityOpen && access === 'full'}
+          settings={activity}
+          onChange={changeActivity}
+          onClose={() => setActivityOpen(false)}
+        />
       </ExplorerContext.Provider>
     </Dialog>
   );

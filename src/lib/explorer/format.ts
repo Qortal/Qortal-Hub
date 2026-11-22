@@ -198,3 +198,33 @@ export function formatList(items: readonly string[], language: string): string {
     language
   ).format([...items]);
 }
+
+/**
+ * A period of days in the language's own way of saying a range ("3 – 9
+ * Mar 2024"), one day as that day; a period under a day with its times.
+ * `end` is where the period stops (not in it).
+ */
+export function formatPeriod(
+  start: number,
+  end: number,
+  language: string
+): string {
+  const short = end - start < 86_400_000;
+  const days: RangeFormat = safe(
+    (lang) =>
+      new Intl.DateTimeFormat(lang, {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        ...(short ? { hour: '2-digit', minute: '2-digit' } : {}),
+      }),
+    language
+  );
+  const last = Math.max(start, end - 1);
+  const from = days.format(start);
+  const to = days.format(last);
+  if (from === to) return from;
+  return typeof days.formatRange === 'function'
+    ? days.formatRange(new Date(start), new Date(last))
+    : `${from} – ${to}`;
+}

@@ -13,6 +13,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import type { ActivitySettings } from '../../lib/explorer/activitySettings';
 import type { ExplorerCache } from '../../lib/explorer/cache';
 import type { ReadSpec } from '../../lib/explorer/reads';
 import type { AccessState } from './useExplorerAccess';
@@ -50,6 +51,13 @@ export interface ExplorerContextValue {
   refresh: (scope: string) => void;
   /** Close the Explorer window. */
   close: () => void;
+  /**
+   * The Activity row of the settings (lib/explorer/activitySettings.ts):
+   * how much the Overview reads first, and the milestones it leaves out.
+   */
+  activity: ActivitySettings;
+  /** Open the Activity settings (for a viewer who sees the detailed parts). */
+  openActivitySettings: () => void;
 }
 
 export const ExplorerContext = createContext<ExplorerContextValue | null>(null);

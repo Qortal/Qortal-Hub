@@ -214,6 +214,7 @@ describe('first seen', () => {
     await expect(firstSeenRead(ADDRESS).load()).resolves.toEqual({
       height: 1,
       timestamp: 1_500,
+      signature: 's',
     });
     expect(paths).toEqual([
       `/transactions/search?address=${ADDRESS}&confirmationStatus=CONFIRMED&limit=1&reverse=false`,
