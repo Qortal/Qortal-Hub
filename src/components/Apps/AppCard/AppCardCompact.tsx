@@ -109,7 +109,7 @@ export const AppCardCompact = ({ app, myName }: AppCardCompactProps) => {
             },
           }}
           alt={app?.name}
-          src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${app?.name}/qortal_avatar?async=true`}
+          src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${encodeURIComponent(app?.name)}/qortal_avatar?async=true`}
         >
           <img
             style={{
