@@ -46,6 +46,7 @@ import {
   subscribeToAppSettingsChanges,
   setLastP2POptions,
   startDecentralizedStunAfterP2P,
+  isAllowedNodeUrl,
 } from './setup';
 import { shutdownPrivateTransportSidecar } from './private-transport-runtime';
 import { viewMenu } from './hub-zoom';
@@ -86,7 +87,7 @@ import * as net from 'net';
 
 registerReticulumIpcHandlers();
 registerReticulumMeshIpcHandlers();
-registerQortinoLlmIpcHandlers();
+registerQortinoLlmIpcHandlers({ isNodeUrl: isAllowedNodeUrl });
 
 function isBenignStdioWriteError(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException)?.code;

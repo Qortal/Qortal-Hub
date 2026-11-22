@@ -100,7 +100,9 @@ describe('Qortino in the main process when the Hub page goes away', () => {
     fake.handlers.get(channel)!(event, args);
 
   beforeAll(() => {
-    registerQortinoLlmIpcHandlers();
+    registerQortinoLlmIpcHandlers({
+      isNodeUrl: (url) => url.startsWith('http://127.0.0.1:12391/'),
+    });
   });
 
   beforeEach(async () => {
@@ -186,7 +188,7 @@ describe('Qortino in the main process when the Hub page goes away', () => {
     const part = `${path.join(fake.userData, 'Qortino AI', relativePath)}.part`;
     let outcome = 'pending';
     void call('qortino:downloadUrl', {
-      url: 'https://example.com/m.gguf',
+      url: 'http://127.0.0.1:12391/arbitrary/FILE/Qortino%20AI/qshare_file_m',
       relativePath,
     }).then(
       () => {
@@ -206,7 +208,7 @@ describe('Qortino in the main process when the Hub page goes away', () => {
     expect(fs.readFileSync(part, 'utf8')).toBe('saved so far');
     // The next page can ask for it again.
     const again = call('qortino:downloadUrl', {
-      url: 'https://example.com/m.gguf',
+      url: 'http://127.0.0.1:12391/arbitrary/FILE/Qortino%20AI/qshare_file_m',
       relativePath,
     });
     again.catch(() => undefined);

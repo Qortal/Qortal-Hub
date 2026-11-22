@@ -16,6 +16,7 @@ const llm = vi.hoisted(() => ({
   cleanupStorage: vi.fn(),
   downloadUrl: vi.fn(),
   fileExists: vi.fn(),
+  removeOtherModel: vi.fn(),
   getStoragePaths: vi.fn(async () => ({
     knowledgeDir: '/agent/knowledge',
     modelsDir: '/agent/models',
@@ -64,6 +65,7 @@ vi.mock('../store', () => store);
 
 import {
   chooseQortinoModelLayout,
+  downloadQdnModel,
   installQortinoModel,
   reclaimOldQortinoFiles,
   savedModelBytes,
@@ -155,6 +157,12 @@ describe('Qortino model install', () => {
         for (const path of [...disk.keys()])
           if (!keep.includes(path)) disk.delete(path);
         return { deletedFiles: 0, freedBytes: 0 };
+      }
+    );
+    llm.removeOtherModel.mockImplementation(
+      async ({ relativePath }: { relativePath: string }) => {
+        disk.delete(relativePath);
+        return { freedBytes: 0 };
       }
     );
     vi.stubGlobal(
@@ -349,6 +357,215 @@ describe('Qortino model install', () => {
         expect(keep).toContain(`${modelPartRelativePath(part)}.part`);
       }
     }
+  });
+  it("asks the node for every part of Qortino's own model up front", async () => {
+    const THREE: QortinoModelSpec = {
+      ...MODEL,
+      parts: [
+        {
+          filename: 'three-00001-of-00003.gguf',
+          sizeBytes: 1000,
+          sha256: 'aa11',
+        },
+        {
+          filename: 'three-00002-of-00003.gguf',
+          sizeBytes: 700,
+          sha256: 'bb22',
+        },
+        {
+          filename: 'three-00003-of-00003.gguf',
+          sizeBytes: 500,
+          sha256: 'cc33',
+        },
+      ],
+    };
+    const sizes: Record<string, number> = { T1: 1000, T2: 700, T3: 500 };
+    const shas: Record<string, string> = { T1: 'aa11', T2: 'bb22', T3: 'cc33' };
+    discovery.discoverQortinoQshareFiles.mockResolvedValue(
+      new Map(
+        THREE.parts.map((part, i) => [
+          part.filename,
+          {
+            filename: part.filename,
+            identifier: `qshare_file_qortino-ai_T${i + 1}`,
+            service: 'FILE',
+          },
+        ])
+      )
+    );
+    const log: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('?async=true')) {
+          log.push(`ask ${/_(T\d)\?/.exec(url)?.[1]}`);
+        }
+        return new Response(JSON.stringify({ status: 'READY' }));
+      })
+    );
+    llm.downloadUrl.mockImplementation(
+      async ({ relativePath, url }: { relativePath: string; url: string }) => {
+        const id = url.split('_').pop() as string;
+        log.push(`save ${relativePath}`);
+        disk.set(relativePath, { size: sizes[id], sha256: shas[id] });
+        return { bytesWritten: sizes[id], path: `/agent/${relativePath}` };
+      }
+    );
+
+    await installQortinoModel({ model: THREE });
+
+    expect(log).toEqual([
+      'ask T1',
+      'ask T2',
+      'ask T3',
+      'save models/three-00001-of-00003.gguf',
+      'save models/three-00002-of-00003.gguf',
+      'save models/three-00003-of-00003.gguf',
+    ]);
+  });
+
+  describe('another model from QDN', () => {
+    const BIG: QortinoModelSpec = {
+      id: 'big-model',
+      label: 'Big',
+      license: 'Apache-2.0',
+      parts: [
+        {
+          filename: 'big-00001-of-00003.gguf',
+          sizeBytes: 1000,
+          sha256: 'aa11',
+        },
+        { filename: 'big-00002-of-00003.gguf', sizeBytes: 700, sha256: 'bb22' },
+        { filename: 'big-00003-of-00003.gguf', sizeBytes: 500, sha256: 'cc33' },
+      ],
+      recommendedRamBytes: 0,
+      contextTokens: 4096,
+      folder: 'other-models/big-model',
+    };
+    const BIG_SHA: Record<string, string> = {
+      B1: 'aa11',
+      B2: 'bb22',
+      B3: 'cc33',
+    };
+    const BIG_SIZE: Record<string, number> = { B1: 1000, B2: 700, B3: 500 };
+    let log: string[];
+
+    beforeEach(() => {
+      log = [];
+      discovery.discoverQortinoQshareFiles.mockResolvedValue(
+        new Map(
+          BIG.parts.map((part, i) => [
+            part.filename,
+            {
+              filename: part.filename,
+              identifier: `qshare_file_qortino-ai_B${i + 1}`,
+              service: 'FILE',
+            },
+          ])
+        )
+      );
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) => {
+          if (url.includes('?async=true')) {
+            log.push(`ask ${/_(B\d)\?/.exec(url)?.[1]}`);
+          }
+          return new Response(JSON.stringify({ status: 'READY' }));
+        })
+      );
+      llm.downloadUrl.mockImplementation(
+        async ({
+          relativePath,
+          url,
+        }: {
+          relativePath: string;
+          url: string;
+        }) => {
+          const id = url.split('_').pop() as string;
+          log.push(`save ${relativePath}`);
+          disk.set(relativePath, { size: BIG_SIZE[id], sha256: BIG_SHA[id] });
+          return { bytesWritten: BIG_SIZE[id], path: `/agent/${relativePath}` };
+        }
+      );
+    });
+
+    it('saves every part in its own folder and gives the first part to load', async () => {
+      const result = await downloadQdnModel(BIG, {});
+
+      expect(result).toEqual({
+        path: '/agent/other-models/big-model/big-00001-of-00003.gguf',
+      });
+      expect([...disk.keys()].sort()).toEqual([
+        'other-models/big-model/big-00001-of-00003.gguf',
+        'other-models/big-model/big-00002-of-00003.gguf',
+        'other-models/big-model/big-00003-of-00003.gguf',
+      ]);
+      // Not Qortino's own install.
+      expect(store.saveInstallState).not.toHaveBeenCalled();
+      expect(llm.cleanupStorage).not.toHaveBeenCalled();
+    });
+
+    it('asks the node for one part ahead, not for all of them at once', async () => {
+      await downloadQdnModel(BIG, {});
+
+      expect(log).toEqual([
+        'ask B1',
+        'ask B2',
+        'save other-models/big-model/big-00001-of-00003.gguf',
+        'ask B3',
+        'save other-models/big-model/big-00002-of-00003.gguf',
+        'save other-models/big-model/big-00003-of-00003.gguf',
+      ]);
+    });
+
+    it("deletes only a damaged part, and leaves Qortino's own model alone", async () => {
+      disk.set('models/test-00001-of-00002.gguf', {
+        size: 1000,
+        sha256: 'aa11',
+      });
+      disk.set('models/test-00002-of-00002.gguf', {
+        size: 700,
+        sha256: 'bb22',
+      });
+      const save = llm.downloadUrl.getMockImplementation()!;
+      llm.downloadUrl.mockImplementation(
+        async (options: { relativePath: string; url: string }) => {
+          const result = await save(options);
+          if (options.url.endsWith('B2')) {
+            disk.set(options.relativePath, { size: 700, sha256: 'broken' });
+          }
+          return result;
+        }
+      );
+
+      const failure = await downloadQdnModel(BIG, {}).catch(
+        (error: unknown) => error
+      );
+
+      expect((failure as QortinoInstallError).code).toBe('checksum');
+      expect(llm.removeOtherModel).toHaveBeenCalledWith({
+        relativePath: 'other-models/big-model/big-00002-of-00003.gguf',
+      });
+      expect(llm.cleanupStorage).not.toHaveBeenCalled();
+      expect([...disk.keys()].sort()).toEqual([
+        'models/test-00001-of-00002.gguf',
+        'models/test-00002-of-00002.gguf',
+        'other-models/big-model/big-00001-of-00003.gguf',
+      ]);
+    });
+
+    it('counts the parts already saved in its folder', async () => {
+      disk.set('other-models/big-model/big-00001-of-00003.gguf', {
+        size: 1000,
+        sha256: 'aa11',
+      });
+      disk.set('other-models/big-model/big-00002-of-00003.gguf.part', {
+        size: 300,
+        sha256: '',
+      });
+
+      expect(await savedModelBytes(BIG)).toBe(1300);
+    });
   });
 });
 

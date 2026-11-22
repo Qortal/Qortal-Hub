@@ -1,17 +1,28 @@
 /**
  * Which model Qortino AI talks with.
  *
- * Qortino's own model (manifest.ts) comes from QDN. Besides it, people can
- * add any open model in GGUF format: a file already on this computer, or one
- * downloaded from a link (Hugging Face and the like). Qortino's persona and
- * its curated Qortal answers stay the same whichever model writes the rest.
+ * Qortino's own model (manifest.ts) comes from QDN, and so do the bigger
+ * QDN_OTHER_MODELS Hub offers beside it. Hub downloads models from QDN only;
+ * any other open model in GGUF format can be added as a file the user already
+ * has on this computer. Qortino's persona and its curated Qortal answers stay
+ * the same whichever model writes the rest.
  *
  * Kept in this computer's localStorage, read synchronously like settings.ts.
  */
+import i18n from 'i18next';
 import { useSyncExternalStore } from 'react';
 import QortinoLlm from './qortinoLlm';
-import { QORTINO_MODEL } from './manifest';
+import type { DownloadProgress } from './download';
+import {
+  modelPartPath,
+  modelTotalBytes,
+  QDN_OTHER_MODELS,
+  QORTINO_MODEL,
+  type QortinoModelSpec,
+} from './manifest';
 import { isQortinoModelPathInUse, unloadQortinoModelNow } from './modelSession';
+import type { QdnModelFailure, QdnModelRetry } from './qdnModelDownload';
+import { executeEvent } from '../utils/events';
 
 /** Id of Qortino's own model in the list. */
 export const QORTINO_OWN_MODEL_ID = 'qortino';
@@ -21,26 +32,30 @@ export const OTHER_MODEL_CONTEXT_TOKENS = 4096;
 
 export type OtherModelStatus = 'ready' | 'downloading' | 'failed';
 
-/** A failed link download's `error` when the link brought no GGUF file. */
-export const OTHER_MODEL_NOT_GGUF = 'not_gguf';
-/** A failed link download's `error` when the disk had no room for it. */
-export const OTHER_MODEL_NO_SPACE = 'not_enough_space';
-
 export type OtherModel = {
   id: string;
   /** Shown in the list; the file name unless the user named it. */
   label: string;
-  /** `file`: picked on this computer; `link`: downloaded by Hub. */
-  source: 'file' | 'link';
+  /**
+   * `file`: picked on this computer and used where it is. `qdn`: one of the
+   * QDN_OTHER_MODELS, downloaded by Hub. `link`: downloaded from a web link
+   * by an earlier test build of Hub; kept so its file can still be used, or
+   * deleted.
+   */
+  source: 'file' | 'qdn' | 'link';
   /** Absolute path of the GGUF (for a split model, its first part). */
   path: string;
   sizeBytes: number;
   addedAt: number;
-  /** For `link`: where it came from and where it is saved under Qortino's folder. */
-  url?: string;
+  /** For `qdn`: which of the QDN_OTHER_MODELS it is. */
+  qdnModelId?: string;
+  /** For a model Hub downloaded: its (first) file, under Qortino's folder. */
   relativePath?: string;
+  /** For `qdn`: every part, under Qortino's folder, first part first. */
+  partPaths?: string[];
   status: OtherModelStatus;
-  error?: string;
+  /** For `qdn`: why the last download gave up (none: it was stopped). */
+  failure?: QdnModelFailure;
 };
 
 export type QortinoModelsState = {
@@ -65,14 +80,16 @@ function sanitize(raw: unknown): QortinoModelsState {
           typeof model.id === 'string' &&
           typeof model.path === 'string' &&
           typeof model.label === 'string' &&
-          (model.source === 'file' || model.source === 'link')
+          (model.source === 'file' ||
+            model.source === 'link' ||
+            (model.source === 'qdn' && typeof model.qdnModelId === 'string'))
       )
     : [];
-  // A download Hub was closed in the middle of carries on from its `.part`
+  // A download Hub was closed in the middle of carries on from what it saved
   // only when asked: show it as stopped.
   const fixed = others.map((model) =>
     model.status === 'downloading'
-      ? { ...model, status: 'failed' as const, error: undefined }
+      ? { ...model, status: 'failed' as const, failure: undefined }
       : model
   );
   const activeId =
@@ -158,20 +175,6 @@ export function isLaterSplitPart(name: string): boolean {
   return Boolean(match && Number(match[1]) > 1);
 }
 
-/**
- * A link to one part of a split GGUF (name-00001-of-00003.gguf): one part
- * alone never loads, so it is not downloaded. Part 1 of 1 is the whole model.
- */
-export function isSplitModelLink(url: string): boolean {
-  try {
-    const name = new URL(url.trim()).pathname.split('/').pop() || '';
-    const match = /-\d+-of-(\d+)\.gguf$/i.exec(decodeURIComponent(name));
-    return Boolean(match && Number(match[1]) > 1);
-  } catch {
-    return false;
-  }
-}
-
 /** Counts choices of the model in use, so a download ends without undoing one. */
 let choices = 0;
 
@@ -220,13 +223,24 @@ export function renameOtherModel(id: string, label: string): void {
   patchModel(id, { label: trimmed.slice(0, 80) });
 }
 
-/* ------------------------------------------------- downloads by link */
+/* ------------------------------------------------- downloads from QDN */
 
+/** Where a download of one of the QDN_OTHER_MODELS stands. */
 export type OtherModelDownload = {
-  bytesReceived: number;
-  bytesTotal: number;
+  progress: DownloadProgress | null;
+  /** Waiting before the next try. */
+  retry: QdnModelRetry | null;
 };
 
+type Job = {
+  controller: AbortController;
+  /** Settles once the download has stopped touching its files. */
+  done: Promise<void>;
+  /** Ends a wait before the next try at once. */
+  wake?: () => void;
+};
+
+const jobs = new Map<string, Job>();
 const downloads = new Map<string, OtherModelDownload>();
 const downloadListeners = new Set<() => void>();
 let downloadsSnapshot: Record<string, OtherModelDownload> = {};
@@ -234,6 +248,16 @@ let downloadsSnapshot: Record<string, OtherModelDownload> = {};
 function emitDownloads(): void {
   downloadsSnapshot = Object.fromEntries(downloads);
   for (const listener of downloadListeners) listener();
+}
+
+function setDownload(id: string, patch: Partial<OtherModelDownload>): void {
+  downloads.set(id, {
+    progress: null,
+    retry: null,
+    ...downloads.get(id),
+    ...patch,
+  });
+  emitDownloads();
 }
 
 function subscribeDownloads(listener: () => void): () => void {
@@ -251,120 +275,144 @@ export function useOtherModelDownloads(): Record<string, OtherModelDownload> {
   return useSyncExternalStore(subscribeDownloads, getDownloads, getDownloads);
 }
 
-export function isOtherModelLink(url: string): boolean {
-  try {
-    const parsed = new URL(url.trim());
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
-  } catch {
-    return false;
-  }
+/** The list entry of one of the QDN_OTHER_MODELS; there is at most one. */
+export function qdnModelEntryId(model: QortinoModelSpec): string {
+  return `qdn:${model.id}`;
 }
 
-async function runDownload(model: OtherModel): Promise<void> {
-  if (!model.url || !model.relativePath) return;
-  const relativePath = model.relativePath;
+function qdnModelSpec(id?: string): QortinoModelSpec | undefined {
+  return QDN_OTHER_MODELS.find((model) => model.id === id);
+}
+
+/**
+ * A model from QDN that this build offers, which the list shows in its own
+ * row. One an earlier build offered is listed with the other models: it can
+ * still be used when downloaded, and removed.
+ */
+export function isOfferedQdnModel(model: OtherModel): boolean {
+  return model.source === 'qdn' && Boolean(qdnModelSpec(model.qdnModelId));
+}
+
+async function runQdnDownload(
+  id: string,
+  model: QortinoModelSpec,
+  job: Job
+): Promise<void> {
+  const { signal } = job.controller;
   const choicesAtStart = choices;
-  downloads.set(model.id, { bytesReceived: 0, bytesTotal: model.sizeBytes });
-  emitDownloads();
-  const handle = await QortinoLlm.addListener('downloadProgress', (event) => {
-    if (event.relativePath !== relativePath || event.done) return;
-    downloads.set(model.id, {
-      bytesReceived: event.bytesReceived,
-      bytesTotal: event.bytesTotal,
-    });
-    emitDownloads();
-  });
+  setDownload(id, { progress: null, retry: null });
   try {
-    const result = await QortinoLlm.downloadUrl({
-      url: model.url,
-      relativePath,
+    const { downloadQdnModelWithRetries } = await import('./qdnModelDownload');
+    const { path } = await downloadQdnModelWithRetries(model, {
+      signal,
+      onProgress: (progress) => setDownload(id, { progress, retry: null }),
+      onRetry: (retry) => setDownload(id, { retry }),
+      onWait: (wake) => {
+        job.wake = wake;
+      },
     });
-    patchModel(model.id, {
-      path: result.path,
-      sizeBytes: result.bytesWritten,
-      status: 'ready',
-      error: undefined,
-    });
+    patchModel(id, { path, status: 'ready', failure: undefined });
     // Nothing else chosen in the meantime: use the new model.
-    const current = getQortinoModels();
     if (
-      current.activeId === QORTINO_OWN_MODEL_ID &&
+      getQortinoModels().activeId === QORTINO_OWN_MODEL_ID &&
       choices === choicesAtStart
     ) {
-      setActiveQortinoModel(model.id);
+      setActiveQortinoModel(id);
     }
+    executeEvent('openGlobalSnackBar', {
+      type: 'success',
+      message: String(
+        i18n.t('core:qortino_agent.models.ready_notice', {
+          name: model.label,
+        })
+      ),
+      dismissible: true,
+      duration: 9_000,
+    });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message === 'cancelled') {
-      forgetOtherModel(model.id);
-    } else {
-      patchModel(model.id, { status: 'failed', error: message });
+    if (signal.aborted) {
+      // Stopped: the parts it saved stay, to carry on from.
+      patchModel(id, { status: 'failed', failure: undefined });
+      return;
     }
+    const failure: QdnModelFailure =
+      error && typeof error === 'object' && 'failure' in error
+        ? (error as { failure: QdnModelFailure }).failure
+        : {
+            code: 'generic',
+            detail: error instanceof Error ? error.message : String(error),
+          };
+    patchModel(id, { status: 'failed', failure });
   } finally {
-    await handle.remove();
-    downloads.delete(model.id);
+    if (jobs.get(id) === job) jobs.delete(id);
+    downloads.delete(id);
     emitDownloads();
   }
 }
 
-/** Download a GGUF from `url` into Qortino's folder and add it to the list. */
-export async function addLinkModel(input: {
-  url: string;
-  label?: string;
-}): Promise<OtherModel> {
-  const url = input.url.trim();
-  if (!isOtherModelLink(url)) throw new Error('invalid_link');
-  if (isSplitModelLink(url)) throw new Error('split_link');
-  const { relativePath, filename } = await QortinoLlm.otherModelPath({ url });
-  // The same file again (the same link, or with ?download=true): no second
-  // copy, and no second download over the first.
+/**
+ * Download one of the QDN_OTHER_MODELS into Qortino's folder, or carry on
+ * with a download that stopped. Nothing happens if it is already going.
+ * Resolves when the download ends, however it ends; it never rejects.
+ */
+export async function downloadQdnOtherModel(
+  model: QortinoModelSpec
+): Promise<void> {
+  const id = qdnModelEntryId(model);
+  if (jobs.has(id)) return;
+  let settle!: () => void;
+  const job: Job = {
+    controller: new AbortController(),
+    done: new Promise<void>((resolve) => {
+      settle = resolve;
+    }),
+  };
+  jobs.set(id, job);
   const current = getQortinoModels();
-  const existing = current.others.find(
-    (model) => model.url === url || model.relativePath === relativePath
-  );
-  if (existing) {
-    if (existing.status === 'failed') void retryOtherModelDownload(existing.id);
-    return existing;
-  }
-  const { rootDir } = await QortinoLlm.getStoragePaths();
-  const latest = getQortinoModels();
-  const raced = latest.others.find(
-    (item) => item.url === url || item.relativePath === relativePath
-  );
-  if (raced) return raced;
-  const model: OtherModel = {
-    id: newModelId(),
-    label: input.label?.trim() || modelLabelFromFileName(filename),
-    source: 'link',
-    path: `${rootDir.replace(/[\\/]$/, '')}/${relativePath}`,
-    sizeBytes: 0,
-    addedAt: Date.now(),
-    url,
-    relativePath,
+  const existing = current.others.find((item) => item.id === id);
+  const partPaths = model.parts.map((part) => modelPartPath(model, part));
+  const entry: OtherModel = {
+    id,
+    label: model.label,
+    source: 'qdn',
+    qdnModelId: model.id,
+    // Known for sure once the download is done.
+    path: existing?.path ?? '',
+    relativePath: partPaths[0],
+    // Parts an earlier build named otherwise are still deleted on Remove.
+    partPaths: [...new Set([...partPaths, ...(existing?.partPaths ?? [])])],
+    sizeBytes: modelTotalBytes(model),
+    addedAt: existing?.addedAt ?? Date.now(),
     status: 'downloading',
   };
-  // Written from the list as it is now: it may have changed while waiting.
-  write({ ...latest, others: [...latest.others, model] });
-  void runDownload(model);
-  return model;
+  write({
+    ...current,
+    others: existing
+      ? current.others.map((item) => (item.id === id ? entry : item))
+      : [...current.others, entry],
+  });
+  try {
+    await runQdnDownload(id, model, job);
+  } finally {
+    settle();
+  }
 }
 
-/** Carry on with a download that failed or that Hub was closed during. */
+/** Carry on with a download that stopped, or end the wait before the next try. */
 export async function retryOtherModelDownload(id: string): Promise<void> {
-  const model = getQortinoModels().others.find((item) => item.id === id);
-  if (!model || model.source !== 'link' || downloads.has(id)) return;
-  patchModel(id, { status: 'downloading', error: undefined });
-  await runDownload({ ...model, status: 'downloading' });
-}
-
-export async function cancelOtherModelDownload(id: string): Promise<void> {
-  const model = getQortinoModels().others.find((item) => item.id === id);
-  if (!model?.relativePath) return;
-  if (downloads.has(id)) {
-    await QortinoLlm.cancelDownload({ relativePath: model.relativePath });
+  const job = jobs.get(id);
+  if (job) {
+    job.wake?.();
     return;
   }
-  await removeOtherModel(id);
+  const entry = getQortinoModels().others.find((item) => item.id === id);
+  const model = entry?.source === 'qdn' ? qdnModelSpec(entry.qdnModelId) : null;
+  if (model) await downloadQdnOtherModel(model);
+}
+
+/** Stop a download; the parts it saved stay, to carry on from or to remove. */
+export function stopOtherModelDownload(id: string): void {
+  jobs.get(id)?.controller.abort();
 }
 
 function forgetOtherModel(id: string): void {
@@ -376,17 +424,20 @@ function forgetOtherModel(id: string): void {
 }
 
 /**
- * Take a model off the list. One Hub downloaded is deleted from disk; a file
- * the user picked stays where it is. A model in use is unloaded first: the
- * model process reads its weights straight from the file (and Windows will
- * not delete a file that is open). If the file cannot be deleted, the model
- * stays on the list and the error is thrown.
+ * Take a model off the list. One Hub downloaded is deleted from disk (a
+ * download still going is stopped first); a file the user picked stays where
+ * it is. A model in use is unloaded first: the model process reads its
+ * weights straight from the file (and Windows will not delete a file that is
+ * open). If a file cannot be deleted, the model stays on the list and the
+ * error is thrown.
  */
 export async function removeOtherModel(id: string): Promise<void> {
   const model = getQortinoModels().others.find((item) => item.id === id);
   if (!model) return;
-  if (downloads.has(id) && model.relativePath) {
-    await QortinoLlm.cancelDownload({ relativePath: model.relativePath });
+  const job = jobs.get(id);
+  if (job) {
+    job.controller.abort();
+    await job.done;
   }
   // Loaded, still loading, or about to be loaded by the chat as the model
   // in use: let go of it before its file goes.
@@ -398,8 +449,12 @@ export async function removeOtherModel(id: string): Promise<void> {
     await QortinoLlm.cancel().catch(() => undefined);
     await unloadQortinoModelNow();
   }
-  if (model.source === 'link' && model.relativePath) {
-    await QortinoLlm.removeOtherModel({ relativePath: model.relativePath });
+  if (model.source !== 'file') {
+    const files =
+      model.partPaths ?? (model.relativePath ? [model.relativePath] : []);
+    for (const relativePath of files) {
+      await QortinoLlm.removeOtherModel({ relativePath });
+    }
   }
   forgetOtherModel(id);
 }
@@ -451,60 +506,12 @@ export const OTHER_MODEL_SAMPLING = {
   presencePenalty: 0,
 };
 
-/**
- * Open models people often run on a PC, with a direct GGUF link. Offered in
- * the add dialog to fill the link in; nothing is downloaded unless asked.
- */
-export type SuggestedModel = {
-  id: string;
-  label: string;
-  url: string;
-  sizeBytes: number;
-  license: string;
-};
-
-export const SUGGESTED_OTHER_MODELS: SuggestedModel[] = [
-  {
-    id: 'phi-4-mini',
-    label: 'Phi-4 mini Instruct',
-    url: 'https://huggingface.co/bartowski/microsoft_Phi-4-mini-instruct-GGUF/resolve/main/microsoft_Phi-4-mini-instruct-Q4_K_M.gguf',
-    sizeBytes: 2_491_874_688,
-    license: 'MIT',
-  },
-  {
-    id: 'llama-3.2-3b',
-    label: 'Llama 3.2 3B Instruct',
-    url: 'https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf',
-    sizeBytes: 2_019_377_696,
-    license: 'Llama 3.2 Community',
-  },
-  {
-    id: 'mistral-7b',
-    label: 'Mistral 7B Instruct v0.3',
-    url: 'https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf',
-    sizeBytes: 4_372_812_000,
-    license: 'Apache-2.0',
-  },
-  {
-    id: 'qwen2.5-7b',
-    label: 'Qwen2.5 7B Instruct',
-    url: 'https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf',
-    sizeBytes: 4_683_074_240,
-    license: 'Apache-2.0',
-  },
-  {
-    id: 'qwen3-30b-a3b',
-    label: 'Qwen3 30B A3B Instruct 2507',
-    url: 'https://huggingface.co/unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF/resolve/main/Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf',
-    sizeBytes: 18_556_686_752,
-    license: 'Apache-2.0',
-  },
-];
-
 export function resetQortinoModelsForTests(): void {
   state = null;
   choices = 0;
   listeners.clear();
+  for (const job of jobs.values()) job.controller.abort();
+  jobs.clear();
   downloads.clear();
   downloadListeners.clear();
   downloadsSnapshot = {};

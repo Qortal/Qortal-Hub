@@ -32,11 +32,8 @@ import {
   downloadToFile,
   fileSize,
   isDownloadTarget,
-  isGgufFile,
   isLoadableModelPath,
-  NOT_GGUF,
   OTHER_MODELS_DIR,
-  otherModelRelativePath,
   QORTINO_ROOT_NAME,
   readPickedModels,
   rememberPickedModel,
@@ -208,8 +205,8 @@ export function stopQortinoWorker(): void {
 
 const downloads = new Map<string, AbortController>();
 
-/** Left free on the disk by a model downloaded by link, as by Qortino's own. */
-const LINK_DOWNLOAD_HEADROOM_BYTES = 300 * 1024 ** 2;
+/** Left free on the disk by a part of another model, as by Qortino's own. */
+const OTHER_MODEL_HEADROOM_BYTES = 300 * 1024 ** 2;
 
 function cancelDownloads(relativePath?: string): void {
   for (const [key, controller] of downloads) {
@@ -257,7 +254,13 @@ function handle(channel: string, handler: Handler): void {
 
 let registered = false;
 
-export function registerQortinoLlmIpcHandlers(): void {
+export function registerQortinoLlmIpcHandlers(options: {
+  /**
+   * Whether `url` is on one of Hub's nodes. Qortino downloads models from
+   * QDN through the node only, never from elsewhere on the web.
+   */
+  isNodeUrl: (url: string) => boolean;
+}): void {
   if (registered) return;
   registered = true;
 
@@ -312,8 +315,12 @@ export function registerQortinoLlmIpcHandlers(): void {
     if (!isDownloadTarget(relativePath)) {
       throw new Error('Only model files can be downloaded here');
     }
+    const url = String(args.url || '');
+    if (!options.isNodeUrl(url)) {
+      throw new Error('Models are downloaded only from your node');
+    }
     const target = resolveInsideRoot(qortinoRoot(), relativePath);
-    const isLink = relativePath.startsWith(`${OTHER_MODELS_DIR}/`);
+    const isOtherModel = relativePath.startsWith(`${OTHER_MODELS_DIR}/`);
     if (downloads.has(relativePath)) {
       throw new Error('This file is already downloading');
     }
@@ -324,46 +331,36 @@ export function registerQortinoLlmIpcHandlers(): void {
     // proxy settings, which Node's fetch does not.
     const hubSession = mainContents()?.session;
     try {
-      // A link's file that a last try saved but could not read is checked
-      // again, not downloaded again.
-      const kept = isLink ? await fileSize(target) : null;
-      const result = kept
-        ? { path: target, bytesWritten: kept }
-        : await downloadToFile({
-            url: String(args.url || ''),
-            apiKey: typeof args.apiKey === 'string' ? args.apiKey : undefined,
-            target,
-            signal: controller.signal,
-            fetchImpl: hubSession
-              ? (((input, init) =>
-                  hubSession.fetch(input as string, {
-                    ...init,
-                    credentials: 'omit',
-                    cache: 'no-store',
-                  })) as typeof fetch)
-              : undefined,
-            // With the node's API key: redirects one by one, the key only on
-            // the node's own origin.
-            hop: hubSession ? sessionHop(hubSession) : undefined,
-            // Qortino's own parts are checked against the free space before
-            // each try; a link is checked here.
-            reserveBytes: isLink ? LINK_DOWNLOAD_HEADROOM_BYTES : undefined,
-            events: {
-              onProgress: (bytesReceived, bytesTotal) =>
-                sendToHub('downloadProgress', {
-                  relativePath,
-                  bytesReceived,
-                  bytesTotal,
-                  done: false,
-                }),
-            },
-          });
-      // A link to a model's web page brings the page, not the model. A file
-      // that cannot be read throws here and stays for the next try.
-      if (isLink && !(await isGgufFile(result.path))) {
-        await fs.promises.rm(result.path, { force: true });
-        throw new Error(NOT_GGUF);
-      }
+      const result = await downloadToFile({
+        url,
+        apiKey: typeof args.apiKey === 'string' ? args.apiKey : undefined,
+        target,
+        signal: controller.signal,
+        fetchImpl: hubSession
+          ? (((input, init) =>
+              hubSession.fetch(input as string, {
+                ...init,
+                credentials: 'omit',
+                cache: 'no-store',
+              })) as typeof fetch)
+          : undefined,
+        // With the node's API key: redirects one by one, the key only on
+        // the node's own origin.
+        hop: hubSession ? sessionHop(hubSession) : undefined,
+        // Qortino's own parts are checked against the free space before
+        // each try; a part of another model, which may download beside
+        // them, is checked here too.
+        reserveBytes: isOtherModel ? OTHER_MODEL_HEADROOM_BYTES : undefined,
+        events: {
+          onProgress: (bytesReceived, bytesTotal) =>
+            sendToHub('downloadProgress', {
+              relativePath,
+              bytesReceived,
+              bytesTotal,
+              done: false,
+            }),
+        },
+      });
       sendToHub('downloadProgress', {
         relativePath,
         bytesReceived: result.bytesWritten,
@@ -385,10 +382,6 @@ export function registerQortinoLlmIpcHandlers(): void {
         done: true,
         error: message,
       });
-      // A link's folder left empty (nothing kept to carry on from) goes too.
-      if (isLink) {
-        await fs.promises.rmdir(path.dirname(target)).catch(() => undefined);
-      }
       throw new Error(message);
     } finally {
       if (downloads.get(relativePath) === controller) {
@@ -403,20 +396,16 @@ export function registerQortinoLlmIpcHandlers(): void {
     );
   });
 
-  handle('qortino:otherModelPath', async (_event, args) =>
-    otherModelRelativePath(String(args.url || ''))
-  );
-
   handle('qortino:removeOtherModel', async (_event, args) => {
     const relativePath = toPosix(String(args.relativePath || ''));
     if (!relativePath.startsWith(`${OTHER_MODELS_DIR}/`)) {
-      throw new Error('Only models added by link can be deleted here');
+      throw new Error('Only models Hub downloaded can be deleted here');
     }
     const target = resolveInsideRoot(qortinoRoot(), relativePath);
     const size = (await fileSize(target)) ?? 0;
     await fs.promises.rm(target, { force: true });
     await fs.promises.rm(`${target}.part`, { force: true });
-    // The link's own folder, once empty.
+    // The model's own folder, once empty.
     const folder = path.dirname(target);
     if (path.basename(path.dirname(folder)) === OTHER_MODELS_DIR) {
       await fs.promises.rmdir(folder).catch(() => undefined);

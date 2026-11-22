@@ -292,7 +292,7 @@ export function QortinoAgentGate({
                   lineHeight: 1.4,
                 }}
               >
-                {t('core:qortino_agent.gate.other_models')}
+                {t('core:qortino_agent.gate.other_models_qdn')}
               </Typography>
               <Button
                 onClick={onOpenModels}

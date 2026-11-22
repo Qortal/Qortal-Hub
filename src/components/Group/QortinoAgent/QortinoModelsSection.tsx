@@ -2,48 +2,50 @@ import {
   Box,
   Button,
   ButtonBase,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   IconButton,
   LinearProgress,
   Radio,
-  TextField,
   Typography,
   useTheme,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
+import { useAtomValue } from 'jotai';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { isRunningPublicNodeAtom } from '../../../atoms/global';
+import {
+  qortinoInstallErrorText,
+  qortinoProgressRatio,
+  qortinoProgressText,
+  qortinoRetryCause,
+} from '../../../qortinoAgent/installJobStore';
 import {
   formatBytes,
   modelTotalBytes,
+  QDN_OTHER_MODELS,
   QORTINO_MODEL,
+  type QortinoModelSpec,
 } from '../../../qortinoAgent/manifest';
 import {
   addFileModel,
-  addLinkModel,
-  cancelOtherModelDownload,
+  downloadQdnOtherModel,
   isLaterSplitPart,
-  isOtherModelLink,
-  isSplitModelLink,
-  OTHER_MODEL_NO_SPACE,
-  OTHER_MODEL_NOT_GGUF,
+  isOfferedQdnModel,
+  qdnModelEntryId,
   QORTINO_OWN_MODEL_ID,
   removeOtherModel,
   retryOtherModelDownload,
   setActiveQortinoModel,
-  SUGGESTED_OTHER_MODELS,
+  stopOtherModelDownload,
   useOtherModelDownloads,
   useQortinoModels,
   type OtherModel,
+  type OtherModelDownload,
 } from '../../../qortinoAgent/models';
 import QortinoLlm, {
   type QortinoDeviceTier,
@@ -68,14 +70,7 @@ type Props = {
   onUseQortino: () => void;
 };
 
-function linkHost(url?: string): string {
-  if (!url) return '';
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return '';
-  }
-}
+type Translate = (key: string, options?: Record<string, unknown>) => string;
 
 function ModelRow({
   selected,
@@ -158,22 +153,154 @@ function ModelRow({
   );
 }
 
+function RowNote({
+  children,
+  tone,
+  role,
+}: {
+  children: ReactNode;
+  tone: 'warning' | 'error';
+  role?: string;
+}) {
+  const theme = useTheme();
+  return (
+    <Typography
+      role={role}
+      sx={{
+        color: theme.palette[tone].main,
+        fontSize: '0.7rem',
+        pt: 0.4,
+        px: 1,
+      }}
+    >
+      {children}
+    </Typography>
+  );
+}
+
+function RemoveConfirm({
+  text,
+  onCancel,
+  onRemove,
+}: {
+  text: string;
+  onCancel: () => void;
+  onRemove: () => void;
+}) {
+  const theme = useTheme();
+  const { t } = useTranslation(['core']);
+  return (
+    <Box
+      role="alertdialog"
+      sx={{
+        alignItems: 'center',
+        background: alpha(theme.palette.error.main, 0.08),
+        border: `1px solid ${alpha(theme.palette.error.main, 0.4)}`,
+        borderRadius: '10px',
+        display: 'flex',
+        gap: 0.75,
+        mt: 0.5,
+        p: 0.75,
+      }}
+    >
+      <Typography sx={{ flex: 1, fontSize: '0.74rem' }}>{text}</Typography>
+      <Button onClick={onCancel} size="small" sx={{ textTransform: 'none' }}>
+        {t('core:action.cancel', {
+          postProcess: 'capitalizeFirstChar',
+        })}
+      </Button>
+      <Button
+        color="error"
+        onClick={onRemove}
+        size="small"
+        sx={{ textTransform: 'none' }}
+        variant="contained"
+      >
+        {t('core:action.remove', {
+          postProcess: 'capitalizeFirstChar',
+        })}
+      </Button>
+    </Box>
+  );
+}
+
+/** "Part 2 of 11 · …", or why it waits and when it tries again. */
+function downloadText(
+  download: OtherModelDownload | undefined,
+  now: number,
+  t: Translate
+): string {
+  if (download?.retry) {
+    const seconds = Math.max(
+      0,
+      Math.ceil((download.retry.retryAt - now) / 1_000)
+    );
+    // Not found at all: no peer is to blame.
+    const reason =
+      download.retry.error.code === 'not_published'
+        ? t('core:qortino_agent.models.retry_not_found')
+        : t(
+            `core:qortino_agent.gate.retry_reason.${qortinoRetryCause(download.retry.error)}`
+          );
+    return `${reason} ${
+      seconds >= 60
+        ? t('core:qortino_agent.gate.retry_in_minutes', {
+            minutes: Math.ceil(seconds / 60),
+          })
+        : t('core:qortino_agent.gate.retry_in_seconds', { seconds })
+    }`;
+  }
+  const progress = download?.progress ?? null;
+  if (!progress || progress.phase === 'locate') {
+    return t('core:qortino_agent.models.locate');
+  }
+  const text = qortinoProgressText(progress, t);
+  return progress.phase === 'save' && progress.bytesTotal > 0
+    ? `${text} ${t('core:qortino_agent.progress.bytes', {
+        done: formatBytes(progress.bytesDone),
+        total: formatBytes(progress.bytesTotal),
+      })}`
+    : text;
+}
+
+function failureText(entry: OtherModel, t: Translate): string {
+  if (!entry.failure) return t('core:qortino_agent.models.stopped');
+  // The note under the row says it: only through the user's own node.
+  if (entry.failure.code === 'public_node') return '';
+  if (entry.failure.code === 'not_published') {
+    return t('core:qortino_agent.models.not_published');
+  }
+  if (entry.failure.code === 'generic') {
+    return t('core:qortino_agent.error.download');
+  }
+  if (entry.failure.code === 'low_storage') {
+    return t('core:qortino_agent.models.low_storage', {
+      needed: formatBytes(entry.failure.neededBytes),
+      free: formatBytes(entry.failure.freeBytes),
+    });
+  }
+  return qortinoInstallErrorText(entry.failure, t);
+}
+
 /**
- * Which model Qortino talks with: his own (from QDN), or open models the
- * user added from a file or a download link.
+ * Which model Qortino talks with: his own, a bigger one Hub downloads from
+ * QDN, or an open model the user added as a file from this computer.
  */
 export function QortinoModelsSection({ install, onUseQortino }: Props) {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
   const models = useQortinoModels();
   const downloads = useOtherModelDownloads();
+  const publicNode = useAtomValue(isRunningPublicNodeAtom);
   const [tier, setTier] = useState<QortinoDeviceTier | null>(null);
-  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState('');
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<{
     id: string;
     reason: string;
   } | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const waiting = Object.values(downloads).some((item) => item.retry);
 
   useEffect(() => {
     let cancelled = false;
@@ -187,6 +314,73 @@ export function QortinoModelsSection({ install, onUseQortino }: Props) {
     };
   }, []);
 
+  // The wait before a download's next try counts down.
+  useEffect(() => {
+    if (!waiting) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(timer);
+  }, [waiting]);
+
+  const remove = (id: string) => {
+    setConfirmRemove(null);
+    setRemoveError(null);
+    void removeOtherModel(id).catch((e: unknown) =>
+      setRemoveError({
+        id,
+        reason: e instanceof Error ? e.message : String(e),
+      })
+    );
+  };
+
+  const removeParts = (id: string, confirmText: string) => (
+    <>
+      {removeError?.id === id ? (
+        <RowNote role="alert" tone="error">
+          {t('core:qortino_agent.models.remove_failed', {
+            reason: removeError.reason,
+          })}
+        </RowNote>
+      ) : null}
+      {confirmRemove === id ? (
+        <RemoveConfirm
+          onCancel={() => setConfirmRemove(null)}
+          onRemove={() => remove(id)}
+          text={confirmText}
+        />
+      ) : null}
+    </>
+  );
+
+  const removeButton = (id: string) => (
+    <IconButton
+      aria-label={t('core:qortino_agent.models.remove')}
+      onClick={() => setConfirmRemove(id)}
+      size="small"
+      title={t('core:qortino_agent.models.remove')}
+    >
+      <DeleteOutlineRoundedIcon fontSize="small" />
+    </IconButton>
+  );
+
+  const pickFile = async () => {
+    setAddError('');
+    try {
+      const file = await QortinoLlm.pickModelFile({
+        title: t('core:qortino_agent.models.pick_title'),
+        filterName: t('core:qortino_agent.models.pick_filter'),
+      });
+      if (!file) return;
+      if (isLaterSplitPart(file.name)) {
+        setAddError(t('core:qortino_agent.models.first_part'));
+        return;
+      }
+      addFileModel(file);
+    } catch (e) {
+      setAddError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const qortinoInstalled = Boolean(install.installed && install.llmPath);
   const qortinoDetails = [
     t('core:qortino_agent.models.recommended'),
@@ -196,29 +390,106 @@ export function QortinoModelsSection({ install, onUseQortino }: Props) {
       : t('core:qortino_agent.models.from_qdn'),
   ].join(' · ');
 
-  const detailsOf = (model: OtherModel): string => {
-    const parts: string[] = [];
-    if (model.sizeBytes) parts.push(formatBytes(model.sizeBytes));
-    parts.push(
-      model.source === 'file'
-        ? t('core:qortino_agent.models.source_file')
-        : t('core:qortino_agent.models.source_link', {
-            host: linkHost(model.url),
-          })
+  const qdnRow = (spec: QortinoModelSpec) => {
+    const id = qdnModelEntryId(spec);
+    const entry = models.others.find((model) => model.id === id);
+    const download = downloads[id];
+    const ready = entry?.status === 'ready';
+    const downloading = entry?.status === 'downloading';
+    const failed = entry?.status === 'failed';
+    const totalBytes = modelTotalBytes(spec);
+    // Where it is comes before the memory note, which a narrow panel cuts.
+    const details = [
+      formatBytes(totalBytes),
+      ready
+        ? t('core:qortino_agent.models.on_computer')
+        : t('core:qortino_agent.models.from_qdn'),
+      t('core:qortino_agent.models.needs_memory', {
+        ram: formatBytes(spec.recommendedRamBytes),
+      }),
+    ].join(' · ');
+    return (
+      <Box key={id}>
+        <ModelRow
+          selected={models.activeId === id}
+          disabled={!ready}
+          title={spec.label}
+          details={details}
+          onSelect={() => setActiveQortinoModel(id)}
+        >
+          {!entry ? (
+            <Button
+              disabled={publicNode}
+              onClick={() => void downloadQdnOtherModel(spec)}
+              size="small"
+              startIcon={<DownloadRoundedIcon />}
+              sx={{ flexShrink: 0, textTransform: 'none' }}
+            >
+              {t('core:qortino_agent.models.get')}
+            </Button>
+          ) : null}
+          {failed || download?.retry ? (
+            <IconButton
+              disabled={publicNode}
+              aria-label={
+                failed
+                  ? t('core:qortino_agent.models.retry')
+                  : t('core:qortino_agent.gate.try_now')
+              }
+              onClick={() => void retryOtherModelDownload(id)}
+              size="small"
+              title={
+                failed
+                  ? t('core:qortino_agent.models.retry')
+                  : t('core:qortino_agent.gate.try_now')
+              }
+            >
+              <RefreshRoundedIcon fontSize="small" />
+            </IconButton>
+          ) : null}
+          {downloading ? (
+            <IconButton
+              aria-label={t('core:qortino_agent.models.cancel_download')}
+              onClick={() => stopOtherModelDownload(id)}
+              size="small"
+              title={t('core:qortino_agent.models.cancel_download')}
+            >
+              <CloseRoundedIcon fontSize="small" />
+            </IconButton>
+          ) : null}
+          {entry && !downloading ? removeButton(id) : null}
+        </ModelRow>
+        {downloading ? (
+          <Box sx={{ px: 1, pt: 0.5 }}>
+            <LinearProgress
+              variant={
+                download?.progress?.bytesTotal ? 'determinate' : 'indeterminate'
+              }
+              value={qortinoProgressRatio(download?.progress ?? null) * 100}
+            />
+            <Typography sx={{ fontSize: '0.68rem', mt: 0.35, opacity: 0.7 }}>
+              {downloadText(download, now, t)}
+            </Typography>
+          </Box>
+        ) : null}
+        {failed && failureText(entry, t) ? (
+          <RowNote tone="warning">{failureText(entry, t)}</RowNote>
+        ) : null}
+        {!ready && (publicNode || entry?.failure?.code === 'public_node') ? (
+          <RowNote tone="warning">
+            {t('core:qortino_agent.models.own_node_only')}
+          </RowNote>
+        ) : null}
+        {!modelFitsMemory(totalBytes, tier) ? (
+          <RowNote tone="warning">
+            {t('core:qortino_agent.models.too_big', {
+              ram: formatBytes(tier?.totalRamBytes ?? 0),
+            })}
+          </RowNote>
+        ) : null}
+        {removeParts(id, t('core:qortino_agent.models.remove_confirm_hub'))}
+      </Box>
     );
-    return parts.join(' · ');
-  };
-
-  const failedText = (model: OtherModel): string => {
-    if (model.error === OTHER_MODEL_NOT_GGUF) {
-      return t('core:qortino_agent.models.not_gguf');
-    }
-    if (model.error === OTHER_MODEL_NO_SPACE) {
-      return t('core:qortino_agent.models.no_space');
-    }
-    return model.error
-      ? t('core:qortino_agent.models.failed_reason', { reason: model.error })
-      : t('core:qortino_agent.models.stopped');
   };
 
   return (
@@ -260,179 +531,78 @@ export function QortinoModelsSection({ install, onUseQortino }: Props) {
             </Button>
           ) : null}
         </ModelRow>
-        {models.others.map((model) => {
-          const progress = downloads[model.id];
-          const ready = model.status === 'ready';
-          const tooBig = ready && !modelFitsMemory(model.sizeBytes, tier);
-          return (
-            <Box key={model.id}>
-              <ModelRow
-                selected={models.activeId === model.id}
-                disabled={!ready}
-                title={model.label}
-                details={detailsOf(model)}
-                onSelect={() => setActiveQortinoModel(model.id)}
-              >
-                {/* The same link would bring the same web page again. */}
-                {model.status === 'failed' &&
-                model.error !== OTHER_MODEL_NOT_GGUF ? (
-                  <IconButton
-                    aria-label={t('core:qortino_agent.models.retry')}
-                    onClick={() => void retryOtherModelDownload(model.id)}
-                    size="small"
-                    title={t('core:qortino_agent.models.retry')}
-                  >
-                    <RefreshRoundedIcon fontSize="small" />
-                  </IconButton>
+        {QDN_OTHER_MODELS.map(qdnRow)}
+        {models.others
+          .filter((model) => !isOfferedQdnModel(model))
+          .map((model) => {
+            const ready = model.status === 'ready';
+            const tooBig = ready && !modelFitsMemory(model.sizeBytes, tier);
+            const details = [
+              ...(model.sizeBytes ? [formatBytes(model.sizeBytes)] : []),
+              model.source === 'file'
+                ? t('core:qortino_agent.models.source_file')
+                : t('core:qortino_agent.models.on_computer'),
+            ].join(' · ');
+            return (
+              <Box key={model.id}>
+                <ModelRow
+                  selected={models.activeId === model.id}
+                  disabled={!ready}
+                  title={model.label}
+                  details={details}
+                  onSelect={() => setActiveQortinoModel(model.id)}
+                >
+                  {removeButton(model.id)}
+                </ModelRow>
+                {/* From a web link (an earlier test build), or a model from
+                    QDN this build no longer offers: nothing carries it on. */}
+                {!ready ? (
+                  <RowNote tone="warning">
+                    {t('core:qortino_agent.models.download_unsupported')}
+                  </RowNote>
                 ) : null}
-                {model.status === 'downloading' ? (
-                  <IconButton
-                    aria-label={t('core:qortino_agent.models.cancel_download')}
-                    onClick={() => void cancelOtherModelDownload(model.id)}
-                    size="small"
-                    title={t('core:qortino_agent.models.cancel_download')}
-                  >
-                    <CloseRoundedIcon fontSize="small" />
-                  </IconButton>
-                ) : (
-                  <IconButton
-                    aria-label={t('core:qortino_agent.models.remove')}
-                    onClick={() => setConfirmRemove(model.id)}
-                    size="small"
-                    title={t('core:qortino_agent.models.remove')}
-                  >
-                    <DeleteOutlineRoundedIcon fontSize="small" />
-                  </IconButton>
+                {tooBig ? (
+                  <RowNote tone="warning">
+                    {t('core:qortino_agent.models.too_big', {
+                      ram: formatBytes(tier?.totalRamBytes ?? 0),
+                    })}
+                  </RowNote>
+                ) : null}
+                {removeParts(
+                  model.id,
+                  model.source === 'file'
+                    ? t('core:qortino_agent.models.remove_confirm_file')
+                    : t('core:qortino_agent.models.remove_confirm_hub')
                 )}
-              </ModelRow>
-              {model.status === 'downloading' ? (
-                <Box sx={{ px: 1, pt: 0.5 }}>
-                  <LinearProgress
-                    variant={
-                      progress?.bytesTotal ? 'determinate' : 'indeterminate'
-                    }
-                    value={
-                      progress?.bytesTotal
-                        ? (progress.bytesReceived / progress.bytesTotal) * 100
-                        : 0
-                    }
-                  />
-                  <Typography
-                    sx={{ fontSize: '0.68rem', mt: 0.35, opacity: 0.7 }}
-                  >
-                    {progress?.bytesTotal
-                      ? t('core:qortino_agent.models.downloading_bytes', {
-                          done: formatBytes(progress.bytesReceived),
-                          total: formatBytes(progress.bytesTotal),
-                        })
-                      : t('core:qortino_agent.models.downloading')}
-                  </Typography>
-                </Box>
-              ) : null}
-              {model.status === 'failed' ? (
-                <Typography
-                  sx={{
-                    color: theme.palette.warning.main,
-                    fontSize: '0.7rem',
-                    pt: 0.4,
-                    px: 1,
-                  }}
-                >
-                  {failedText(model)}
-                </Typography>
-              ) : null}
-              {removeError?.id === model.id ? (
-                <Typography
-                  role="alert"
-                  sx={{
-                    color: theme.palette.error.main,
-                    fontSize: '0.7rem',
-                    pt: 0.4,
-                    px: 1,
-                  }}
-                >
-                  {t('core:qortino_agent.models.remove_failed', {
-                    reason: removeError.reason,
-                  })}
-                </Typography>
-              ) : null}
-              {tooBig ? (
-                <Typography
-                  sx={{
-                    color: theme.palette.warning.main,
-                    fontSize: '0.7rem',
-                    pt: 0.4,
-                    px: 1,
-                  }}
-                >
-                  {t('core:qortino_agent.models.too_big', {
-                    ram: formatBytes(tier?.totalRamBytes ?? 0),
-                  })}
-                </Typography>
-              ) : null}
-              {confirmRemove === model.id ? (
-                <Box
-                  role="alertdialog"
-                  sx={{
-                    alignItems: 'center',
-                    background: alpha(theme.palette.error.main, 0.08),
-                    border: `1px solid ${alpha(theme.palette.error.main, 0.4)}`,
-                    borderRadius: '10px',
-                    display: 'flex',
-                    gap: 0.75,
-                    mt: 0.5,
-                    p: 0.75,
-                  }}
-                >
-                  <Typography sx={{ flex: 1, fontSize: '0.74rem' }}>
-                    {model.source === 'link'
-                      ? t('core:qortino_agent.models.remove_confirm_link')
-                      : t('core:qortino_agent.models.remove_confirm_file')}
-                  </Typography>
-                  <Button
-                    onClick={() => setConfirmRemove(null)}
-                    size="small"
-                    sx={{ textTransform: 'none' }}
-                  >
-                    {t('core:action.cancel', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Button>
-                  <Button
-                    color="error"
-                    onClick={() => {
-                      setConfirmRemove(null);
-                      setRemoveError(null);
-                      void removeOtherModel(model.id).catch((e: unknown) =>
-                        setRemoveError({
-                          id: model.id,
-                          reason: e instanceof Error ? e.message : String(e),
-                        })
-                      );
-                    }}
-                    size="small"
-                    sx={{ textTransform: 'none' }}
-                    variant="contained"
-                  >
-                    {t('core:action.remove', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Button>
-                </Box>
-              ) : null}
-            </Box>
-          );
-        })}
+              </Box>
+            );
+          })}
       </Box>
       <Button
-        onClick={() => setAdding(true)}
-        startIcon={<AddRoundedIcon />}
+        onClick={() => void pickFile()}
+        startIcon={<FolderOpenRoundedIcon />}
         sx={{ alignSelf: 'flex-start', textTransform: 'none' }}
         variant="outlined"
         size="small"
       >
-        {t('core:qortino_agent.models.add')}
+        {t('core:qortino_agent.models.add_file')}
       </Button>
+      <Typography
+        sx={{
+          color: alpha(theme.palette.text.primary, 0.55),
+          fontSize: '0.68rem',
+        }}
+      >
+        {t('core:qortino_agent.models.file_hint')}
+      </Typography>
+      {addError ? (
+        <Typography
+          role="alert"
+          sx={{ color: theme.palette.error.main, fontSize: '0.74rem' }}
+        >
+          {addError}
+        </Typography>
+      ) : null}
       {tier?.totalRamBytes ? (
         <Typography
           sx={{
@@ -445,237 +615,6 @@ export function QortinoModelsSection({ install, onUseQortino }: Props) {
           })}
         </Typography>
       ) : null}
-      <QortinoAddModelDialog
-        open={adding}
-        onClose={() => setAdding(false)}
-        tier={tier}
-      />
     </QortinoSettingsGroup>
-  );
-}
-
-function QortinoAddModelDialog({
-  open,
-  onClose,
-  tier,
-}: {
-  open: boolean;
-  onClose: () => void;
-  tier: QortinoDeviceTier | null;
-}) {
-  const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
-  const { t } = useTranslation(['core']);
-  const [url, setUrl] = useState('');
-  const [label, setLabel] = useState('');
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    setUrl('');
-    setLabel('');
-    setError('');
-    setBusy(false);
-  }, [open]);
-
-  const pickFile = async () => {
-    setError('');
-    try {
-      const file = await QortinoLlm.pickModelFile({
-        title: t('core:qortino_agent.models.pick_title'),
-        filterName: t('core:qortino_agent.models.pick_filter'),
-      });
-      if (!file) return;
-      if (isLaterSplitPart(file.name)) {
-        setError(t('core:qortino_agent.models.first_part'));
-        return;
-      }
-      addFileModel(file);
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  };
-
-  const download = async () => {
-    setError('');
-    if (!isOtherModelLink(url)) {
-      setError(t('core:qortino_agent.models.invalid_link'));
-      return;
-    }
-    if (!/\.gguf(\?|#|$)/i.test(url.trim())) {
-      setError(t('core:qortino_agent.models.gguf_only'));
-      return;
-    }
-    if (isSplitModelLink(url)) {
-      setError(t('core:qortino_agent.models.split_link'));
-      return;
-    }
-    setBusy(true);
-    try {
-      await addLinkModel({ url, label });
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="sm"
-      fullWidth
-      sx={{ zIndex: theme.zIndex.modal + 10 }}
-    >
-      <DialogTitle sx={{ fontWeight: 800, pb: 0.5 }}>
-        {t('core:qortino_agent.models.add_title')}
-      </DialogTitle>
-      <DialogContent
-        sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}
-      >
-        <Typography
-          sx={{
-            color: alpha(theme.palette.text.primary, 0.75),
-            fontSize: '0.84rem',
-            lineHeight: 1.45,
-          }}
-        >
-          {t('core:qortino_agent.models.add_intro')}
-        </Typography>
-        <Box
-          sx={{
-            border: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
-            borderRadius: '12px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 0.75,
-            p: 1.25,
-          }}
-        >
-          <Typography sx={{ fontSize: '0.86rem', fontWeight: 800 }}>
-            {t('core:qortino_agent.models.file_heading')}
-          </Typography>
-          <Typography sx={{ fontSize: '0.76rem', opacity: 0.72 }}>
-            {t('core:qortino_agent.models.file_hint')}
-          </Typography>
-          <Button
-            onClick={() => void pickFile()}
-            startIcon={<FolderOpenRoundedIcon />}
-            sx={{ alignSelf: 'flex-start', textTransform: 'none' }}
-            variant="outlined"
-          >
-            {t('core:qortino_agent.models.choose_file')}
-          </Button>
-        </Box>
-        <Box
-          sx={{
-            border: `1px solid ${alpha(theme.palette.divider, 0.6)}`,
-            borderRadius: '12px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 1,
-            p: 1.25,
-          }}
-        >
-          <Typography sx={{ fontSize: '0.86rem', fontWeight: 800 }}>
-            {t('core:qortino_agent.models.link_heading')}
-          </Typography>
-          <TextField
-            label={t('core:qortino_agent.models.link_label')}
-            placeholder="https://…/model-Q4_K_M.gguf"
-            size="small"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            fullWidth
-          />
-          <TextField
-            label={t('core:qortino_agent.models.name_label')}
-            size="small"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            inputProps={{ maxLength: 80 }}
-            fullWidth
-          />
-          <Typography sx={{ fontSize: '0.74rem', fontWeight: 700, mt: 0.5 }}>
-            {t('core:qortino_agent.models.suggested')}
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-            {SUGGESTED_OTHER_MODELS.map((model) => {
-              const chosen = url.trim() === model.url;
-              const fits = modelFitsMemory(model.sizeBytes, tier);
-              return (
-                <ButtonBase
-                  key={model.id}
-                  onClick={() => {
-                    setUrl(model.url);
-                    setLabel(model.label);
-                    setError('');
-                  }}
-                  sx={{
-                    alignItems: 'center',
-                    background: chosen
-                      ? alpha(ACCENT, isDark ? 0.18 : 0.12)
-                      : 'transparent',
-                    border: `1px solid ${chosen ? alpha(ACCENT, 0.7) : alpha(theme.palette.divider, 0.5)}`,
-                    borderRadius: '10px',
-                    display: 'flex',
-                    gap: 1,
-                    justifyContent: 'space-between',
-                    px: 1,
-                    py: 0.6,
-                    textAlign: 'left',
-                  }}
-                >
-                  <Typography sx={{ fontSize: '0.8rem', fontWeight: 700 }}>
-                    {model.label}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      color: fits
-                        ? alpha(theme.palette.text.primary, 0.6)
-                        : theme.palette.warning.main,
-                      flexShrink: 0,
-                      fontSize: '0.7rem',
-                    }}
-                  >
-                    {`${formatBytes(model.sizeBytes)} · ${model.license}`}
-                  </Typography>
-                </ButtonBase>
-              );
-            })}
-          </Box>
-          <Typography
-            sx={{ fontSize: '0.7rem', opacity: 0.65, lineHeight: 1.4 }}
-          >
-            {t('core:qortino_agent.models.link_note')}
-          </Typography>
-        </Box>
-        {error ? (
-          <Typography
-            role="alert"
-            sx={{ color: theme.palette.error.main, fontSize: '0.8rem' }}
-          >
-            {error}
-          </Typography>
-        ) : null}
-      </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onClose} sx={{ textTransform: 'none' }}>
-          {t('core:action.cancel', { postProcess: 'capitalizeFirstChar' })}
-        </Button>
-        <Button
-          disabled={busy || !url.trim()}
-          onClick={() => void download()}
-          startIcon={<DownloadRoundedIcon />}
-          sx={{ textTransform: 'none' }}
-          variant="contained"
-        >
-          {t('core:qortino_agent.models.download')}
-        </Button>
-      </DialogActions>
-    </Dialog>
   );
 }

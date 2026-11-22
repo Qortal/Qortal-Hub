@@ -40,7 +40,7 @@ vi.mock('./index', () => ({
 
 import { registerQortinoLlmIpcHandlers } from './qortino-llm';
 
-/** The model a link points at: 4 MiB, sent with its length. */
+/** A part of another model on the node: 4 MiB, sent with its length. */
 const MODEL_BYTES = 4 * 1024 * 1024;
 /** What is free on the disk Qortino's folder is on. */
 const FREE_BYTES = 1024 * 1024;
@@ -51,13 +51,15 @@ const servingFetch = async () =>
     headers: { 'content-length': String(MODEL_BYTES) },
   });
 
-describe('a model downloaded by link, on a disk with too little room', () => {
+describe('a part of another model, on a disk with too little room', () => {
   let event: unknown;
   const call = (channel: string, args?: unknown) =>
     fake.handlers.get(channel)!(event, args);
 
   beforeAll(() => {
-    registerQortinoLlmIpcHandlers();
+    registerQortinoLlmIpcHandlers({
+      isNodeUrl: (url) => url.startsWith('http://127.0.0.1:12391/'),
+    });
   });
 
   beforeEach(async () => {
@@ -87,16 +89,16 @@ describe('a model downloaded by link, on a disk with too little room', () => {
     await fs.promises.rm(fake.userData, { recursive: true, force: true });
   });
 
-  it('does not write a model bigger than the free space', async () => {
+  it('does not write a part bigger than the free space', async () => {
     const tier = (await call('qortino:getDeviceTier')) as {
       availStorageBytes: number;
     };
     expect(tier.availStorageBytes).toBe(FREE_BYTES);
 
-    const relativePath = 'other-models/abc123/big-model.gguf';
+    const relativePath = 'other-models/big/big-00001-of-00002.gguf';
     const target = path.join(fake.userData, 'Qortino AI', relativePath);
     const outcome = await call('qortino:downloadUrl', {
-      url: 'https://example.com/big-model.gguf',
+      url: 'http://127.0.0.1:12391/arbitrary/FILE/Qortino%20AI/qshare_file_part',
       relativePath,
     }).then(
       () => 'saved',

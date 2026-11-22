@@ -113,9 +113,6 @@ export type QortinoLlmBridge = {
     relativePath: string;
   }): Promise<{ path: string; bytesWritten: number }>;
   cancelDownload(options?: { relativePath?: string }): Promise<void>;
-  otherModelPath(options: {
-    url: string;
-  }): Promise<{ relativePath: string; filename: string }>;
   removeOtherModel(options: {
     relativePath: string;
   }): Promise<{ freedBytes: number }>;
@@ -255,9 +252,6 @@ const QortinoLlm = {
   },
   async cancelDownload(options?: { relativePath?: string }) {
     await bridge()?.cancelDownload(options ?? {});
-  },
-  async otherModelPath(options: { url: string }) {
-    return requireBridge().otherModelPath(options);
   },
   async removeOtherModel(options: { relativePath: string }) {
     return requireBridge().removeOtherModel(options);

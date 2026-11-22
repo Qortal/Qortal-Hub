@@ -7,9 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const llm = vi.hoisted(() => {
   let line: Promise<unknown> = Promise.resolve();
   let stopReply: ((error?: Error) => void) | null = null;
-  let finishDownload:
-    | ((value: { path: string; bytesWritten: number }) => void)
-    | null = null;
   const inLine = <T>(work: () => Promise<T>): Promise<T> => {
     const next = line.then(work, work);
     line = next.catch(() => undefined);
@@ -18,8 +15,6 @@ const llm = vi.hoisted(() => {
   return {
     replyRunning: () => stopReply !== null,
     endReply: () => stopReply?.(),
-    finishDownload: (value: { path: string; bytesWritten: number }) =>
-      finishDownload?.(value),
     loadModel: vi.fn((options: { path: string }) =>
       inLine(async () => ({ loaded: true, path: options.path }))
     ),
@@ -40,21 +35,11 @@ const llm = vi.hoisted(() => {
       stopReply?.(new Error('cancelled'));
     }),
     unload: vi.fn(() => inLine(async () => undefined)),
-    otherModelPath: vi.fn(async ({ url }: { url: string }) => {
-      const name = url.split('?')[0].split('/').pop() as string;
-      return { relativePath: `other-models/${name}`, filename: name };
-    }),
     getStoragePaths: vi.fn(async () => ({
       rootDir: '/data/Qortino AI',
       modelsDir: '/data/Qortino AI/models',
       knowledgeDir: '/data/Qortino AI/knowledge',
     })),
-    downloadUrl: vi.fn(
-      () =>
-        new Promise<{ path: string; bytesWritten: number }>((resolve) => {
-          finishDownload = resolve;
-        })
-    ),
     cancelDownload: vi.fn(async () => undefined),
     removeOtherModel: vi.fn(async () => ({ freedBytes: 1 })),
     addListener: vi.fn(async () => ({ remove: async () => undefined })),
@@ -66,10 +51,29 @@ vi.mock('../qortinoLlm', () => ({
   isQortinoLlmNativeAvailable: () => true,
 }));
 
+/** A download from QDN that ends when the test says so. */
+const qdn = vi.hoisted(() => {
+  let finish: ((value: { path: string }) => void) | null = null;
+  return {
+    finish: (value: { path: string }) => finish?.(value),
+    downloadQdnModelWithRetries: vi.fn(
+      () =>
+        new Promise<{ path: string }>((resolve) => {
+          finish = resolve;
+        })
+    ),
+  };
+});
+vi.mock('../qdnModelDownload', () => ({
+  downloadQdnModelWithRetries: qdn.downloadQdnModelWithRetries,
+}));
+
+import { QWEN3_30B_MODEL } from '../manifest';
 import {
   addFileModel,
-  addLinkModel,
+  downloadQdnOtherModel,
   getQortinoModels,
+  qdnModelEntryId,
   QORTINO_OWN_MODEL_ID,
   removeOtherModel,
   resetQortinoModelsForTests,
@@ -83,6 +87,7 @@ import {
 
 const flush = async (times = 10) => {
   for (let i = 0; i < times; i += 1) {
+    await vi.dynamicImportSettled();
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 };
@@ -129,16 +134,14 @@ describe("Qortino's other models, against the model process", () => {
   });
 
   it("keeps Qortino's own model in use when it was picked while another model downloaded", async () => {
-    // Another model was in use; a link model starts downloading.
+    // Another model was in use; a bigger one starts downloading from QDN.
     const file = addFileModel({
       path: '/home/me/phi.gguf',
       name: 'phi.gguf',
       size: 2_000,
     });
     expect(getQortinoModels().activeId).toBe(file.id);
-    const link = await addLinkModel({
-      url: 'https://huggingface.co/x/resolve/main/big.gguf',
-    });
+    void downloadQdnOtherModel(QWEN3_30B_MODEL);
     await flush();
 
     // The user picks Qortino's own model in the list.
@@ -146,14 +149,13 @@ describe("Qortino's other models, against the model process", () => {
     expect(getQortinoModels().activeId).toBe(QORTINO_OWN_MODEL_ID);
 
     // The download finishes later.
-    llm.finishDownload({
-      path: '/data/Qortino AI/other-models/big.gguf',
-      bytesWritten: 9,
-    });
+    qdn.finish({ path: '/data/Qortino AI/other-models/big/big-1.gguf' });
     await flush();
 
     expect(
-      getQortinoModels().others.find((m) => m.id === link.id)?.status
+      getQortinoModels().others.find(
+        (m) => m.id === qdnModelEntryId(QWEN3_30B_MODEL)
+      )?.status
     ).toBe('ready');
     expect(getQortinoModels().activeId).toBe(QORTINO_OWN_MODEL_ID);
   });
