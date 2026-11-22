@@ -7,6 +7,7 @@
  * block. All public GETs; a failed read throws, and "the node has none" is
  * an answer of its own.
  */
+import { isAtAddress, isQortAddress } from './addresses';
 import { CoreHttpError, getJson, getText, queryString, seg } from './core';
 import { orderQort, type OrderState, type OrderTrade } from './qortBook';
 import { toTxRows, type ReadSpec } from './reads';
@@ -152,19 +153,56 @@ export const closedOrderKey = (id: string) => `orderclosed:${id}`;
 
 // ---- Its trades on the Trade Portal -----------------------------------------------------
 
+/** One of its completed sales on the Trade Portal (Core's trade summary): QORT for another coin. */
+export interface PortalSale {
+  /** When it completed. */
+  timestamp: number;
+  /** QORT sold, as Core writes it. */
+  qortAmount: string;
+  /** What the buyer paid, in the other coin (Core doesn't name the coin here). */
+  foreignAmount: string;
+  /** The trade's contract (the AT that held the QORT). */
+  atAddress: string | null;
+  seller: string;
+  /** Where the buyer received the QORT: found this way, a buyer needs no public key. */
+  buyer: string;
+}
+
 export interface PortalTrades {
   /** QORT it bought, in atomic units. */
   bought: bigint;
   /** QORT it sold, in atomic units. */
   sold: bigint;
+  /**
+   * Its sales, newest first, each once: Compare's trades between two
+   * accounts (a sale whose buyer received the QORT at the other's address).
+   * A row without a seller and a buyer address is counted in `sold` only.
+   */
+  sales: PortalSale[];
+}
+
+/** A row of Core's trade summaries as one of its sales, or null when it doesn't name both accounts. */
+function saleOf(row: Record<string, unknown>): PortalSale | null {
+  const seller = row.sellerAddress;
+  const buyer = row.buyerReceivingAddress;
+  if (!isQortAddress(seller) || !isQortAddress(buyer)) return null;
+  return {
+    timestamp: Number(row.tradeTimestamp ?? 0),
+    qortAmount: String(row.qortAmount ?? '0'),
+    foreignAmount: String(row.foreignAmount ?? row.btcAmount ?? '0'),
+    atAddress: isAtAddress(row.atAddress) ? row.atAddress : null,
+    seller,
+    buyer,
+  };
 }
 
 /**
  * The QORT of its completed trades on the Trade Portal, on every chain, as
  * the buyer and as the seller (`/crosschain/trades?buyerPublicKey=…` and
  * `?sellerPublicKey=…`), each trade counted once (by its contract's
- * address). An account without a public key never made a transaction, so
- * it traded nothing.
+ * address), and its sales themselves, for Compare (the Overview and
+ * Compare share this read). An account without a public key never made a
+ * transaction, so it traded nothing.
  *
  * Each side is one read without a limit, on purpose: Core applies `limit`
  * and `offset` to each kind of trade contract apart, then joins and cuts
@@ -185,20 +223,27 @@ export const portalTradesRead = (
       );
       const seen = new Set<string>();
       let total = 0n;
+      const trades: Array<Record<string, unknown>> = [];
       for (const trade of Array.isArray(rows) ? rows : []) {
+        if (!trade || typeof trade !== 'object') continue;
         const at = String((trade as { atAddress?: unknown })?.atAddress ?? '');
         if (at && seen.has(at)) continue;
         seen.add(at);
+        trades.push(trade as Record<string, unknown>);
         total +=
           toAtomic((trade as { qortAmount?: unknown })?.qortAmount) ?? 0n;
       }
-      return total;
+      return { total, trades };
     };
     const [bought, sold] = await Promise.all([
       side('buyerPublicKey'),
       side('sellerPublicKey'),
     ]);
-    return { bought, sold };
+    const sales = sold.trades
+      .map(saleOf)
+      .filter((sale): sale is PortalSale => sale !== null)
+      .sort((a, b) => b.timestamp - a.timestamp);
+    return { bought: bought.total, sold: sold.total, sales };
   },
 });
 

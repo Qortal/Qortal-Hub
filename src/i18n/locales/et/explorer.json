@@ -211,6 +211,221 @@
     "minting_penalty": "mintimise karistus",
     "minting_penalty_explained": "Sõlm on sellele kontole registreerinud mintimise karistuse. Arv on kirjas jaotises „Märkused“."
   },
+  "compare": {
+    "add": {
+      "already": "Juba selles võrdluses, tähega {{letter}}.",
+      "at": "See on AT-aadress (programm plokiahelas), mitte isiklik konto.",
+      "full": "Võrdlusse mahub 4 kontot. Eemalda esmalt üks.",
+      "label": "lisa konto võrdlemiseks",
+      "looking_up": "Otsitakse „{{name}}“…",
+      "more": "Lisa veel üks konto, millega seda võrrelda.",
+      "transaction": "See on tehing, mitte konto."
+    },
+    "card": {
+      "about": "teave: {{name}} ({{letter}})",
+      "copy_address": "kopeeri konto {{name}} ({{letter}}) aadress",
+      "letter": "konto {{letter}}",
+      "list": "võrreldavad kontod",
+      "loading": "konto {{letter}} lugemine",
+      "remove": "eemalda {{name}} ({{letter}}) sellest võrdlusest",
+      "remove_short": "eemalda sellest võrdlusest"
+    },
+    "check": {
+      "payments": "maksed mõlemas suunas",
+      "portal_trades": "müügid kauplemisportaalis",
+      "reward_shares": "preemia jagamised nende vahel"
+    },
+    "common": {
+      "band": "see on saatnud {{band}}+ QORT-makset",
+      "bands_failed": "Mõne konto saadetud maksete arvu ei õnnestunud lugeda, seega võib väga aktiivne konto ikka loendis olla.",
+      "blocks": "plokid {{list}}",
+      "check": {
+        "counterparties": "samad kontod nende maksetes",
+        "first_payer": "ühine esimene maksja",
+        "groups": "ühised rühmad (v.a MINTER)",
+        "sponsor": "ühine esimene sponsor"
+      },
+      "count_both": "{{letter}} saatis {{sent}} ja sai {{received}}",
+      "count_received": "{{letter}} sai {{payments}}",
+      "count_sent": "{{letter}} saatis {{payments}}",
+      "counterparties": "samad kontod nende maksetes",
+      "failed": "Kõike, mida „Ühised jooned“ vajab, ei õnnestunud lugeda.",
+      "firsts": "ühine sponsor või esimene maksja",
+      "groups": "rühmad, kuhu kuulub kaks või rohkem neist, väikseimad eespool",
+      "left_ats_one": "{{shown}} AT-aadress (programm plokiahelas)",
+      "left_ats_other": "{{shown}} AT-aadressi (programmid plokiahelas)",
+      "left_busy_one": "{{shown}} konto, mis on saatnud 1000+ QORT-makset",
+      "left_busy_other": "{{shown}} kontot, mis on saatnud 1000+ QORT-makset",
+      "left_out": "Välja jäetud: {{list}}.",
+      "payments_note": "Iga konto loetud maksete, vara ülekannete ja mitmikmaksete põhjal (allpool); võrreldavad kontod ise on välja jäetud.",
+      "payments_one": "{{shown}} makse",
+      "payments_other": "{{shown}} makset",
+      "reading": "loetakse, mis neil ühist on",
+      "sponsor_count_more_one": "Oma uusimates loetud mintimistehingutes sponsoreeris see {{shown}} konto: neid võib olla rohkem.",
+      "sponsor_count_more_other": "Oma uusimates loetud mintimistehingutes sponsoreeris see {{shown}} kontot: neid võib olla rohkem.",
+      "sponsor_count_one": "Kokku sponsoreeris see {{shown}} konto.",
+      "sponsor_count_other": "Kokku sponsoreeris see {{shown}} kontot.",
+      "title": "ühised jooned"
+    },
+    "coverage": {
+      "pair": "{{a}} ja {{b}}",
+      "pairs_more": "Paarides {{pairs}} loeti kummaski suunas uusimad 1000 QORT-makset: on ka vanemaid.",
+      "title": "mis loeti"
+    },
+    "failed": {
+      "list": "Ei õnnestunud lugeda: {{list}}.",
+      "of": "{{part}} ({{letter}})",
+      "pair_payments": "QORT-maksed kontode {{a}} ja {{b}} vahel",
+      "portal": "selle müügid kauplemisportaalis"
+    },
+    "neutral": "Mida plokiahel nende kontode kohta registreeris, koos arvude, plokkide ja kuupäevadega: mitte kunagi seda, mida see tähendab.",
+    "none": "Kontrollitud, midagi ei leitud: {{list}}.",
+    "none_so_far": "Seni loetust ei leitud midagi: {{list}}.",
+    "picks": {
+      "clear": "tühjenda võrdlemiseks valitud kontod",
+      "compare": "võrdle ({{picked}})",
+      "one_more": "Vali veel üks konto, et neid kõrvuti võrrelda.",
+      "remove": "eemalda {{name}} võrdlusest",
+      "remove_short": "eemalda võrdlusest",
+      "title": "valitud võrdlemiseks"
+    },
+    "portal": {
+      "row": "{{amount}} QORT · {{date}}",
+      "row_no_time": "{{amount}} QORT · aeg teadmata",
+      "trades_one": "{{shown}} müük",
+      "trades_other": "{{shown}} müüki",
+      "when_some_unknown_one": "{{when}} ({{shown}} müük: aeg teadmata)",
+      "when_some_unknown_other": "{{when}} ({{shown}} müüki: aeg teadmata)",
+      "when_unknown": "aeg teadmata"
+    },
+    "reading": "Veel loetakse: {{list}}.",
+    "recorded": {
+      "list": "{{words}} kontode {{actor}} ja {{other}} vahel",
+      "note": "Iga paari vahelised QORT-maksed loetakse täpselt, mõlemas suunas, kuni 1000 kummaski suunas, ja iga konto müügid kauplemisportaalis selle enda võtme järgi (kõik). Vara ülekanded, mitmikmaksed, preemia jagamised, mintimise taseme ülekanded, nimede müügid ja varavahetused pärinevad iga konto enda tehingutest, niivõrd kui need loeti (allpool).",
+      "note_lists": "See sõlm ei saa kahe konto vahelisi makseid täpselt lugeda: iga makse siin pärineb iga konto enda tehingutest, niivõrd kui need loeti (allpool). Müügid kauplemisportaalis loetakse iga müüja enda võtme järgi (kõik).",
+      "pair": "{{a}} ja {{b}}",
+      "show": "näita: {{words}} kontode {{actor}} ja {{other}} vahel",
+      "title": "nende vahel registreeritud"
+    },
+    "say": {
+      "common": {
+        "first_payer": {
+          "all": "Kõik {{accounts}} kontot said oma esimese QORT-makse kontolt {{from}}",
+          "both": "Mõlemad said oma esimese QORT-makse kontolt {{from}}",
+          "some": "{{letters}} said oma esimese QORT-makse kontolt {{from}}"
+        },
+        "paid": {
+          "all": "Kõik {{accounts}} kontot maksid kontole {{other}}",
+          "both": "Mõlemad maksid kontole {{other}}",
+          "some": "{{letters}} maksid kontole {{other}}"
+        },
+        "paid_by": {
+          "all": "{{other}} maksis kõigile {{accounts}} kontole",
+          "both": "{{other}} maksis mõlemale",
+          "some": "{{other}} maksis kontodele {{letters}}"
+        },
+        "sponsor": {
+          "all": "Kõigi {{accounts}} konto esimene sponsor oli {{sponsor}}",
+          "both": "Mõlema esimene sponsor oli {{sponsor}}",
+          "some": "Kontode {{letters}} esimene sponsor oli {{sponsor}}"
+        },
+        "through": "{{from}} maksis kontole {{other}} ja {{other}} maksis kontole {{to}}"
+      },
+      "portal_sold_one": "Müüs kauplemisportaalis kontole {{other}} {{amount}}, {{trades}} müügiga",
+      "portal_sold_other": "Müüs kauplemisportaalis kontole {{other}} {{amount}}, {{trades}} müügiga",
+      "registered_name": "Registreeris nime {{name}} (nüüd selle peamine nimi)",
+      "side_account": "{{account}}",
+      "side_first_level": "Selle mintimise tase kontolt {{from}}",
+      "side_first_payment": "{{from}}",
+      "side_first_share": "Preemia jagamine kontolt {{from}}",
+      "side_first_transfer": "Vara ülekanne kontolt {{from}}",
+      "side_primary": "{{name}}",
+      "side_primary_more_one": "{{name}} ja veel {{others}}",
+      "side_primary_more_other": "{{name}} ja veel {{others}}",
+      "side_primary_more_plus_one": "{{name}} ja veel {{others}}+",
+      "side_primary_more_plus_other": "{{name}} ja veel {{others}}+"
+    },
+    "side": {
+      "accounts_more_one": "loetus {{shown}} konto",
+      "accounts_more_other": "loetus {{shown}} kontot",
+      "accounts_one": "{{shown}} konto",
+      "accounts_other": "{{shown}} kontot",
+      "blocks_one": "{{shown}} plokk",
+      "blocks_other": "{{shown}} plokki",
+      "caption": "kontod kõrvuti",
+      "fact": "näitaja",
+      "failed": "ei õnnestunud lugeda",
+      "failed_line": "Osa neist ei õnnestunud lugeda.",
+      "first": {
+        "at": "AT (programm plokiahelas)",
+        "genesis": "geneesisplokk",
+        "level": "mintimise tase",
+        "payment": "makse",
+        "share": "preemia jagamine",
+        "transfer": "vara ülekanne"
+      },
+      "label": {
+        "blocks": "minditud plokid",
+        "first_qort": "esimese QORT-i allikas",
+        "last_sent": "saatis viimati tehingu",
+        "level": "tase",
+        "minting_now": "mindib praegu",
+        "names": "nimed",
+        "penalty": "mintimise karistus",
+        "sponsor": "esimene sponsor",
+        "sponsored": "sponsoreeritud"
+      },
+      "never": "mitte kunagi",
+      "no": "ei",
+      "no_primary_more_one": "peamine nimi puudub ({{shown}}+ nime)",
+      "no_primary_more_other": "peamine nimi puudub ({{shown}}+ nime)",
+      "no_primary_one": "peamine nimi puudub ({{shown}} nimi)",
+      "no_primary_other": "peamine nimi puudub ({{shown}} nime)",
+      "none": "pole",
+      "none_found": "ei leitud",
+      "none_so_far": "loetus pole",
+      "not_found": "ei leitud",
+      "number": "{{value}}",
+      "of": "{{letter}}:",
+      "qort": "{{amount}} QORT",
+      "same": "kõigil sama:",
+      "sponsor_partial": "loetu põhjal teadmata",
+      "title": "kõrvuti",
+      "yes": "jah"
+    },
+    "timeline": {
+      "block": "plokk {{block}}",
+      "blocks_later_one": "{{blocks}} plokk hiljem",
+      "blocks_later_other": "{{blocks}} plokki hiljem",
+      "failed": "Kõike, mida ajajoon vajab, ei õnnestunud lugeda.",
+      "label": "ühine ajajoon, vanim eespool",
+      "moments_later": "hetk hiljem",
+      "open": "{{when}}: ava tehing",
+      "partial": "Loetu põhjal: kontode {{letters}} vanemad preemia jagamised, mintimise taseme ülekanded või nimed võivad puududa.",
+      "reading": "loetakse, kust tuli nende esimene QORT, ning nende preemia jagamisi, mintimise taseme ülekandeid ja nimesid",
+      "same_block": "samas plokis",
+      "time_later": "{{time}} hiljem",
+      "title": "ühine ajajoon",
+      "who": "{{letter}}:"
+    },
+    "title": "kontode võrdlemine",
+    "toggle": {
+      "add": "lisa võrdlusse",
+      "add_label": "lisa võrdlusse: {{name}}",
+      "added": "Lisatud võrdlusse ({{picked}}/{{max}}).",
+      "compare_now": "võrdle kohe",
+      "picked": "valitud võrdlemiseks",
+      "picked_label": "valitud võrdlemiseks: {{name}}",
+      "removed": "Võrdlusest eemaldatud."
+    },
+    "with": {
+      "button": "võrdle kontoga…",
+      "field": "nimi või aadress",
+      "lead": "Leia konto, millega kontot {{name}} võrrelda.",
+      "same": "See on sama konto. Leia mõni teine.",
+      "title": "võrdle kontoga…"
+    }
+  },
   "connections": {
     "at_label": "AT {{address}}",
     "block": "plokk {{block}}",
@@ -522,6 +737,37 @@
     "trades_info": "Selle lõpetatud tehingud Trade Portalis, kõigis ahelates: ostetud {{bought}} QORT, müüdud {{sold}} QORT.",
     "trades_no_key_info": "See pole kunagi ise tehingut teinud, seega pole see Trade Portalis müünud (müük algab oma kauplemislepinguga). Ostetud {{bought}} QORT on see, mida teiste kontode kauplemislepingud on sellele kogu selle ajaloo jooksul maksnud."
   },
+  "funded": {
+    "ats_one": "Maksed {{shown}} AT-aadressile (programm plokiahelas) on välja jäetud.",
+    "ats_other": "Maksed {{shown}} AT-aadressile (programmid plokiahelas) on välja jäetud.",
+    "check_failed_one": "{{shown}} konto kontrollimine ebaõnnestus.",
+    "check_failed_other": "{{shown}} konto kontrollimine ebaõnnestus.",
+    "check_more_one": "kontrolli veel {{shown}}",
+    "check_more_other": "kontrolli veel {{shown}}",
+    "checking": "Kontrollitakse, kelle esimene QORT-makse see oli: {{done}}/{{total}}…",
+    "list_title": "nende esimene QORT-makse tuli sellelt kontolt",
+    "loading": "selle maksete lugemine",
+    "none": "See pole teistele kontodele QORT-makseid saatnud.",
+    "none_so_far": "Ükski loetud makse ei läinud teisele kontole.",
+    "note": "Konto esimene QORT-makse on siin varaseim QORT-makse, mille see sai: vara ülekandeid, mitmikmakseid ja AT-de väljamakseid ei arvestata.",
+    "paid_one": "Loetud maksetes maksis see {{shown}} kontole.",
+    "paid_other": "Loetud maksetes maksis see {{shown}} kontole.",
+    "read_all_one": "kõik selle saadetud QORT-maksed ({{shown}})",
+    "read_all_other": "kõik selle saadetud QORT-maksed ({{shown}})",
+    "read_ceiling_one": "selle esimesed saadetud QORT-maksed ({{shown}}; see saatis rohkem, Explorer loeb kuni 1000)",
+    "read_ceiling_other": "selle esimesed saadetud QORT-maksed ({{shown}}; see saatis rohkem, Explorer loeb kuni 1000)",
+    "read_first_one": "selle esimesed saadetud QORT-maksed ({{shown}}; see võis saata rohkem)",
+    "read_first_other": "selle esimesed saadetud QORT-maksed ({{shown}}; see võis saata rohkem)",
+    "read_later": "loe hilisemaid makseid",
+    "read_single": "selle ainus saadetud QORT-makse",
+    "result_all_one": "See tegi esimese QORT-makse {{shown}} kontole neist.",
+    "result_all_other": "See tegi esimese QORT-makse {{shown}} kontole neist.",
+    "result_some_one": "Seni kontrollitud {{checked}} kontost tegi see esimese QORT-makse {{shown}} kontole.",
+    "result_some_other": "Seni kontrollitud {{checked}} kontost tegi see esimese QORT-makse {{shown}} kontole.",
+    "row": "{{amount}} QORT, {{date}} · plokk {{block}}",
+    "title": "esimesed QORT-maksed kontolt {{name}}",
+    "unsupported": "See sõlm ei saa kontode vahelisi makseid lugeda, aga siin on neid vaja."
+  },
   "groups": {
     "admin": "administraator",
     "closed": "suletud rühm",
@@ -706,12 +952,94 @@
     "label": "leia konto või tehing",
     "placeholder": "nimi, aadress või tehingu allkiri"
   },
+  "set_checks": {
+    "again": "kontrolli uuesti",
+    "done_one": "Kontrollitud {{shown}} konto.",
+    "done_other": "Kontrollitud kõik {{shown}} kontot.",
+    "failed_one": "{{shown}} konto lugemine ebaõnnestus.",
+    "failed_other": "{{shown}} konto lugemine ebaõnnestus.",
+    "first": {
+      "about": "Kust tuli iga konto esimene QORT, maksja järgi rühmitatud. Kaks kontot korraga.",
+      "empty": "Kontrollitute hulgast ei leitud ühtegi esimest QORT-makset.",
+      "none_one": "{{shown}} kontol ei leitud esimest QORT-i.",
+      "none_other": "{{shown}} kontol ei leitud esimest QORT-i.",
+      "other_one": "{{shown}} kontol oli muu esimene tehing (mitmikmakse, preemia jagamine, mintimise taseme ülekanne, vara ülekanne, AT või geneesisplokk).",
+      "other_other": "{{shown}} kontol oli muu esimene tehing (mitmikmakse, preemia jagamine, mintimise taseme ülekanne, vara ülekanne, AT või geneesisplokk).",
+      "title": "kes tegi nende esimese QORT-makse"
+    },
+    "progress": "Kontrollitud {{done}}/{{total}}…",
+    "start_one": "kontrolli {{shown}} kontot",
+    "start_other": "kontrolli {{shown}} kontot",
+    "stop": "peata",
+    "stopped": "Peatatud pärast {{done}}/{{total}}.",
+    "title": "kontrollid nende kontode kohta",
+    "went": {
+      "about": "Iga konto saadetud QORT-maksed (kõige rohkem selle esimesed 1000), saaja järgi rühmitatud. Kaks kontot korraga.",
+      "ats_one": "Maksed {{shown}} AT-aadressile (programm plokiahelas) on välja jäetud.",
+      "ats_other": "Maksed {{shown}} AT-aadressile (programmid plokiahelas) on välja jäetud.",
+      "beyond_one": "{{shown}} neist saatis rohkem, kui Explorer loeb (1000 igaühelt): selle hilisemaid makseid ei arvestata.",
+      "beyond_other": "{{shown}} neist saatsid rohkem, kui Explorer loeb (1000 igaühelt): nende hilisemaid makseid ei arvestata.",
+      "empty": "Kontrollitute hulgas pole saadetud QORT-makseid.",
+      "title": "kuhu nende QORT läks"
+    }
+  },
+  "sets": {
+    "link": {
+      "funded": "kes said oma esimese QORT-makse kontolt {{name}}",
+      "funded_own": "kes said oma esimese QORT-makse sellelt kontolt",
+      "sponsees": "kontod, mida {{name}} sponsoreeris",
+      "sponsees_own": "kontod, mida see sponsoreeris"
+    },
+    "say": {
+      "first_payer_one": "{{from}} tegi esimese QORT-makse {{accounts}} kontole {{total}} kontrollitud kontost",
+      "first_payer_other": "{{from}} tegi esimese QORT-makse {{accounts}} kontole {{total}} kontrollitud kontost",
+      "first_payer_single": "{{from}} tegi esimese QORT-makse {{accounts}} kontole (ainus kontrollitud)",
+      "went_to_one": "{{to}} sai {{amount}} {{accounts}} kontolt {{total}} kontrollitud kontost",
+      "went_to_other": "{{to}} sai {{amount}} {{accounts}} kontolt {{total}} kontrollitud kontost",
+      "went_to_single": "{{to}} sai {{amount}} {{accounts}} kontolt (ainus kontrollitud)"
+    }
+  },
   "settings": {
     "activity": "tegevuse seaded",
     "activity_hint": "Kui palju ülevaade esmalt loeb ja milliseid verstaposte selle tegevus näitab.",
     "remember": "jäta minu uuritud kontod selles seadmes meelde",
     "remember_hint": "Ainult nende aadressid, selle Hubi konto jaoks. Väljalülitamisel unustatakse need.",
     "title": "Exploreri seaded"
+  },
+  "sponsees": {
+    "list_title": "sponsoreeritud",
+    "loading": "selle sponsoreeritud kontode lugemine",
+    "minting_now_one": "{{shown}} neist mindib praegu.",
+    "minting_now_other": "{{shown}} neist mindivad praegu.",
+    "none": "See ei teinud teistele kontodele ühtegi preemia jagamist.",
+    "none_so_far": "Oma uusimates loetud mintimistehingutes ei teinud see teistele kontodele ühtegi preemia jagamist: vanemaid võib olla.",
+    "pick": "vali {{name}} võrdlemiseks",
+    "pick_hint": "Vali 2 kuni {{max}} kontot, et neid kõrvuti võrrelda.",
+    "row": {
+      "about": "teave: {{name}}",
+      "again": "pärast seda uuesti sponsoreeritud",
+      "failed": "Selle taset ja seisu MINTERis ei õnnestunud lugeda.",
+      "not_removed": "pole eemaldatud",
+      "removed_one": "eemaldatud {{blocks}} plokk hiljem (plokk {{block}})",
+      "removed_other": "eemaldatud {{blocks}} plokki hiljem (plokk {{block}})",
+      "shares_one": "kokku {{shown}} preemia jagamine",
+      "shares_other": "kokku {{shown}} preemia jagamist",
+      "shares_read_one": "loetus {{shown}} preemia jagamine",
+      "shares_read_other": "loetus {{shown}} preemia jagamist",
+      "sponsored": "Sponsoreeritud {{date}} määraga {{percent}} (plokk {{block}})"
+    },
+    "sort": {
+      "active": "kehtiv jagamine eespool",
+      "first": "varem sponsoreeritud eespool",
+      "latest": "hiljem sponsoreeritud eespool",
+      "minting": "praegu mindivad eespool",
+      "shares": "kõige rohkem preemia jagamisi eespool"
+    },
+    "summary_more_one": "Sponsoreeritud {{shown}} konto ({{span}}) selle uusimates loetud mintimistehingutes: neid võib olla rohkem.",
+    "summary_more_other": "Sponsoreeritud {{shown}} kontot ({{span}}) selle uusimates loetud mintimistehingutes: neid võib olla rohkem.",
+    "summary_one": "Sponsoreeritud {{shown}} konto ({{span}}).",
+    "summary_other": "Sponsoreeritud {{shown}} kontot ({{span}}).",
+    "title": "kontod, mida {{name}} sponsoreeris"
   },
   "start": {
     "clear": "tühjenda",

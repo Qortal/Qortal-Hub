@@ -75,12 +75,15 @@ export function ExplorerSearchField({
   onLookUp,
   compact = false,
   autoFocus = false,
+  placeholder,
 }: {
   /** Look up what was typed or picked (trimmed, never empty). */
   onLookUp: (who: string) => void;
   /** The small field in the window's bar. */
   compact?: boolean;
   autoFocus?: boolean;
+  /** A compact field's own words (its placeholder and name), for a field elsewhere than the bar. */
+  placeholder?: string;
 }) {
   const { t } = useTranslation(['core', 'explorer']);
   const [input, setInput] = useState('');
@@ -150,14 +153,14 @@ export function ExplorerSearchField({
           label={compact ? undefined : t('explorer:search.label', cap)}
           placeholder={
             compact
-              ? t('explorer:search.compact_placeholder', cap)
+              ? (placeholder ?? t('explorer:search.compact_placeholder', cap))
               : t('explorer:search.placeholder', cap)
           }
           helperText={compact ? undefined : t('explorer:search.helper', cap)}
           inputProps={{
             ...params.inputProps,
             'aria-label': compact
-              ? t('explorer:search.compact_placeholder', cap)
+              ? (placeholder ?? t('explorer:search.compact_placeholder', cap))
               : undefined,
             autoCapitalize: 'off',
             spellCheck: false,

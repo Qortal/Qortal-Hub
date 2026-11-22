@@ -211,6 +211,221 @@
     "minting_penalty": "铸币惩罚",
     "minting_penalty_explained": "节点在此账户上记录了铸币惩罚。具体数值见“备注”。"
   },
+  "compare": {
+    "add": {
+      "already": "已在此比较中，为 {{letter}}。",
+      "at": "这是 AT 地址（链上的程序），不是个人账户。",
+      "full": "比较最多容纳 4 个账户。请先移除一个。",
+      "label": "添加要比较的账户",
+      "looking_up": "正在查找“{{name}}”…",
+      "more": "再添加一个账户来与它比较。",
+      "transaction": "这是一笔交易，不是账户。"
+    },
+    "card": {
+      "about": "关于 {{name}}（{{letter}}）",
+      "copy_address": "复制 {{name}}（{{letter}}）的地址",
+      "letter": "账户 {{letter}}",
+      "list": "正在比较的账户",
+      "loading": "正在读取账户 {{letter}}",
+      "remove": "从此比较中移除 {{name}}（{{letter}}）",
+      "remove_short": "从此比较中移除"
+    },
+    "check": {
+      "payments": "双向付款",
+      "portal_trades": "交易门户销售",
+      "reward_shares": "它们之间的奖励分享"
+    },
+    "common": {
+      "band": "它已发送 {{band}}+ 笔 QORT 付款",
+      "bands_failed": "无法读取其中一些账户发送了多少笔付款，因此列表中可能仍有付款非常频繁的账户。",
+      "blocks": "区块 {{list}}",
+      "check": {
+        "counterparties": "它们付款中的相同账户",
+        "first_payer": "共同的首个付款人",
+        "groups": "共同群组（MINTER 除外）",
+        "sponsor": "共同的首个赞助人"
+      },
+      "count_both": "{{letter}} 发送了 {{sent}}，收到了 {{received}}",
+      "count_received": "{{letter}} 收到了 {{payments}}",
+      "count_sent": "{{letter}} 发送了 {{payments}}",
+      "counterparties": "它们付款中的相同账户",
+      "failed": "无法读取“共同点”所需的全部内容。",
+      "firsts": "共同的赞助人或首个付款人",
+      "groups": "其中两个或更多账户所在的群组，最小的在前",
+      "left_ats_one": "{{shown}} 个 AT 地址（链上的程序）",
+      "left_ats_other": "{{shown}} 个 AT 地址（链上的程序）",
+      "left_busy_one": "{{shown}} 个已发送 1000+ 笔 QORT 付款的账户",
+      "left_busy_other": "{{shown}} 个已发送 1000+ 笔 QORT 付款的账户",
+      "left_out": "未计入：{{list}}。",
+      "payments_note": "根据每个账户已读取的付款、资产转移和多笔付款（见下方）；被比较的账户本身不计入。",
+      "payments_one": "{{shown}} 笔付款",
+      "payments_other": "{{shown}} 笔付款",
+      "reading": "正在读取它们的共同点",
+      "sponsor_count_more_one": "在已读取的最新铸币交易中，它赞助了 {{shown}} 个账户：可能还有更多。",
+      "sponsor_count_more_other": "在已读取的最新铸币交易中，它赞助了 {{shown}} 个账户：可能还有更多。",
+      "sponsor_count_one": "它总共赞助了 {{shown}} 个账户。",
+      "sponsor_count_other": "它总共赞助了 {{shown}} 个账户。",
+      "title": "共同点"
+    },
+    "coverage": {
+      "pair": "{{a}} 和 {{b}}",
+      "pairs_more": "在 {{pairs}} 之间，每个方向读取了最新的 1000 笔 QORT 付款：还有更早的付款。",
+      "title": "已读取的内容"
+    },
+    "failed": {
+      "list": "无法读取：{{list}}。",
+      "of": "{{part}}（{{letter}}）",
+      "pair_payments": "{{a}} 与 {{b}} 之间的 QORT 付款",
+      "portal": "其交易门户销售"
+    },
+    "neutral": "链上为这些账户记录的内容，包括数字、区块和日期：从不解释其含义。",
+    "none": "已检查，未发现：{{list}}。",
+    "none_so_far": "在目前已读取的内容中未发现：{{list}}。",
+    "picks": {
+      "clear": "清除已选择比较的账户",
+      "compare": "比较（{{picked}}）",
+      "one_more": "再选择一个账户，即可并排比较。",
+      "remove": "将 {{name}} 移出比较",
+      "remove_short": "移出比较",
+      "title": "已选择比较"
+    },
+    "portal": {
+      "row": "{{amount}} QORT · {{date}}",
+      "row_no_time": "{{amount}} QORT · 时间未知",
+      "trades_one": "{{shown}} 笔销售",
+      "trades_other": "{{shown}} 笔销售",
+      "when_some_unknown_one": "{{when}}（{{shown}} 笔销售：时间未知）",
+      "when_some_unknown_other": "{{when}}（{{shown}} 笔销售：时间未知）",
+      "when_unknown": "时间未知"
+    },
+    "reading": "仍在读取：{{list}}。",
+    "recorded": {
+      "list": "{{actor}} 与 {{other}} 之间的 {{words}}",
+      "note": "每对账户之间的 QORT 付款按两个方向精确读取，每个方向最多 1000 笔；每个账户的交易门户销售按其自己的密钥读取（全部）。资产转移、多笔付款、奖励分享、铸币等级转移、名称买卖和资产买卖来自每个账户自己的交易，以已读取的范围为限（见下方）。",
+      "note_lists": "此节点无法精确读取两个账户之间的付款：这里的每笔付款都来自每个账户自己的交易，以已读取的范围为限（见下方）。交易门户销售按每个卖方自己的密钥读取（全部）。",
+      "pair": "{{a}} 和 {{b}}",
+      "show": "显示 {{actor}} 与 {{other}} 之间的 {{words}}",
+      "title": "它们之间的记录"
+    },
+    "say": {
+      "common": {
+        "first_payer": {
+          "all": "全部 {{accounts}} 个账户的第一笔 QORT 付款都来自 {{from}}",
+          "both": "两者的第一笔 QORT 付款都来自 {{from}}",
+          "some": "{{letters}} 的第一笔 QORT 付款来自 {{from}}"
+        },
+        "paid": {
+          "all": "全部 {{accounts}} 个账户都向 {{other}} 付过款",
+          "both": "两者都向 {{other}} 付过款",
+          "some": "{{letters}} 向 {{other}} 付过款"
+        },
+        "paid_by": {
+          "all": "{{other}} 向全部 {{accounts}} 个账户付过款",
+          "both": "{{other}} 向两者都付过款",
+          "some": "{{other}} 向 {{letters}} 付过款"
+        },
+        "sponsor": {
+          "all": "全部 {{accounts}} 个账户的首个赞助人都是 {{sponsor}}",
+          "both": "两者的首个赞助人都是 {{sponsor}}",
+          "some": "{{letters}} 的首个赞助人是 {{sponsor}}"
+        },
+        "through": "{{from}} 向 {{other}} 付过款，{{other}} 又向 {{to}} 付过款"
+      },
+      "portal_sold_one": "在交易门户上通过 {{trades}} 笔销售将 {{amount}} 卖给了 {{other}}",
+      "portal_sold_other": "在交易门户上通过 {{trades}} 笔销售将 {{amount}} 卖给了 {{other}}",
+      "registered_name": "注册了名称 {{name}}（现为其主名称）",
+      "side_account": "{{account}}",
+      "side_first_level": "其铸币等级来自 {{from}}",
+      "side_first_payment": "{{from}}",
+      "side_first_share": "来自 {{from}} 的奖励分享",
+      "side_first_transfer": "来自 {{from}} 的资产转移",
+      "side_primary": "{{name}}",
+      "side_primary_more_one": "{{name}} 及另外 {{others}} 个",
+      "side_primary_more_other": "{{name}} 及另外 {{others}} 个",
+      "side_primary_more_plus_one": "{{name}} 及另外 {{others}}+ 个",
+      "side_primary_more_plus_other": "{{name}} 及另外 {{others}}+ 个"
+    },
+    "side": {
+      "accounts_more_one": "已读取的内容中有 {{shown}} 个账户",
+      "accounts_more_other": "已读取的内容中有 {{shown}} 个账户",
+      "accounts_one": "{{shown}} 个账户",
+      "accounts_other": "{{shown}} 个账户",
+      "blocks_one": "{{shown}} 个区块",
+      "blocks_other": "{{shown}} 个区块",
+      "caption": "并排显示的账户",
+      "fact": "项目",
+      "failed": "无法读取",
+      "failed_line": "其中部分内容无法读取。",
+      "first": {
+        "at": "AT（链上的程序）",
+        "genesis": "创世区块",
+        "level": "铸币等级",
+        "payment": "一笔付款",
+        "share": "一笔奖励分享",
+        "transfer": "一笔资产转移"
+      },
+      "label": {
+        "blocks": "已铸造的区块",
+        "first_qort": "最初的 QORT 来自",
+        "last_sent": "上次发送交易",
+        "level": "等级",
+        "minting_now": "正在铸币",
+        "names": "名称",
+        "penalty": "铸币惩罚",
+        "sponsor": "首个赞助人",
+        "sponsored": "已赞助"
+      },
+      "never": "从未",
+      "no": "否",
+      "no_primary_more_one": "无主名称（{{shown}}+ 个名称）",
+      "no_primary_more_other": "无主名称（{{shown}}+ 个名称）",
+      "no_primary_one": "无主名称（{{shown}} 个名称）",
+      "no_primary_other": "无主名称（{{shown}} 个名称）",
+      "none": "无",
+      "none_found": "未找到",
+      "none_so_far": "已读取的内容中没有",
+      "not_found": "未找到",
+      "number": "{{value}}",
+      "of": "{{letter}}：",
+      "qort": "{{amount}} QORT",
+      "same": "全部相同：",
+      "sponsor_partial": "从已读取的内容中无法得知",
+      "title": "并排比较",
+      "yes": "是"
+    },
+    "timeline": {
+      "block": "区块 {{block}}",
+      "blocks_later_one": "{{blocks}} 个区块之后",
+      "blocks_later_other": "{{blocks}} 个区块之后",
+      "failed": "无法读取时间线所需的全部内容。",
+      "label": "共同时间线，最早的在前",
+      "moments_later": "片刻之后",
+      "open": "{{when}}：打开交易",
+      "partial": "根据已读取的内容：{{letters}} 较早的奖励分享、铸币等级转移或名称可能缺失。",
+      "reading": "正在读取其最初的 QORT 来源、奖励分享、铸币等级转移和名称",
+      "same_block": "在同一区块中",
+      "time_later": "{{time}}之后",
+      "title": "共同时间线",
+      "who": "{{letter}}："
+    },
+    "title": "比较账户",
+    "toggle": {
+      "add": "添加到比较",
+      "add_label": "添加到比较：{{name}}",
+      "added": "已添加到比较（已选 {{picked}} 个，最多 {{max}} 个）。",
+      "compare_now": "立即比较",
+      "picked": "已选择比较",
+      "picked_label": "已选择比较：{{name}}",
+      "removed": "已移出比较。"
+    },
+    "with": {
+      "button": "与…比较",
+      "field": "名称或地址",
+      "lead": "查找要与 {{name}} 比较的账户。",
+      "same": "这就是此账户。请查找另一个。",
+      "title": "与…比较"
+    }
+  },
   "connections": {
     "at_label": "AT {{address}}",
     "block": "区块 {{block}}",
@@ -522,6 +737,37 @@
     "trades_info": "其在 Trade Portal 上已完成的交易（所有链）：买入 {{bought}} QORT，卖出 {{sold}} QORT。",
     "trades_no_key_info": "它从未自己发起过交易，因此没有在 Trade Portal 上卖出过（卖出要从自己的交易合约开始）。买入的 {{bought}} QORT 是其全部历史中其他账户的交易合约支付给它的。"
   },
+  "funded": {
+    "ats_one": "向 {{shown}} 个 AT 地址（链上的程序）的付款未计入。",
+    "ats_other": "向 {{shown}} 个 AT 地址（链上的程序）的付款未计入。",
+    "check_failed_one": "无法检查其中 {{shown}} 个账户。",
+    "check_failed_other": "无法检查其中 {{shown}} 个账户。",
+    "check_more_one": "再检查 {{shown}} 个",
+    "check_more_other": "再检查 {{shown}} 个",
+    "checking": "正在检查谁的第一笔 QORT 付款来自它：{{done}}/{{total}}…",
+    "list_title": "它们的第一笔 QORT 付款来自它",
+    "loading": "正在读取其付款",
+    "none": "它没有向其他账户发送过 QORT 付款。",
+    "none_so_far": "已读取的付款中没有发给其他账户的。",
+    "note": "此处账户的第一笔 QORT 付款是指它收到的最早一笔 QORT 付款：资产转移、多笔付款和 AT 支出不计入。",
+    "paid_one": "在已读取的付款中，它向 {{shown}} 个账户付过款。",
+    "paid_other": "在已读取的付款中，它向 {{shown}} 个账户付过款。",
+    "read_all_one": "其全部 {{shown}} 笔已发送的 QORT 付款",
+    "read_all_other": "其全部 {{shown}} 笔已发送的 QORT 付款",
+    "read_ceiling_one": "其最早的 {{shown}} 笔已发送的 QORT 付款（它发送了更多；区块浏览器最多读取 1000 笔）",
+    "read_ceiling_other": "其最早的 {{shown}} 笔已发送的 QORT 付款（它发送了更多；区块浏览器最多读取 1000 笔）",
+    "read_first_one": "其最早的 {{shown}} 笔已发送的 QORT 付款（可能还发送了更多）",
+    "read_first_other": "其最早的 {{shown}} 笔已发送的 QORT 付款（可能还发送了更多）",
+    "read_later": "读取较晚的付款",
+    "read_single": "其唯一一笔已发送的 QORT 付款",
+    "result_all_one": "它向其中 {{shown}} 个账户支付了第一笔 QORT 付款。",
+    "result_all_other": "它向其中 {{shown}} 个账户支付了第一笔 QORT 付款。",
+    "result_some_one": "在目前已检查的 {{checked}} 个账户中，它向 {{shown}} 个支付了第一笔 QORT 付款。",
+    "result_some_other": "在目前已检查的 {{checked}} 个账户中，它向 {{shown}} 个支付了第一笔 QORT 付款。",
+    "row": "{{amount}} QORT，{{date}} · 区块 {{block}}",
+    "title": "来自 {{name}} 的第一笔 QORT 付款",
+    "unsupported": "此节点无法读取账户之间的付款，而这里需要这些数据。"
+  },
   "groups": {
     "admin": "管理员",
     "closed": "封闭群组",
@@ -706,12 +952,94 @@
     "label": "查找账户或交易",
     "placeholder": "名称、地址或交易签名"
   },
+  "set_checks": {
+    "again": "再次检查",
+    "done_one": "已检查 {{shown}} 个账户。",
+    "done_other": "已检查全部 {{shown}} 个账户。",
+    "failed_one": "{{shown}} 个账户无法读取。",
+    "failed_other": "{{shown}} 个账户无法读取。",
+    "first": {
+      "about": "每个账户最初的 QORT 来自何处，按付款人分组。每次两个账户。",
+      "empty": "在已检查的账户中未找到第一笔 QORT 付款。",
+      "none_one": "未找到 {{shown}} 个账户最初的 QORT。",
+      "none_other": "未找到 {{shown}} 个账户最初的 QORT。",
+      "other_one": "{{shown}} 个账户的第一笔交易是其他类型（多笔付款、奖励分享、铸币等级转移、资产转移、AT 或创世区块）。",
+      "other_other": "{{shown}} 个账户的第一笔交易是其他类型（多笔付款、奖励分享、铸币等级转移、资产转移、AT 或创世区块）。",
+      "title": "谁支付了它们的第一笔 QORT 付款"
+    },
+    "progress": "已检查 {{done}}/{{total}}…",
+    "start_one": "检查 {{shown}} 个账户",
+    "start_other": "检查 {{shown}} 个账户",
+    "stop": "停止",
+    "stopped": "已在检查 {{done}}/{{total}} 后停止。",
+    "title": "针对这些账户的检查",
+    "went": {
+      "about": "每个账户已发送的 QORT 付款（最多读取最早的 1000 笔），按收款人分组。每次两个账户。",
+      "ats_one": "向 {{shown}} 个 AT 地址（链上的程序）的付款未计入。",
+      "ats_other": "向 {{shown}} 个 AT 地址（链上的程序）的付款未计入。",
+      "beyond_one": "其中 {{shown}} 个账户发送的付款超过区块浏览器读取的数量（每个 1000 笔）：其较晚的付款未计入。",
+      "beyond_other": "其中 {{shown}} 个账户发送的付款超过区块浏览器读取的数量（每个 1000 笔）：其较晚的付款未计入。",
+      "empty": "在已检查的账户中没有已发送的 QORT 付款。",
+      "title": "它们的 QORT 去了哪里"
+    }
+  },
+  "sets": {
+    "link": {
+      "funded": "谁的第一笔 QORT 付款来自 {{name}}",
+      "funded_own": "谁的第一笔 QORT 付款来自此账户",
+      "sponsees": "{{name}} 赞助的账户",
+      "sponsees_own": "它赞助的账户"
+    },
+    "say": {
+      "first_payer_one": "{{from}} 向已检查的 {{total}} 个账户中的 {{accounts}} 个支付了第一笔 QORT 付款",
+      "first_payer_other": "{{from}} 向已检查的 {{total}} 个账户中的 {{accounts}} 个支付了第一笔 QORT 付款",
+      "first_payer_single": "{{from}} 向 {{accounts}} 个账户支付了第一笔 QORT 付款（仅检查了这一个）",
+      "went_to_one": "{{to}} 从已检查的 {{total}} 个账户中的 {{accounts}} 个收到了 {{amount}}",
+      "went_to_other": "{{to}} 从已检查的 {{total}} 个账户中的 {{accounts}} 个收到了 {{amount}}",
+      "went_to_single": "{{to}} 从 {{accounts}} 个账户收到了 {{amount}}（仅检查了这一个）"
+    }
+  },
   "settings": {
     "activity": "活动设置",
     "activity_hint": "总览起初读取多少，以及其活动显示哪些里程碑。",
     "remember": "在此设备上记住我浏览过的账户",
     "remember_hint": "仅保存其地址，仅限此 Hub 账户。关闭后会清除它们。",
     "title": "区块浏览器设置"
+  },
+  "sponsees": {
+    "list_title": "已赞助",
+    "loading": "正在读取它赞助的账户",
+    "minting_now_one": "其中 {{shown}} 个正在铸币。",
+    "minting_now_other": "其中 {{shown}} 个正在铸币。",
+    "none": "它没有向其他账户进行奖励分享。",
+    "none_so_far": "在已读取的最新铸币交易中，它没有向其他账户进行奖励分享：可能还有更早的。",
+    "pick": "选择 {{name}} 进行比较",
+    "pick_hint": "选择 2 到 {{max}} 个账户进行并排比较。",
+    "row": {
+      "about": "关于 {{name}}",
+      "again": "此后再次赞助",
+      "failed": "无法读取其等级及其在 MINTER 中的状态。",
+      "not_removed": "未移除",
+      "removed_one": "{{blocks}} 个区块后移除（区块 {{block}}）",
+      "removed_other": "{{blocks}} 个区块后移除（区块 {{block}}）",
+      "shares_one": "共 {{shown}} 次奖励分享",
+      "shares_other": "共 {{shown}} 次奖励分享",
+      "shares_read_one": "已读取的内容中共 {{shown}} 次奖励分享",
+      "shares_read_other": "已读取的内容中共 {{shown}} 次奖励分享",
+      "sponsored": "于 {{date}} 以 {{percent}} 赞助（区块 {{block}}）"
+    },
+    "sort": {
+      "active": "分享仍有效的在前",
+      "first": "最早赞助的在前",
+      "latest": "最近赞助的在前",
+      "minting": "正在铸币的在前",
+      "shares": "奖励分享最多的在前"
+    },
+    "summary_more_one": "在已读取的最新铸币交易中，已赞助 {{shown}} 个账户（{{span}}）：可能还有更多。",
+    "summary_more_other": "在已读取的最新铸币交易中，已赞助 {{shown}} 个账户（{{span}}）：可能还有更多。",
+    "summary_one": "已赞助 {{shown}} 个账户（{{span}}）。",
+    "summary_other": "已赞助 {{shown}} 个账户（{{span}}）。",
+    "title": "{{name}} 赞助的账户"
   },
   "start": {
     "clear": "清除",

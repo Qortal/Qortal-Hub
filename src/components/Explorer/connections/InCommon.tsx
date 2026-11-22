@@ -29,6 +29,8 @@ import {
   useAccountTxList,
   type AccountTxListState,
 } from '../transactions/useAccountTxList';
+import { isFirstQortPayment } from '../../../lib/explorer/compare';
+import { FundedLink, SponseesLink } from '../sets/SetLinks';
 import { ConnectionRow, ROW_LIST_SX, whenText } from './ConnectionRow';
 import { isShort, MINTING_TYPES } from './useConnections';
 
@@ -40,6 +42,8 @@ export interface InCommonEntry {
   when: string;
   tags: string[];
   evidence: TxRow[];
+  /** The set it links to: who else got their first QORT payment from `other`, or the accounts `other` sponsored. */
+  link?: 'funded' | 'sponsees';
 }
 
 export interface InCommonData {
@@ -86,6 +90,10 @@ export function inCommonEntries(
       when: whenText(funding, t, language),
       tags: [],
       evidence: [funding.tx],
+      // Only a first QORT payment (a PAYMENT): the Funded page lists those.
+      ...(funding.from && isFirstQortPayment(funding)
+        ? { link: 'funded' as const }
+        : {}),
     });
   const { siblings } = common;
   if (sponsor && siblings && siblings.length) {
@@ -111,6 +119,7 @@ export function inCommonEntries(
         )
         .filter((tx): tx is TxRow => Boolean(tx))
         .reverse(),
+      link: 'sponsees',
     });
   }
   return entries;
@@ -123,6 +132,7 @@ export function InCommon({
   common,
   entries,
   searching,
+  sentPayments = false,
 }: {
   address: string;
   funding: ReadState<Funding | null>;
@@ -131,6 +141,8 @@ export function InCommon({
   /** The rows to show: all of them, or the ones the tab's search found. */
   entries: readonly InCommonEntry[];
   searching: boolean;
+  /** It sent payments: it may have made someone's first one (a link to them, while not searching). */
+  sentPayments?: boolean;
 }) {
   const { t } = useTranslation(['explorer']);
   const { sponsorList } = common;
@@ -141,7 +153,14 @@ export function InCommon({
     funding.status === 'error' && funding.data === undefined;
   const siblingsFailed =
     Boolean(sponsor) && !sponsorList.list && Boolean(sponsorList.error);
-  if (!entries.length && !loading && !fundingFailed && !siblingsFailed)
+  const fundedLink = sentPayments && !searching;
+  if (
+    !entries.length &&
+    !loading &&
+    !fundingFailed &&
+    !siblingsFailed &&
+    !fundedLink
+  )
     return null;
   // Searching, and nothing here is found: the part steps aside, unless a
   // read of it failed (the search couldn't look there: it says so).
@@ -174,10 +193,18 @@ export function InCommon({
               when={entry.when}
               tags={entry.tags}
               evidence={{ kind: 'transactions', txs: entry.evidence }}
+              action={
+                entry.other && entry.link === 'funded' ? (
+                  <FundedLink payer={entry.other} />
+                ) : entry.other && entry.link === 'sponsees' ? (
+                  <SponseesLink sponsor={entry.other} />
+                ) : undefined
+              }
             />
           ))}
         </Box>
       ) : null}
+      {fundedLink ? <FundedLink payer={address} own /> : null}
       {loading ? (
         <LoadingLine label={t('explorer:connections.common_loading', cap)} />
       ) : null}

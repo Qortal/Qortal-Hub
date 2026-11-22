@@ -325,6 +325,8 @@ export interface ConnectionRowProps {
   };
   /** Payments one way: the sentence's amounts take the way's colour. */
   flow?: 'in' | 'out';
+  /** A link under the sentence (to the accounts it sponsored, say). */
+  action?: ReactNode;
 }
 
 export function ConnectionRow({
@@ -336,6 +338,7 @@ export function ConnectionRow({
   tags,
   evidence,
   flow,
+  action,
 }: ConnectionRowProps) {
   const { t, i18n } = useTranslation(['explorer']);
   const [node, setNode] = useState<HTMLElement | null>(null);
@@ -460,6 +463,7 @@ export function ConnectionRow({
           </Button>
         ) : null}
       </Box>
+      {action}
       {evidence && open ? (
         <Box id={id} sx={{ minWidth: 0 }}>
           {evidence.signatures ? (

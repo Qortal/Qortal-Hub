@@ -211,6 +211,221 @@
     "minting_penalty": "minting penalty",
     "minting_penalty_explained": "The node recorded a minting penalty on this account. Its Notes give the number."
   },
+  "compare": {
+    "add": {
+      "already": "Already in this comparison, as {{letter}}.",
+      "at": "That's an AT address (a program on the chain), not a personal account.",
+      "full": "Compare holds 4 accounts. Remove one first.",
+      "label": "add an account to compare",
+      "looking_up": "Looking up “{{name}}”…",
+      "more": "Add another account to compare it with.",
+      "transaction": "That's a transaction, not an account."
+    },
+    "card": {
+      "about": "about {{name}} ({{letter}})",
+      "copy_address": "copy the address of {{name}} ({{letter}})",
+      "letter": "account {{letter}}",
+      "list": "accounts compared",
+      "loading": "reading account {{letter}}",
+      "remove": "remove {{name}} ({{letter}}) from this comparison",
+      "remove_short": "remove from this comparison"
+    },
+    "check": {
+      "payments": "payments both ways",
+      "portal_trades": "trade portal sales",
+      "reward_shares": "reward shares between them"
+    },
+    "common": {
+      "band": "it has sent {{band}}+ QORT payments",
+      "bands_failed": "Couldn't read how many payments some of these accounts sent, so a busy one may still be listed.",
+      "blocks": "blocks {{list}}",
+      "check": {
+        "counterparties": "the same accounts in their payments",
+        "first_payer": "a shared first payer",
+        "groups": "shared groups (MINTER aside)",
+        "sponsor": "a shared first sponsor"
+      },
+      "count_both": "{{letter}} sent {{sent}} and received {{received}}",
+      "count_received": "{{letter}} received {{payments}}",
+      "count_sent": "{{letter}} sent {{payments}}",
+      "counterparties": "the same accounts in their payments",
+      "failed": "Couldn't read everything In common needs.",
+      "firsts": "a shared sponsor or first payer",
+      "groups": "groups two or more of them are in, smallest first",
+      "left_ats_one": "{{shown}} AT address (a program on the chain)",
+      "left_ats_other": "{{shown}} AT addresses (programs on the chain)",
+      "left_busy_one": "{{shown}} account that has sent 1,000+ QORT payments",
+      "left_busy_other": "{{shown}} accounts that have sent 1,000+ QORT payments",
+      "left_out": "Left out: {{list}}.",
+      "payments_note": "From each account's payments, Q-Asset transfers and multi-payments read (below); the compared accounts themselves are left out.",
+      "payments_one": "{{shown}} payment",
+      "payments_other": "{{shown}} payments",
+      "reading": "reading what they have in common",
+      "sponsor_count_more_one": "It sponsored {{shown}} account in its newest minting transactions read: there may be more.",
+      "sponsor_count_more_other": "It sponsored {{shown}} accounts in its newest minting transactions read: there may be more.",
+      "sponsor_count_one": "It sponsored {{shown}} account in all.",
+      "sponsor_count_other": "It sponsored {{shown}} accounts in all.",
+      "title": "in common"
+    },
+    "coverage": {
+      "pair": "{{a}} and {{b}}",
+      "pairs_more": "Between {{pairs}}, the newest 1,000 QORT payments each way were read: there are older ones.",
+      "title": "what was read"
+    },
+    "failed": {
+      "list": "Couldn't read {{list}}.",
+      "of": "{{part}} ({{letter}})",
+      "pair_payments": "the QORT payments between {{a}} and {{b}}",
+      "portal": "its trade portal sales"
+    },
+    "neutral": "What the chain recorded about these accounts, with numbers, blocks and dates: never what it means.",
+    "none": "Checked, nothing found: {{list}}.",
+    "none_so_far": "In what was read so far, nothing found: {{list}}.",
+    "picks": {
+      "clear": "clear the accounts picked to compare",
+      "compare": "compare ({{picked}})",
+      "one_more": "Pick one more account to compare them side by side.",
+      "remove": "take {{name}} out of compare",
+      "remove_short": "take out of compare",
+      "title": "picked to compare"
+    },
+    "portal": {
+      "row": "{{amount}} QORT · {{date}}",
+      "row_no_time": "{{amount}} QORT · time not known",
+      "trades_one": "{{shown}} sale",
+      "trades_other": "{{shown}} sales",
+      "when_some_unknown_one": "{{when}} ({{shown}} sale: time not known)",
+      "when_some_unknown_other": "{{when}} ({{shown}} sales: time not known)",
+      "when_unknown": "time not known"
+    },
+    "reading": "Still reading: {{list}}.",
+    "recorded": {
+      "list": "the {{words}} between {{actor}} and {{other}}",
+      "note": "The QORT payments between each pair are read exactly, both ways, up to 1,000 each way, and each account's trade portal sales by its own key (all of them). Q-Asset transfers, multi-payments, reward shares, level moves, name sales and Q-Asset trades come from each account's own transactions, as far as they were read (below).",
+      "note_lists": "This node can't read the payments between two accounts exactly: every payment here comes from each account's own transactions, as far as they were read (below). Trade portal sales are read by each seller's own key (all of them).",
+      "pair": "{{a}} and {{b}}",
+      "show": "show the {{words}} between {{actor}} and {{other}}",
+      "title": "recorded between them"
+    },
+    "say": {
+      "common": {
+        "first_payer": {
+          "all": "All {{accounts}} got their first QORT payment from {{from}}",
+          "both": "Both got their first QORT payment from {{from}}",
+          "some": "{{letters}} got their first QORT payment from {{from}}"
+        },
+        "paid": {
+          "all": "All {{accounts}} paid {{other}}",
+          "both": "Both paid {{other}}",
+          "some": "{{letters}} paid {{other}}"
+        },
+        "paid_by": {
+          "all": "{{other}} paid all {{accounts}}",
+          "both": "{{other}} paid both",
+          "some": "{{other}} paid {{letters}}"
+        },
+        "sponsor": {
+          "all": "All {{accounts}} were first sponsored by {{sponsor}}",
+          "both": "Both were first sponsored by {{sponsor}}",
+          "some": "{{letters}} were first sponsored by {{sponsor}}"
+        },
+        "through": "{{from}} paid {{other}}, and {{other}} paid {{to}}"
+      },
+      "portal_sold_one": "Sold {{amount}} to {{other}} on the trade portal in {{trades}} sale",
+      "portal_sold_other": "Sold {{amount}} to {{other}} on the trade portal in {{trades}} sales",
+      "registered_name": "Registered the name {{name}} (its primary name now)",
+      "side_account": "{{account}}",
+      "side_first_level": "Its minting level from {{from}}",
+      "side_first_payment": "{{from}}",
+      "side_first_share": "A reward share from {{from}}",
+      "side_first_transfer": "An asset transfer from {{from}}",
+      "side_primary": "{{name}}",
+      "side_primary_more_one": "{{name}} and {{others}} more",
+      "side_primary_more_other": "{{name}} and {{others}} more",
+      "side_primary_more_plus_one": "{{name}} and {{others}}+ more",
+      "side_primary_more_plus_other": "{{name}} and {{others}}+ more"
+    },
+    "side": {
+      "accounts_more_one": "{{shown}} account in what was read",
+      "accounts_more_other": "{{shown}} accounts in what was read",
+      "accounts_one": "{{shown}} account",
+      "accounts_other": "{{shown}} accounts",
+      "blocks_one": "{{shown}} block",
+      "blocks_other": "{{shown}} blocks",
+      "caption": "the accounts side by side",
+      "fact": "fact",
+      "failed": "couldn't read",
+      "failed_line": "Some of these couldn't be read.",
+      "first": {
+        "at": "an AT (a program on the chain)",
+        "genesis": "the genesis block",
+        "level": "a minting level",
+        "payment": "a payment",
+        "share": "a reward share",
+        "transfer": "an asset transfer"
+      },
+      "label": {
+        "blocks": "blocks minted",
+        "first_qort": "first QORT from",
+        "last_sent": "last sent a transaction",
+        "level": "level",
+        "minting_now": "minting now",
+        "names": "names",
+        "penalty": "minting penalty",
+        "sponsor": "first sponsor",
+        "sponsored": "sponsored"
+      },
+      "never": "never",
+      "no": "no",
+      "no_primary_more_one": "no primary name ({{shown}}+ names)",
+      "no_primary_more_other": "no primary name ({{shown}}+ names)",
+      "no_primary_one": "no primary name ({{shown}} name)",
+      "no_primary_other": "no primary name ({{shown}} names)",
+      "none": "none",
+      "none_found": "none found",
+      "none_so_far": "none in what was read",
+      "not_found": "not found",
+      "number": "{{value}}",
+      "of": "{{letter}}:",
+      "qort": "{{amount}} QORT",
+      "same": "same for all:",
+      "sponsor_partial": "not known from what was read",
+      "title": "side by side",
+      "yes": "yes"
+    },
+    "timeline": {
+      "block": "block {{block}}",
+      "blocks_later_one": "{{blocks}} block later",
+      "blocks_later_other": "{{blocks}} blocks later",
+      "failed": "Couldn't read everything the timeline needs.",
+      "label": "timeline together, oldest first",
+      "moments_later": "moments later",
+      "open": "{{when}}: open the transaction",
+      "partial": "From what was read: older reward shares, level moves or names of {{letters}} may be missing.",
+      "reading": "reading where their first QORT came from, their reward shares, level moves and names",
+      "same_block": "in the same block",
+      "time_later": "{{time}} later",
+      "title": "timeline together",
+      "who": "{{letter}}:"
+    },
+    "title": "compare accounts",
+    "toggle": {
+      "add": "add to compare",
+      "add_label": "add to compare: {{name}}",
+      "added": "Added to compare ({{picked}} of {{max}}).",
+      "compare_now": "compare now",
+      "picked": "picked to compare",
+      "picked_label": "picked to compare: {{name}}",
+      "removed": "Taken out of compare."
+    },
+    "with": {
+      "button": "compare with…",
+      "field": "a name or an address",
+      "lead": "Find the account to compare {{name}} with.",
+      "same": "That's this account. Find another one.",
+      "title": "compare with…"
+    }
+  },
   "connections": {
     "at_label": "AT {{address}}",
     "block": "block {{block}}",
@@ -522,6 +737,37 @@
     "trades_info": "Its completed trades on the Trade Portal, on every chain: bought {{bought}} QORT, sold {{sold}} QORT.",
     "trades_no_key_info": "It has never made a transaction of its own, so it hasn't sold on the Trade Portal (a sale starts with a trade contract of its own). What it bought, {{bought}} QORT, is what other accounts' trade contracts paid it over its whole history."
   },
+  "funded": {
+    "ats_one": "Payments to {{shown}} AT address (a program on the chain) are left out.",
+    "ats_other": "Payments to {{shown}} AT addresses (programs on the chain) are left out.",
+    "check_failed_one": "Couldn't check {{shown}} of the accounts.",
+    "check_failed_other": "Couldn't check {{shown}} of the accounts.",
+    "check_more_one": "check {{shown}} more",
+    "check_more_other": "check {{shown}} more",
+    "checking": "Checking whose first QORT payment it was: {{done}} of {{total}}…",
+    "list_title": "their first QORT payment came from it",
+    "loading": "reading its payments",
+    "none": "It has sent no QORT payments to other accounts.",
+    "none_so_far": "None of the payments read went to another account.",
+    "note": "An account's first QORT payment here is the earliest QORT payment it received: asset transfers, multi-payments and AT payouts aren't counted.",
+    "paid_one": "In the payments read, it paid {{shown}} account.",
+    "paid_other": "In the payments read, it paid {{shown}} accounts.",
+    "read_all_one": "all {{shown}} of its QORT payments sent",
+    "read_all_other": "all {{shown}} of its QORT payments sent",
+    "read_ceiling_one": "its first {{shown}} QORT payments sent (it sent more; the Explorer reads up to 1,000)",
+    "read_ceiling_other": "its first {{shown}} QORT payments sent (it sent more; the Explorer reads up to 1,000)",
+    "read_first_one": "its first {{shown}} QORT payments sent (it may have sent more)",
+    "read_first_other": "its first {{shown}} QORT payments sent (it may have sent more)",
+    "read_later": "read later payments",
+    "read_single": "its only QORT payment sent",
+    "result_all_one": "It made the first QORT payment to {{shown}} of them.",
+    "result_all_other": "It made the first QORT payment to {{shown}} of them.",
+    "result_some_one": "Of the {{checked}} checked so far, it made the first QORT payment to {{shown}}.",
+    "result_some_other": "Of the {{checked}} checked so far, it made the first QORT payment to {{shown}}.",
+    "row": "{{amount}} QORT, {{date}} · block {{block}}",
+    "title": "first QORT payments from {{name}}",
+    "unsupported": "This node can't read the payments between accounts, which this needs."
+  },
   "groups": {
     "admin": "admin",
     "closed": "closed group",
@@ -706,12 +952,94 @@
     "label": "find an account or a transaction",
     "placeholder": "name, address or transaction signature"
   },
+  "set_checks": {
+    "again": "check again",
+    "done_one": "Checked {{shown}} account.",
+    "done_other": "Checked all {{shown}} accounts.",
+    "failed_one": "{{shown}} account couldn't be read.",
+    "failed_other": "{{shown}} accounts couldn't be read.",
+    "first": {
+      "about": "Where each account's first QORT came from, grouped by who paid it. Two accounts at a time.",
+      "empty": "No first QORT payments found among those checked.",
+      "none_one": "No first QORT found for {{shown}} account.",
+      "none_other": "No first QORT found for {{shown}} accounts.",
+      "other_one": "{{shown}} account had another first transaction (a multi-payment, a reward share, a level move, an asset transfer, an AT or the genesis block).",
+      "other_other": "{{shown}} accounts had another first transaction (a multi-payment, a reward share, a level move, an asset transfer, an AT or the genesis block).",
+      "title": "who made their first QORT payment"
+    },
+    "progress": "Checked {{done}} of {{total}}…",
+    "start_one": "check {{shown}} account",
+    "start_other": "check {{shown}} accounts",
+    "stop": "stop",
+    "stopped": "Stopped after {{done}} of {{total}}.",
+    "title": "checks across these accounts",
+    "went": {
+      "about": "Each account's QORT payments sent (its first 1,000 at most), grouped by who received them. Two accounts at a time.",
+      "ats_one": "Payments to {{shown}} AT address (a program on the chain) are left out.",
+      "ats_other": "Payments to {{shown}} AT addresses (programs on the chain) are left out.",
+      "beyond_one": "{{shown}} of them sent more than the Explorer reads (1,000 each): its later payments aren't counted.",
+      "beyond_other": "{{shown}} of them sent more than the Explorer reads (1,000 each): their later payments aren't counted.",
+      "empty": "No QORT payments sent among those checked.",
+      "title": "where their QORT went"
+    }
+  },
+  "sets": {
+    "link": {
+      "funded": "who got their first QORT payment from {{name}}",
+      "funded_own": "who got their first QORT payment from this account",
+      "sponsees": "the accounts {{name}} sponsored",
+      "sponsees_own": "the accounts it sponsored"
+    },
+    "say": {
+      "first_payer_one": "{{from}} made the first QORT payment to {{accounts}} of the {{total}} account checked",
+      "first_payer_other": "{{from}} made the first QORT payment to {{accounts}} of the {{total}} accounts checked",
+      "first_payer_single": "{{from}} made the first QORT payment to {{accounts}} account (the only one checked)",
+      "went_to_one": "{{to}} received {{amount}} from {{accounts}} of the {{total}} account checked",
+      "went_to_other": "{{to}} received {{amount}} from {{accounts}} of the {{total}} accounts checked",
+      "went_to_single": "{{to}} received {{amount}} from {{accounts}} account (the only one checked)"
+    }
+  },
   "settings": {
     "activity": "activity settings",
     "activity_hint": "How much the Overview reads first, and which milestones its Activity shows.",
     "remember": "remember accounts I explore on this device",
     "remember_hint": "Only their addresses, for this Hub account. Turning it off forgets them.",
     "title": "Explorer settings"
+  },
+  "sponsees": {
+    "list_title": "sponsored",
+    "loading": "reading the accounts it sponsored",
+    "minting_now_one": "{{shown}} of them is minting now.",
+    "minting_now_other": "{{shown}} of them are minting now.",
+    "none": "It made no reward shares to other accounts.",
+    "none_so_far": "It made no reward shares to other accounts in its newest minting transactions read: there may be older ones.",
+    "pick": "pick {{name}} to compare",
+    "pick_hint": "Pick 2 to {{max}} accounts to compare them side by side.",
+    "row": {
+      "about": "about {{name}}",
+      "again": "sponsored again since",
+      "failed": "Couldn't read its level and where it stands in MINTER.",
+      "not_removed": "not removed",
+      "removed_one": "removed {{blocks}} block later (block {{block}})",
+      "removed_other": "removed {{blocks}} blocks later (block {{block}})",
+      "shares_one": "{{shown}} reward share in all",
+      "shares_other": "{{shown}} reward shares in all",
+      "shares_read_one": "{{shown}} reward share in what was read",
+      "shares_read_other": "{{shown}} reward shares in what was read",
+      "sponsored": "Sponsored {{date}} at {{percent}} (block {{block}})"
+    },
+    "sort": {
+      "active": "share still running first",
+      "first": "first sponsored first",
+      "latest": "latest sponsored first",
+      "minting": "minting now first",
+      "shares": "most reward shares first"
+    },
+    "summary_more_one": "{{shown}} account sponsored ({{span}}) in its newest minting transactions read: there may be more.",
+    "summary_more_other": "{{shown}} accounts sponsored ({{span}}) in its newest minting transactions read: there may be more.",
+    "summary_one": "{{shown}} account sponsored ({{span}}).",
+    "summary_other": "{{shown}} accounts sponsored ({{span}}).",
+    "title": "accounts {{name}} sponsored"
   },
   "start": {
     "clear": "clear",

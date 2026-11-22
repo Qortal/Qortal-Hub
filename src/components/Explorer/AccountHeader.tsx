@@ -5,7 +5,8 @@
  * note when it was opened by a name, and what User search offered: Send
  * QORT and Block. The chips' colours say what kind of fact each is, never
  * good or bad. For a viewer who sees the detailed parts, an exchange's
- * deposit account is named as the exchange, with a chip saying so.
+ * deposit account is named as the exchange, with a chip saying so, and
+ * Compare with… and Add to compare (compare/CompareButtons) follow Block.
  */
 import { useState } from 'react';
 import { Box, Button, Tooltip, Typography } from '@mui/material';
@@ -27,6 +28,7 @@ import {
   type MinterStanding,
   type MintingNow,
 } from '../../lib/explorer/rules';
+import { CompareButtons } from './compare/CompareButtons';
 import { useExplorer } from './ExplorerContext';
 import { ExplorerAvatar } from './ExplorerSearchField';
 import { useExchangeName } from './useExplorerAccess';
@@ -374,6 +376,10 @@ export function AccountHeader({
             </Button>
           </span>
         </Tooltip>
+        <CompareButtons
+          address={address}
+          label={name ? visibleName(name) : (exchange ?? shortAddress(address))}
+        />
       </Box>
     </Box>
   );

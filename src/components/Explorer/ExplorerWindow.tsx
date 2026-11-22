@@ -14,6 +14,11 @@
  * in a sentence), or Transactions on Qortal (the whole chain's, from the
  * start page or a transaction's block). Each step keeps what it showed (the
  * tab, a filter: useStepState), so Back and Forward show it as it was left.
+ *
+ * For a viewer the level 5+ rule lets in, three more: Compare (2 to 4
+ * accounts side by side), the accounts a sponsor sponsored and the
+ * accounts whose first QORT payment came from one (compare/SetStepView);
+ * for anyone else such a step shows the account it was about.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -62,9 +67,16 @@ import {
 } from '../../lib/explorer/addresses';
 import { nextTrail } from '../../lib/explorer/rules';
 import { CHAIN_SCOPE, type ChainPreset } from '../../lib/explorer/chainTx';
+import { cleanPicks } from '../../lib/explorer/comparePicks';
 import type { NameMatch } from './AccountHeader';
 import { chainStepState } from './chain/chainStep';
 import { ChainView } from './chain/ChainView';
+import {
+  CompareStepsContext,
+  useComparePicks,
+  type CompareSteps,
+} from './compare/compareSteps';
+import { SetStepView, type SetStep } from './compare/SetStepView';
 import { ExplorerAccount } from './ExplorerAccount';
 import {
   ExplorerContext,
@@ -113,7 +125,29 @@ type View =
       state: StepState;
     }
   /** Transactions on Qortal: an account opened from it starts a trail of its own. */
-  | { kind: 'chain'; id: number; state: StepState };
+  | { kind: 'chain'; id: number; state: StepState }
+  | SetView;
+
+/** Compare, Sponsees, Funded: only for a viewer the level 5+ rule lets in. */
+type SetView = SetStep & {
+  id: number;
+  /** The trail it was opened from: an account opened from it goes on from there. */
+  trail: string[];
+  state: StepState;
+};
+
+const isSetView = (view: View | undefined): view is SetView =>
+  view?.kind === 'compare' ||
+  view?.kind === 'sponsees' ||
+  view?.kind === 'funded';
+
+/** Compare and the sets: Refresh reads again what is about each of their accounts. */
+const setScopes = (view: View): string[] =>
+  view.kind === 'compare'
+    ? [...view.accounts]
+    : view.kind === 'sponsees' || view.kind === 'funded'
+      ? [view.address]
+      : [];
 
 interface History {
   views: View[];
@@ -129,7 +163,7 @@ const START: History = {
 const trailOf = (view: View | undefined): string[] =>
   view?.kind === 'account'
     ? (view.trail ?? [])
-    : view?.kind === 'tx' || view?.kind === 'name'
+    : view?.kind === 'tx' || view?.kind === 'name' || isSetView(view)
       ? view.trail
       : [];
 
@@ -291,6 +325,71 @@ export function ExplorerWindow({
       return { views, index: views.length - 1 };
     });
   }, []);
+  // Compare and the sets: a step from what is on screen (one already on screen: not a step more).
+  const openSetStep = useCallback(
+    (step: SetStep, same: (here: View | undefined) => boolean) => {
+      setMenuAnchor(null);
+      lastId.current += 1;
+      const id = lastId.current;
+      setHistory((current) => {
+        const here = current.views[current.index];
+        if (same(here)) return current;
+        const next: View = { ...step, id, trail: trailOf(here), state: {} };
+        const views = [
+          ...current.views.slice(0, current.index + 1),
+          next,
+        ].slice(-HISTORY_MAX);
+        return { views, index: views.length - 1 };
+      });
+    },
+    []
+  );
+  const openCompare = useCallback(
+    (accounts: readonly string[], about?: string) => {
+      const list = cleanPicks(accounts);
+      if (!list.length) return;
+      // One account isn't a comparison: its own page.
+      if (list.length === 1) {
+        openAccount(list[0], { fromExplorer: true });
+        return;
+      }
+      openSetStep(
+        {
+          kind: 'compare',
+          accounts: list,
+          about: about && isQortAddress(about) ? about : list[0],
+        },
+        (here) =>
+          here?.kind === 'compare' && here.accounts.join(' ') === list.join(' ')
+      );
+    },
+    [openAccount, openSetStep]
+  );
+  const openSponsees = useCallback(
+    (address: string) => {
+      if (!isQortAddress(address)) return;
+      openSetStep(
+        { kind: 'sponsees', address },
+        (here) => here?.kind === 'sponsees' && here.address === address
+      );
+    },
+    [openSetStep]
+  );
+  const openFunded = useCallback(
+    (address: string) => {
+      if (!isQortAddress(address)) return;
+      openSetStep(
+        { kind: 'funded', address },
+        (here) => here?.kind === 'funded' && here.address === address
+      );
+    },
+    [openSetStep]
+  );
+  const picks = useComparePicks(viewer);
+  const compareSteps = useMemo<CompareSteps>(
+    () => ({ ...picks, openCompare, openSponsees, openFunded }),
+    [picks, openCompare, openSponsees, openFunded]
+  );
 
   // A step's own state (its tab, a filter), changed in place: never a step more.
   const setStepState = useCallback(
@@ -335,6 +434,8 @@ export function ExplorerWindow({
     },
     [viewer]
   );
+  /** The account a Compare or set step shows instead: its step keeps its own trail. */
+  const noTrailChange = useCallback(() => undefined, []);
 
   const refresh = useCallback(
     (scope: string) => {
@@ -450,6 +551,8 @@ export function ExplorerWindow({
           : view.kind === 'chain'
             ? CHAIN_SCOPE
             : null;
+  /** Or, for Compare and the sets, every account they are about. */
+  const refreshScopes = refreshScope ? [refreshScope] : setScopes(view);
 
   return (
     <Dialog
@@ -585,12 +688,12 @@ export function ExplorerWindow({
                   />
                 </Box>
               ) : null}
-              {refreshScope ? (
+              {refreshScopes.length ? (
                 <Tooltip title={t('core:action.refresh', cap)}>
                   <IconButton
                     size="small"
                     aria-label={t('core:action.refresh', cap)}
-                    onClick={() => refresh(refreshScope)}
+                    onClick={() => refreshScopes.forEach(refresh)}
                   >
                     <RefreshRoundedIcon fontSize="small" />
                   </IconButton>
@@ -656,24 +759,44 @@ export function ExplorerWindow({
           >
             <Box sx={{ margin: '0 auto', maxWidth: 1080, minWidth: 0 }}>
               <ExplorerStepContext.Provider value={step}>
-                {view.kind === 'start' ? (
-                  <ExplorerStart recent={recent} onClearRecent={forgetRecent} />
-                ) : view.kind === 'tx' ? (
-                  <TxView key={view.id} signature={view.signature} />
-                ) : view.kind === 'name' ? (
-                  <NameLifeView key={view.id} name={view.name} />
-                ) : view.kind === 'chain' ? (
-                  <ChainView key={view.id} />
-                ) : (
-                  <ExplorerAccount
-                    key={`${view.id}:${view.who}`}
-                    who={view.who}
-                    openedBy={view.openedBy}
-                    trail={view.trail ?? []}
-                    onNameResolved={onNameResolved}
-                    onShown={onShown}
-                  />
-                )}
+                <CompareStepsContext.Provider value={compareSteps}>
+                  {view.kind === 'start' ? (
+                    <ExplorerStart
+                      recent={recent}
+                      onClearRecent={forgetRecent}
+                    />
+                  ) : view.kind === 'tx' ? (
+                    <TxView key={view.id} signature={view.signature} />
+                  ) : view.kind === 'name' ? (
+                    <NameLifeView key={view.id} name={view.name} />
+                  ) : view.kind === 'chain' ? (
+                    <ChainView key={view.id} />
+                  ) : isSetView(view) ? (
+                    <SetStepView
+                      key={view.id}
+                      step={view}
+                      trail={view.trail}
+                      fallback={(address) => (
+                        <ExplorerAccount
+                          who={address}
+                          openedBy={null}
+                          trail={view.trail}
+                          onNameResolved={onNameResolved}
+                          onShown={noTrailChange}
+                        />
+                      )}
+                    />
+                  ) : (
+                    <ExplorerAccount
+                      key={`${view.id}:${view.who}`}
+                      who={view.who}
+                      openedBy={view.openedBy}
+                      trail={view.trail ?? []}
+                      onNameResolved={onNameResolved}
+                      onShown={onShown}
+                    />
+                  )}
+                </CompareStepsContext.Provider>
               </ExplorerStepContext.Provider>
             </Box>
           </Box>

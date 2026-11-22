@@ -211,6 +211,221 @@
     "minting_penalty": "penalidade de minting",
     "minting_penalty_explained": "O nó registrou uma penalidade de minting nesta conta. O número aparece em “Notas”."
   },
+  "compare": {
+    "add": {
+      "already": "Já está nesta comparação, como {{letter}}.",
+      "at": "É um endereço de AT (um programa na cadeia), não uma conta pessoal.",
+      "full": "A comparação comporta 4 contas. Remova uma primeiro.",
+      "label": "adicionar uma conta para comparar",
+      "looking_up": "Procurando “{{name}}”…",
+      "more": "Adicione outra conta para compará-la.",
+      "transaction": "É uma transação, não uma conta."
+    },
+    "card": {
+      "about": "sobre {{name}} ({{letter}})",
+      "copy_address": "copiar o endereço de {{name}} ({{letter}})",
+      "letter": "conta {{letter}}",
+      "list": "contas comparadas",
+      "loading": "lendo a conta {{letter}}",
+      "remove": "remover {{name}} ({{letter}}) desta comparação",
+      "remove_short": "remover desta comparação"
+    },
+    "check": {
+      "payments": "pagamentos nos dois sentidos",
+      "portal_trades": "vendas no portal de negociação",
+      "reward_shares": "compartilhamentos de recompensa entre elas"
+    },
+    "common": {
+      "band": "ela enviou {{band}}+ pagamentos em QORT",
+      "bands_failed": "Não foi possível ler quantos pagamentos algumas destas contas enviaram, então uma conta muito ativa ainda pode aparecer na lista.",
+      "blocks": "blocos {{list}}",
+      "check": {
+        "counterparties": "as mesmas contas em seus pagamentos",
+        "first_payer": "um primeiro pagador em comum",
+        "groups": "grupos em comum (sem contar o MINTER)",
+        "sponsor": "um primeiro patrocinador em comum"
+      },
+      "count_both": "{{letter}} enviou {{sent}} e recebeu {{received}}",
+      "count_received": "{{letter}} recebeu {{payments}}",
+      "count_sent": "{{letter}} enviou {{payments}}",
+      "counterparties": "as mesmas contas em seus pagamentos",
+      "failed": "Não foi possível ler tudo de que “em comum” precisa.",
+      "firsts": "um patrocinador ou um primeiro pagador em comum",
+      "groups": "grupos em que estão duas ou mais delas, os menores primeiro",
+      "left_ats_one": "{{shown}} endereço de AT (um programa na cadeia)",
+      "left_ats_other": "{{shown}} endereços de AT (programas na cadeia)",
+      "left_busy_one": "{{shown}} conta que enviou 1.000+ pagamentos em QORT",
+      "left_busy_other": "{{shown}} contas que enviaram 1.000+ pagamentos em QORT",
+      "left_out": "Deixados de fora: {{list}}.",
+      "payments_note": "Pelos pagamentos, transferências de ativos e pagamentos múltiplos lidos de cada conta (abaixo); as contas comparadas ficam de fora.",
+      "payments_one": "{{shown}} pagamento",
+      "payments_other": "{{shown}} pagamentos",
+      "reading": "lendo o que elas têm em comum",
+      "sponsor_count_more_one": "Patrocinou {{shown}} conta em suas transações de minting mais recentes lidas: pode haver mais.",
+      "sponsor_count_more_other": "Patrocinou {{shown}} contas em suas transações de minting mais recentes lidas: pode haver mais.",
+      "sponsor_count_one": "Patrocinou {{shown}} conta ao todo.",
+      "sponsor_count_other": "Patrocinou {{shown}} contas ao todo.",
+      "title": "em comum"
+    },
+    "coverage": {
+      "pair": "{{a}} e {{b}}",
+      "pairs_more": "Entre {{pairs}} foram lidos os 1.000 pagamentos em QORT mais recentes de cada sentido: há outros mais antigos.",
+      "title": "o que foi lido"
+    },
+    "failed": {
+      "list": "Não foi possível ler {{list}}.",
+      "of": "{{part}} ({{letter}})",
+      "pair_payments": "os pagamentos em QORT entre {{a}} e {{b}}",
+      "portal": "suas vendas no portal de negociação"
+    },
+    "neutral": "O que a cadeia registrou sobre estas contas, com números, blocos e datas: nunca o que isso significa.",
+    "none": "Verificado, nada encontrado: {{list}}.",
+    "none_so_far": "No que foi lido até agora, nada encontrado: {{list}}.",
+    "picks": {
+      "clear": "limpar as contas escolhidas para comparar",
+      "compare": "comparar ({{picked}})",
+      "one_more": "Escolha mais uma conta para compará-las lado a lado.",
+      "remove": "tirar {{name}} da comparação",
+      "remove_short": "tirar da comparação",
+      "title": "escolhidas para comparar"
+    },
+    "portal": {
+      "row": "{{amount}} QORT · {{date}}",
+      "row_no_time": "{{amount}} QORT · data desconhecida",
+      "trades_one": "{{shown}} venda",
+      "trades_other": "{{shown}} vendas",
+      "when_some_unknown_one": "{{when}} ({{shown}} venda: data desconhecida)",
+      "when_some_unknown_other": "{{when}} ({{shown}} vendas: data desconhecida)",
+      "when_unknown": "data desconhecida"
+    },
+    "reading": "Ainda lendo: {{list}}.",
+    "recorded": {
+      "list": "os {{words}} entre {{actor}} e {{other}}",
+      "note": "Os pagamentos em QORT entre cada par são lidos exatamente, nos dois sentidos, até 1.000 por sentido, assim como as vendas de cada conta no portal de negociação, pela sua própria chave (todas). Transferências de ativos, pagamentos múltiplos, compartilhamentos de recompensa, transferências de nível de minting, vendas de nomes e trocas de ativos vêm das transações de cada conta, até onde foram lidas (abaixo).",
+      "note_lists": "Este nó não consegue ler exatamente os pagamentos entre duas contas: cada pagamento aqui vem das transações de cada conta, até onde foram lidas (abaixo). As vendas no portal de negociação são lidas pela própria chave de cada vendedor (todas).",
+      "pair": "{{a}} e {{b}}",
+      "show": "mostrar os {{words}} entre {{actor}} e {{other}}",
+      "title": "registrado entre elas"
+    },
+    "say": {
+      "common": {
+        "first_payer": {
+          "all": "As {{accounts}} receberam o primeiro pagamento em QORT de {{from}}",
+          "both": "As duas receberam o primeiro pagamento em QORT de {{from}}",
+          "some": "{{letters}} receberam o primeiro pagamento em QORT de {{from}}"
+        },
+        "paid": {
+          "all": "As {{accounts}} pagaram {{other}}",
+          "both": "As duas pagaram {{other}}",
+          "some": "{{letters}} pagaram {{other}}"
+        },
+        "paid_by": {
+          "all": "{{other}} pagou as {{accounts}}",
+          "both": "{{other}} pagou as duas",
+          "some": "{{other}} pagou {{letters}}"
+        },
+        "sponsor": {
+          "all": "As {{accounts}} foram patrocinadas primeiro por {{sponsor}}",
+          "both": "As duas foram patrocinadas primeiro por {{sponsor}}",
+          "some": "{{letters}} foram patrocinadas primeiro por {{sponsor}}"
+        },
+        "through": "{{from}} pagou {{other}}, e {{other}} pagou {{to}}"
+      },
+      "portal_sold_one": "Vendeu {{amount}} a {{other}} no portal de negociação em {{trades}} venda",
+      "portal_sold_other": "Vendeu {{amount}} a {{other}} no portal de negociação em {{trades}} vendas",
+      "registered_name": "Registrou o nome {{name}} (agora seu nome principal)",
+      "side_account": "{{account}}",
+      "side_first_level": "Seu nível de minting, de {{from}}",
+      "side_first_payment": "{{from}}",
+      "side_first_share": "Um compartilhamento de recompensa de {{from}}",
+      "side_first_transfer": "Uma transferência de ativo de {{from}}",
+      "side_primary": "{{name}}",
+      "side_primary_more_one": "{{name}} e mais {{others}}",
+      "side_primary_more_other": "{{name}} e mais {{others}}",
+      "side_primary_more_plus_one": "{{name}} e mais {{others}}+",
+      "side_primary_more_plus_other": "{{name}} e mais {{others}}+"
+    },
+    "side": {
+      "accounts_more_one": "{{shown}} conta no que foi lido",
+      "accounts_more_other": "{{shown}} contas no que foi lido",
+      "accounts_one": "{{shown}} conta",
+      "accounts_other": "{{shown}} contas",
+      "blocks_one": "{{shown}} bloco",
+      "blocks_other": "{{shown}} blocos",
+      "caption": "as contas lado a lado",
+      "fact": "dado",
+      "failed": "não foi possível ler",
+      "failed_line": "Alguns destes dados não puderam ser lidos.",
+      "first": {
+        "at": "um AT (um programa na cadeia)",
+        "genesis": "o bloco gênese",
+        "level": "um nível de minting",
+        "payment": "um pagamento",
+        "share": "um compartilhamento de recompensa",
+        "transfer": "uma transferência de ativo"
+      },
+      "label": {
+        "blocks": "blocos cunhados",
+        "first_qort": "primeiros QORT de",
+        "last_sent": "última transação enviada",
+        "level": "nível",
+        "minting_now": "minting ativo",
+        "names": "nomes",
+        "penalty": "penalidade de minting",
+        "sponsor": "primeiro patrocinador",
+        "sponsored": "patrocinadas"
+      },
+      "never": "nunca",
+      "no": "não",
+      "no_primary_more_one": "sem nome principal ({{shown}}+ nomes)",
+      "no_primary_more_other": "sem nome principal ({{shown}}+ nomes)",
+      "no_primary_one": "sem nome principal ({{shown}} nome)",
+      "no_primary_other": "sem nome principal ({{shown}} nomes)",
+      "none": "nenhum",
+      "none_found": "nenhum encontrado",
+      "none_so_far": "nenhum no que foi lido",
+      "not_found": "não encontrado",
+      "number": "{{value}}",
+      "of": "{{letter}}:",
+      "qort": "{{amount}} QORT",
+      "same": "igual para todas:",
+      "sponsor_partial": "desconhecido pelo que foi lido",
+      "title": "lado a lado",
+      "yes": "sim"
+    },
+    "timeline": {
+      "block": "bloco {{block}}",
+      "blocks_later_one": "{{blocks}} bloco depois",
+      "blocks_later_other": "{{blocks}} blocos depois",
+      "failed": "Não foi possível ler tudo de que a linha do tempo precisa.",
+      "label": "linha do tempo conjunta, do mais antigo ao mais recente",
+      "moments_later": "instantes depois",
+      "open": "{{when}}: abrir a transação",
+      "partial": "Pelo que foi lido: podem faltar compartilhamentos de recompensa, transferências de nível de minting ou nomes mais antigos de {{letters}}.",
+      "reading": "lendo de onde vieram seus primeiros QORT, seus compartilhamentos de recompensa, transferências de nível de minting e nomes",
+      "same_block": "no mesmo bloco",
+      "time_later": "{{time}} depois",
+      "title": "linha do tempo conjunta",
+      "who": "{{letter}}:"
+    },
+    "title": "comparar contas",
+    "toggle": {
+      "add": "adicionar à comparação",
+      "add_label": "adicionar à comparação: {{name}}",
+      "added": "Adicionada à comparação ({{picked}} de {{max}}).",
+      "compare_now": "comparar agora",
+      "picked": "escolhida para comparar",
+      "picked_label": "escolhida para comparar: {{name}}",
+      "removed": "Retirada da comparação."
+    },
+    "with": {
+      "button": "comparar com…",
+      "field": "um nome ou um endereço",
+      "lead": "Encontre a conta com a qual comparar {{name}}.",
+      "same": "É esta mesma conta. Encontre outra.",
+      "title": "comparar com…"
+    }
+  },
   "connections": {
     "at_label": "AT {{address}}",
     "block": "bloco {{block}}",
@@ -522,6 +737,37 @@
     "trades_info": "Suas trocas concluídas no Trade Portal, em todas as blockchains: comprou {{bought}} QORT, vendeu {{sold}} QORT.",
     "trades_no_key_info": "Ela nunca fez uma transação própria, então não vendeu no Trade Portal (uma venda começa com um contrato de troca próprio). O que ela comprou, {{bought}} QORT, é o que contratos de troca de outras contas lhe pagaram em todo o seu histórico."
   },
+  "funded": {
+    "ats_one": "Os pagamentos para {{shown}} endereço de AT (um programa na cadeia) ficam de fora.",
+    "ats_other": "Os pagamentos para {{shown}} endereços de AT (programas na cadeia) ficam de fora.",
+    "check_failed_one": "Não foi possível verificar {{shown}} das contas.",
+    "check_failed_other": "Não foi possível verificar {{shown}} das contas.",
+    "check_more_one": "verificar mais {{shown}}",
+    "check_more_other": "verificar mais {{shown}}",
+    "checking": "Verificando de quem foi o primeiro pagamento em QORT: {{done}} de {{total}}…",
+    "list_title": "seu primeiro pagamento em QORT veio dela",
+    "loading": "lendo seus pagamentos",
+    "none": "Não enviou pagamentos em QORT para outras contas.",
+    "none_so_far": "Nenhum dos pagamentos lidos foi para outra conta.",
+    "note": "O primeiro pagamento em QORT de uma conta é aqui o pagamento em QORT mais antigo que ela recebeu: transferências de ativos, pagamentos múltiplos e pagamentos de AT não contam.",
+    "paid_one": "Nos pagamentos lidos, pagou {{shown}} conta.",
+    "paid_other": "Nos pagamentos lidos, pagou {{shown}} contas.",
+    "read_all_one": "todos os seus {{shown}} pagamentos em QORT enviados",
+    "read_all_other": "todos os seus {{shown}} pagamentos em QORT enviados",
+    "read_ceiling_one": "seus primeiros {{shown}} pagamentos em QORT enviados (enviou mais; o Explorador lê até 1.000)",
+    "read_ceiling_other": "seus primeiros {{shown}} pagamentos em QORT enviados (enviou mais; o Explorador lê até 1.000)",
+    "read_first_one": "seus primeiros {{shown}} pagamentos em QORT enviados (pode ter enviado mais)",
+    "read_first_other": "seus primeiros {{shown}} pagamentos em QORT enviados (pode ter enviado mais)",
+    "read_later": "ler pagamentos posteriores",
+    "read_single": "seu único pagamento em QORT enviado",
+    "result_all_one": "Fez o primeiro pagamento em QORT para {{shown}} delas.",
+    "result_all_other": "Fez o primeiro pagamento em QORT para {{shown}} delas.",
+    "result_some_one": "Das {{checked}} verificadas até agora, fez o primeiro pagamento em QORT para {{shown}}.",
+    "result_some_other": "Das {{checked}} verificadas até agora, fez o primeiro pagamento em QORT para {{shown}}.",
+    "row": "{{amount}} QORT, {{date}} · bloco {{block}}",
+    "title": "primeiros pagamentos em QORT de {{name}}",
+    "unsupported": "Este nó não consegue ler os pagamentos entre contas, de que isto precisa."
+  },
   "groups": {
     "admin": "administrador",
     "closed": "grupo fechado",
@@ -706,12 +952,94 @@
     "label": "encontrar uma conta ou uma transação",
     "placeholder": "nome, endereço ou assinatura de transação"
   },
+  "set_checks": {
+    "again": "verificar de novo",
+    "done_one": "{{shown}} conta verificada.",
+    "done_other": "Todas as {{shown}} contas verificadas.",
+    "failed_one": "Não foi possível ler {{shown}} conta.",
+    "failed_other": "Não foi possível ler {{shown}} contas.",
+    "first": {
+      "about": "De onde vieram os primeiros QORT de cada conta, agrupados por quem pagou. Duas contas por vez.",
+      "empty": "Nenhum primeiro pagamento em QORT encontrado entre as verificadas.",
+      "none_one": "Nenhum primeiro QORT encontrado para {{shown}} conta.",
+      "none_other": "Nenhum primeiro QORT encontrado para {{shown}} contas.",
+      "other_one": "{{shown}} conta teve outra primeira transação (um pagamento múltiplo, um compartilhamento de recompensa, uma transferência de nível de minting, uma transferência de ativo, um AT ou o bloco gênese).",
+      "other_other": "{{shown}} contas tiveram outra primeira transação (um pagamento múltiplo, um compartilhamento de recompensa, uma transferência de nível de minting, uma transferência de ativo, um AT ou o bloco gênese).",
+      "title": "quem fez o primeiro pagamento em QORT delas"
+    },
+    "progress": "Verificadas {{done}} de {{total}}…",
+    "start_one": "verificar {{shown}} conta",
+    "start_other": "verificar {{shown}} contas",
+    "stop": "parar",
+    "stopped": "Parado após {{done}} de {{total}}.",
+    "title": "verificações nestas contas",
+    "went": {
+      "about": "Os pagamentos em QORT enviados por cada conta (no máximo seus primeiros 1.000), agrupados por quem os recebeu. Duas contas por vez.",
+      "ats_one": "Os pagamentos para {{shown}} endereço de AT (um programa na cadeia) ficam de fora.",
+      "ats_other": "Os pagamentos para {{shown}} endereços de AT (programas na cadeia) ficam de fora.",
+      "beyond_one": "{{shown}} delas enviou mais do que o Explorador lê (1.000 cada): seus pagamentos posteriores não são contados.",
+      "beyond_other": "{{shown}} delas enviaram mais do que o Explorador lê (1.000 cada): seus pagamentos posteriores não são contados.",
+      "empty": "Nenhum pagamento em QORT enviado entre as verificadas.",
+      "title": "para onde foram seus QORT"
+    }
+  },
+  "sets": {
+    "link": {
+      "funded": "quem recebeu o primeiro pagamento em QORT de {{name}}",
+      "funded_own": "quem recebeu o primeiro pagamento em QORT desta conta",
+      "sponsees": "as contas que {{name}} patrocinou",
+      "sponsees_own": "as contas que patrocinou"
+    },
+    "say": {
+      "first_payer_one": "{{from}} fez o primeiro pagamento em QORT para {{accounts}} da {{total}} conta verificada",
+      "first_payer_other": "{{from}} fez o primeiro pagamento em QORT para {{accounts}} das {{total}} contas verificadas",
+      "first_payer_single": "{{from}} fez o primeiro pagamento em QORT para {{accounts}} conta (a única verificada)",
+      "went_to_one": "{{to}} recebeu {{amount}} de {{accounts}} da {{total}} conta verificada",
+      "went_to_other": "{{to}} recebeu {{amount}} de {{accounts}} das {{total}} contas verificadas",
+      "went_to_single": "{{to}} recebeu {{amount}} de {{accounts}} conta (a única verificada)"
+    }
+  },
   "settings": {
     "activity": "configurações da atividade",
     "activity_hint": "Quanto a visão geral lê primeiro e quais marcos a atividade mostra.",
     "remember": "lembrar neste dispositivo as contas que exploro",
     "remember_hint": "Apenas os endereços, para esta conta do Hub. Ao desativar, eles são esquecidos.",
     "title": "configurações do Explorador"
+  },
+  "sponsees": {
+    "list_title": "patrocinadas",
+    "loading": "lendo as contas que patrocinou",
+    "minting_now_one": "{{shown}} delas está fazendo minting agora.",
+    "minting_now_other": "{{shown}} delas estão fazendo minting agora.",
+    "none": "Não fez compartilhamentos de recompensa para outras contas.",
+    "none_so_far": "Não fez compartilhamentos de recompensa para outras contas em suas transações de minting mais recentes lidas: pode haver outros mais antigos.",
+    "pick": "escolher {{name}} para comparar",
+    "pick_hint": "Escolha de 2 a {{max}} contas para compará-las lado a lado.",
+    "row": {
+      "about": "sobre {{name}}",
+      "again": "patrocinada novamente desde então",
+      "failed": "Não foi possível ler seu nível e sua situação no MINTER.",
+      "not_removed": "não removido",
+      "removed_one": "removido {{blocks}} bloco depois (bloco {{block}})",
+      "removed_other": "removido {{blocks}} blocos depois (bloco {{block}})",
+      "shares_one": "{{shown}} compartilhamento de recompensa ao todo",
+      "shares_other": "{{shown}} compartilhamentos de recompensa ao todo",
+      "shares_read_one": "{{shown}} compartilhamento de recompensa no que foi lido",
+      "shares_read_other": "{{shown}} compartilhamentos de recompensa no que foi lido",
+      "sponsored": "Patrocinada em {{date}} a {{percent}} (bloco {{block}})"
+    },
+    "sort": {
+      "active": "compartilhamento ainda ativo primeiro",
+      "first": "primeiras patrocinadas primeiro",
+      "latest": "últimas patrocinadas primeiro",
+      "minting": "minting ativo primeiro",
+      "shares": "mais compartilhamentos de recompensa primeiro"
+    },
+    "summary_more_one": "{{shown}} conta patrocinada ({{span}}) em suas transações de minting mais recentes lidas: pode haver mais.",
+    "summary_more_other": "{{shown}} contas patrocinadas ({{span}}) em suas transações de minting mais recentes lidas: pode haver mais.",
+    "summary_one": "{{shown}} conta patrocinada ({{span}}).",
+    "summary_other": "{{shown}} contas patrocinadas ({{span}}).",
+    "title": "contas patrocinadas por {{name}}"
   },
   "start": {
     "clear": "limpar",

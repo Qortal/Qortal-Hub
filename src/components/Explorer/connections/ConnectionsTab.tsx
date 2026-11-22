@@ -90,6 +90,7 @@ import {
 import { ExchangeNotice } from './ExchangeNotice';
 import { InCommon, inCommonEntries, useInCommon } from './InCommon';
 import { PaymentsPanel } from './PaymentsPanel';
+import { SponseesLink } from '../sets/SetLinks';
 import {
   isShort,
   stoppedAtCeiling,
@@ -156,7 +157,7 @@ function Rows({
 }
 
 /** What was read of its lists, how far, and Read older; a list that couldn't be read is named as such. */
-function Coverage({ data }: { data: ConnectionsData }) {
+export function Coverage({ data }: { data: ConnectionsData }) {
   const { t, i18n } = useTranslation(['explorer']);
   const language = i18n.language;
   const lists = [
@@ -449,7 +450,7 @@ export function ConnectionsTab({ account }: { account: AccountInfo }) {
       )
   );
 
-  const row = (finding: Finding) => (
+  const row = (finding: Finding, action?: ReactNode) => (
     <ConnectionRow
       key={finding.key}
       address={address}
@@ -463,6 +464,7 @@ export function ConnectionsTab({ account }: { account: AccountInfo }) {
         txs: finding.evidence,
         signatures: finding.evidenceSignatures,
       }}
+      action={action}
     />
   );
 
@@ -718,7 +720,7 @@ export function ConnectionsTab({ account }: { account: AccountInfo }) {
               ) : null}
               {sponseesFound ? (
                 <Box component="ul" sx={ROW_LIST_SX}>
-                  {row(sponseesFound)}
+                  {row(sponseesFound, <SponseesLink sponsor={address} own />)}
                 </Box>
               ) : null}
               <Typography
@@ -782,6 +784,7 @@ export function ConnectionsTab({ account }: { account: AccountInfo }) {
         common={common}
         entries={commonFound}
         searching={searching}
+        sentPayments={Boolean(data.flowsSent?.length)}
       />
 
       {!searching && empty.length ? (

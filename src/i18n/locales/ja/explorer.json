@@ -211,6 +211,221 @@
     "minting_penalty": "ミンティングペナルティ",
     "minting_penalty_explained": "ノードがこのアカウントにミンティングペナルティを記録しています。その数は「注記」に表示されます。"
   },
+  "compare": {
+    "add": {
+      "already": "すでにこの比較に {{letter}} として含まれています。",
+      "at": "これは AT アドレス（チェーン上のプログラム）で、個人のアカウントではありません。",
+      "full": "比較できるのは 4 アカウントまでです。先に 1 つ外してください。",
+      "label": "比較するアカウントを追加",
+      "looking_up": "「{{name}}」を検索しています…",
+      "more": "比較するアカウントをもう 1 つ追加してください。",
+      "transaction": "これはトランザクションで、アカウントではありません。"
+    },
+    "card": {
+      "about": "{{name}}（{{letter}}）について",
+      "copy_address": "{{name}}（{{letter}}）のアドレスをコピー",
+      "letter": "アカウント {{letter}}",
+      "list": "比較中のアカウント",
+      "loading": "アカウント {{letter}} を読み込んでいます",
+      "remove": "{{name}}（{{letter}}）をこの比較から外す",
+      "remove_short": "この比較から外す"
+    },
+    "check": {
+      "payments": "双方向の支払い",
+      "portal_trades": "取引ポータルでの売却",
+      "reward_shares": "両者間のリワードシェア"
+    },
+    "common": {
+      "band": "{{band}} 件以上の QORT の支払いを送っています",
+      "bands_failed": "一部のアカウントが送った支払いの件数を読み込めなかったため、支払いの非常に多いアカウントが一覧に残っている可能性があります。",
+      "blocks": "ブロック {{list}}",
+      "check": {
+        "counterparties": "支払いに共通して現れるアカウント",
+        "first_payer": "共通の最初の支払者",
+        "groups": "共通のグループ（MINTER を除く）",
+        "sponsor": "共通の最初のスポンサー"
+      },
+      "count_both": "{{letter}} が {{sent}} を送信、{{received}} を受信",
+      "count_received": "{{letter}} が {{payments}} を受信",
+      "count_sent": "{{letter}} が {{payments}} を送信",
+      "counterparties": "支払いに共通して現れるアカウント",
+      "failed": "「共通点」に必要な情報をすべては読み込めませんでした。",
+      "firsts": "共通のスポンサーまたは最初の支払者",
+      "groups": "2 つ以上が参加しているグループ（小さい順）",
+      "left_ats_one": "{{shown}} 件の AT アドレス（チェーン上のプログラム）",
+      "left_ats_other": "{{shown}} 件の AT アドレス（チェーン上のプログラム）",
+      "left_busy_one": "1,000 件以上の QORT の支払いを送った {{shown}} 件のアカウント",
+      "left_busy_other": "1,000 件以上の QORT の支払いを送った {{shown}} 件のアカウント",
+      "left_out": "除外：{{list}}。",
+      "payments_note": "各アカウントの読み込んだ支払い、アセットの転送、一括支払い（下記）に基づきます。比較中のアカウント自体は除外しています。",
+      "payments_one": "{{shown}} 件の支払い",
+      "payments_other": "{{shown}} 件の支払い",
+      "reading": "共通点を読み込んでいます",
+      "sponsor_count_more_one": "読み込んだ最新のミンティングのトランザクションでは {{shown}} 件のアカウントをスポンサーしました。さらにある可能性があります。",
+      "sponsor_count_more_other": "読み込んだ最新のミンティングのトランザクションでは {{shown}} 件のアカウントをスポンサーしました。さらにある可能性があります。",
+      "sponsor_count_one": "合計 {{shown}} 件のアカウントをスポンサーしました。",
+      "sponsor_count_other": "合計 {{shown}} 件のアカウントをスポンサーしました。",
+      "title": "共通点"
+    },
+    "coverage": {
+      "pair": "{{a}} と {{b}}",
+      "pairs_more": "{{pairs}} の間では、各方向の最新 1,000 件の QORT の支払いを読み込みました。それより前の支払いもあります。",
+      "title": "読み込んだ範囲"
+    },
+    "failed": {
+      "list": "読み込めませんでした：{{list}}。",
+      "of": "{{part}}（{{letter}}）",
+      "pair_payments": "{{a}} と {{b}} の間の QORT の支払い",
+      "portal": "取引ポータルでの売却"
+    },
+    "neutral": "チェーンがこれらのアカウントについて記録した内容を、数値・ブロック・日付とともに示します。その意味は示しません。",
+    "none": "確認しましたが、見つかりませんでした：{{list}}。",
+    "none_so_far": "これまでに読み込んだ範囲では見つかりませんでした：{{list}}。",
+    "picks": {
+      "clear": "比較用に選択したアカウントをクリア",
+      "compare": "比較（{{picked}}）",
+      "one_more": "もう 1 つアカウントを選ぶと、横に並べて比較できます。",
+      "remove": "{{name}} を比較から外す",
+      "remove_short": "比較から外す",
+      "title": "比較用に選択済み"
+    },
+    "portal": {
+      "row": "{{amount}} QORT · {{date}}",
+      "row_no_time": "{{amount}} QORT · 日時不明",
+      "trades_one": "{{shown}} 件の売却",
+      "trades_other": "{{shown}} 件の売却",
+      "when_some_unknown_one": "{{when}}（{{shown}} 件の売却：日時不明）",
+      "when_some_unknown_other": "{{when}}（{{shown}} 件の売却：日時不明）",
+      "when_unknown": "日時不明"
+    },
+    "reading": "読み込み中：{{list}}。",
+    "recorded": {
+      "list": "{{actor}} と {{other}} の間の {{words}}",
+      "note": "各ペア間の QORT の支払いは、双方向とも正確に、各方向最大 1,000 件まで読み込みます。各アカウントの取引ポータルでの売却は、そのアカウント自身の鍵で読み込みます（すべて）。アセットの転送、一括支払い、リワードシェア、ミンティングレベルの移転、名前の売買、アセットの取引は、各アカウント自身のトランザクションから、読み込んだ範囲で取得しています（下記）。",
+      "note_lists": "このノードは 2 つのアカウント間の支払いを正確には読み込めません。ここでの支払いはすべて、各アカウント自身のトランザクションから、読み込んだ範囲で取得しています（下記）。取引ポータルでの売却は、各売り手自身の鍵で読み込みます（すべて）。",
+      "pair": "{{a}} と {{b}}",
+      "show": "{{actor}} と {{other}} の間の {{words}} を表示",
+      "title": "両者間の記録"
+    },
+    "say": {
+      "common": {
+        "first_payer": {
+          "all": "{{accounts}} 件すべてが最初の QORT の支払いを {{from}} から受け取りました",
+          "both": "両方とも最初の QORT の支払いを {{from}} から受け取りました",
+          "some": "{{letters}} は最初の QORT の支払いを {{from}} から受け取りました"
+        },
+        "paid": {
+          "all": "{{accounts}} 件すべてが {{other}} に支払いました",
+          "both": "両方とも {{other}} に支払いました",
+          "some": "{{letters}} が {{other}} に支払いました"
+        },
+        "paid_by": {
+          "all": "{{other}} が {{accounts}} 件すべてに支払いました",
+          "both": "{{other}} が両方に支払いました",
+          "some": "{{other}} が {{letters}} に支払いました"
+        },
+        "sponsor": {
+          "all": "{{accounts}} 件すべての最初のスポンサーは {{sponsor}} です",
+          "both": "両方とも最初のスポンサーは {{sponsor}} です",
+          "some": "{{letters}} の最初のスポンサーは {{sponsor}} です"
+        },
+        "through": "{{from}} が {{other}} に支払い、{{other}} が {{to}} に支払いました"
+      },
+      "portal_sold_one": "取引ポータルで {{other}} に {{amount}} を売却しました（{{trades}} 件の売却）",
+      "portal_sold_other": "取引ポータルで {{other}} に {{amount}} を売却しました（{{trades}} 件の売却）",
+      "registered_name": "名前 {{name}} を登録しました（現在のプライマリ名）",
+      "side_account": "{{account}}",
+      "side_first_level": "{{from}} から移転されたミンティングレベル",
+      "side_first_payment": "{{from}}",
+      "side_first_share": "{{from}} からのリワードシェア",
+      "side_first_transfer": "{{from}} からのアセットの転送",
+      "side_primary": "{{name}}",
+      "side_primary_more_one": "{{name}} ほか {{others}} 件",
+      "side_primary_more_other": "{{name}} ほか {{others}} 件",
+      "side_primary_more_plus_one": "{{name}} ほか {{others}} 件以上",
+      "side_primary_more_plus_other": "{{name}} ほか {{others}} 件以上"
+    },
+    "side": {
+      "accounts_more_one": "読み込んだ範囲で {{shown}} 件のアカウント",
+      "accounts_more_other": "読み込んだ範囲で {{shown}} 件のアカウント",
+      "accounts_one": "{{shown}} 件のアカウント",
+      "accounts_other": "{{shown}} 件のアカウント",
+      "blocks_one": "{{shown}} ブロック",
+      "blocks_other": "{{shown}} ブロック",
+      "caption": "アカウントを横に並べた表",
+      "fact": "項目",
+      "failed": "読み込めませんでした",
+      "failed_line": "一部の項目を読み込めませんでした。",
+      "first": {
+        "at": "AT（チェーン上のプログラム）",
+        "genesis": "ジェネシスブロック",
+        "level": "ミンティングレベル",
+        "payment": "支払い",
+        "share": "リワードシェア",
+        "transfer": "アセットの転送"
+      },
+      "label": {
+        "blocks": "ミンティングしたブロック",
+        "first_qort": "最初の QORT の出どころ",
+        "last_sent": "最終トランザクション送信",
+        "level": "レベル",
+        "minting_now": "ミンティング中",
+        "names": "名前",
+        "penalty": "ミンティングペナルティ",
+        "sponsor": "最初のスポンサー",
+        "sponsored": "スポンサーしたアカウント"
+      },
+      "never": "未送信",
+      "no": "いいえ",
+      "no_primary_more_one": "プライマリ名なし（名前 {{shown}} 件以上）",
+      "no_primary_more_other": "プライマリ名なし（名前 {{shown}} 件以上）",
+      "no_primary_one": "プライマリ名なし（名前 {{shown}} 件）",
+      "no_primary_other": "プライマリ名なし（名前 {{shown}} 件）",
+      "none": "なし",
+      "none_found": "見つかりません",
+      "none_so_far": "読み込んだ範囲にはなし",
+      "not_found": "見つかりません",
+      "number": "{{value}}",
+      "of": "{{letter}}：",
+      "qort": "{{amount}} QORT",
+      "same": "すべて同じ：",
+      "sponsor_partial": "読み込んだ範囲からは不明",
+      "title": "横に並べて比較",
+      "yes": "はい"
+    },
+    "timeline": {
+      "block": "ブロック {{block}}",
+      "blocks_later_one": "{{blocks}} ブロック後",
+      "blocks_later_other": "{{blocks}} ブロック後",
+      "failed": "タイムラインに必要な情報をすべては読み込めませんでした。",
+      "label": "共通のタイムライン（古い順）",
+      "moments_later": "直後",
+      "open": "{{when}}：トランザクションを開く",
+      "partial": "読み込んだ範囲に基づきます：{{letters}} の古いリワードシェア、ミンティングレベルの移転、名前が欠けている可能性があります。",
+      "reading": "最初の QORT の出どころ、リワードシェア、ミンティングレベルの移転、名前を読み込んでいます",
+      "same_block": "同じブロック内",
+      "time_later": "{{time}}後",
+      "title": "共通のタイムライン",
+      "who": "{{letter}}："
+    },
+    "title": "アカウントの比較",
+    "toggle": {
+      "add": "比較に追加",
+      "add_label": "比較に追加：{{name}}",
+      "added": "比較に追加しました（{{max}} 件中 {{picked}} 件）。",
+      "compare_now": "今すぐ比較",
+      "picked": "比較用に選択済み",
+      "picked_label": "比較用に選択済み：{{name}}",
+      "removed": "比較から外しました。"
+    },
+    "with": {
+      "button": "…と比較",
+      "field": "名前またはアドレス",
+      "lead": "{{name}} と比較するアカウントを探してください。",
+      "same": "これは同じアカウントです。別のアカウントを探してください。",
+      "title": "…と比較"
+    }
+  },
   "connections": {
     "at_label": "AT {{address}}",
     "block": "ブロック {{block}}",
@@ -522,6 +737,37 @@
     "trades_info": "Trade Portal での完了した取引（全チェーン）：購入 {{bought}} QORT、売却 {{sold}} QORT。",
     "trades_no_key_info": "自分でトランザクションを一度も行っていないため、Trade Portal での売却はありません（売却は自分の取引コントラクトから始まります）。購入した {{bought}} QORT は、全履歴で他のアカウントの取引コントラクトから支払われた分です。"
   },
+  "funded": {
+    "ats_one": "{{shown}} 件の AT アドレス（チェーン上のプログラム）への支払いは除外しています。",
+    "ats_other": "{{shown}} 件の AT アドレス（チェーン上のプログラム）への支払いは除外しています。",
+    "check_failed_one": "{{shown}} 件のアカウントを確認できませんでした。",
+    "check_failed_other": "{{shown}} 件のアカウントを確認できませんでした。",
+    "check_more_one": "さらに {{shown}} 件確認",
+    "check_more_other": "さらに {{shown}} 件確認",
+    "checking": "誰の最初の QORT の支払いだったかを確認しています：{{total}} 件中 {{done}} 件…",
+    "list_title": "最初の QORT の支払いをこのアカウントから受け取ったアカウント",
+    "loading": "支払いを読み込んでいます",
+    "none": "他のアカウントに QORT の支払いを送っていません。",
+    "none_so_far": "読み込んだ支払いの中に、他のアカウント宛てのものはありません。",
+    "note": "ここでいうアカウントの最初の QORT の支払いとは、そのアカウントが受け取った最も古い QORT の支払いです。アセットの転送、一括支払い、AT からの支払いは含みません。",
+    "paid_one": "読み込んだ支払いでは、{{shown}} 件のアカウントに支払っています。",
+    "paid_other": "読み込んだ支払いでは、{{shown}} 件のアカウントに支払っています。",
+    "read_all_one": "送った QORT の支払い全 {{shown}} 件",
+    "read_all_other": "送った QORT の支払い全 {{shown}} 件",
+    "read_ceiling_one": "送った QORT の支払いの最初の {{shown}} 件（さらに送っています。エクスプローラーが読み込むのは最大 1,000 件までです）",
+    "read_ceiling_other": "送った QORT の支払いの最初の {{shown}} 件（さらに送っています。エクスプローラーが読み込むのは最大 1,000 件までです）",
+    "read_first_one": "送った QORT の支払いの最初の {{shown}} 件（さらに送っている可能性があります）",
+    "read_first_other": "送った QORT の支払いの最初の {{shown}} 件（さらに送っている可能性があります）",
+    "read_later": "後の支払いを読み込む",
+    "read_single": "送った唯一の QORT の支払い",
+    "result_all_one": "そのうち {{shown}} 件のアカウントに最初の QORT の支払いをしました。",
+    "result_all_other": "そのうち {{shown}} 件のアカウントに最初の QORT の支払いをしました。",
+    "result_some_one": "これまでに確認した {{checked}} 件のうち、{{shown}} 件に最初の QORT の支払いをしました。",
+    "result_some_other": "これまでに確認した {{checked}} 件のうち、{{shown}} 件に最初の QORT の支払いをしました。",
+    "row": "{{amount}} QORT、{{date}} · ブロック {{block}}",
+    "title": "{{name}} からの最初の QORT の支払い",
+    "unsupported": "このノードはアカウント間の支払いを読み込めませんが、ここではそれが必要です。"
+  },
   "groups": {
     "admin": "管理者",
     "closed": "非公開グループ",
@@ -706,12 +952,94 @@
     "label": "アカウントまたはトランザクションを探す",
     "placeholder": "名前、アドレス、またはトランザクション署名"
   },
+  "set_checks": {
+    "again": "もう一度確認",
+    "done_one": "{{shown}} 件のアカウントを確認しました。",
+    "done_other": "{{shown}} 件のアカウントをすべて確認しました。",
+    "failed_one": "{{shown}} 件のアカウントを読み込めませんでした。",
+    "failed_other": "{{shown}} 件のアカウントを読み込めませんでした。",
+    "first": {
+      "about": "各アカウントの最初の QORT の出どころを、支払った相手ごとにまとめます。一度に 2 アカウントずつ確認します。",
+      "empty": "確認したアカウントに最初の QORT の支払いは見つかりませんでした。",
+      "none_one": "{{shown}} 件のアカウントの最初の QORT は見つかりませんでした。",
+      "none_other": "{{shown}} 件のアカウントの最初の QORT は見つかりませんでした。",
+      "other_one": "{{shown}} 件のアカウントは、最初のトランザクションが別の種類でした（一括支払い、リワードシェア、ミンティングレベルの移転、アセットの転送、AT、またはジェネシスブロック）。",
+      "other_other": "{{shown}} 件のアカウントは、最初のトランザクションが別の種類でした（一括支払い、リワードシェア、ミンティングレベルの移転、アセットの転送、AT、またはジェネシスブロック）。",
+      "title": "最初の QORT の支払いをしたのは誰か"
+    },
+    "progress": "{{total}} 件中 {{done}} 件を確認しました…",
+    "start_one": "{{shown}} 件のアカウントを確認",
+    "start_other": "{{shown}} 件のアカウントを確認",
+    "stop": "停止",
+    "stopped": "{{total}} 件中 {{done}} 件で停止しました。",
+    "title": "これらのアカウントの確認",
+    "went": {
+      "about": "各アカウントが送った QORT の支払い（最初の 1,000 件まで）を、受け取った相手ごとにまとめます。一度に 2 アカウントずつ確認します。",
+      "ats_one": "{{shown}} 件の AT アドレス（チェーン上のプログラム）への支払いは除外しています。",
+      "ats_other": "{{shown}} 件の AT アドレス（チェーン上のプログラム）への支払いは除外しています。",
+      "beyond_one": "そのうち {{shown}} 件は、エクスプローラーが読み込む件数（各 1,000 件）より多く送っています。後の支払いは含みません。",
+      "beyond_other": "そのうち {{shown}} 件は、エクスプローラーが読み込む件数（各 1,000 件）より多く送っています。後の支払いは含みません。",
+      "empty": "確認したアカウントに送った QORT の支払いはありません。",
+      "title": "QORT の行き先"
+    }
+  },
+  "sets": {
+    "link": {
+      "funded": "{{name}} から最初の QORT の支払いを受け取ったアカウント",
+      "funded_own": "このアカウントから最初の QORT の支払いを受け取ったアカウント",
+      "sponsees": "{{name}} がスポンサーしたアカウント",
+      "sponsees_own": "スポンサーしたアカウント"
+    },
+    "say": {
+      "first_payer_one": "{{from}} は、確認した {{total}} 件のアカウントのうち {{accounts}} 件に最初の QORT の支払いをしました",
+      "first_payer_other": "{{from}} は、確認した {{total}} 件のアカウントのうち {{accounts}} 件に最初の QORT の支払いをしました",
+      "first_payer_single": "{{from}} は {{accounts}} 件のアカウントに最初の QORT の支払いをしました（確認したのはこの 1 件のみ）",
+      "went_to_one": "{{to}} は、確認した {{total}} 件のアカウントのうち {{accounts}} 件から {{amount}} を受け取りました",
+      "went_to_other": "{{to}} は、確認した {{total}} 件のアカウントのうち {{accounts}} 件から {{amount}} を受け取りました",
+      "went_to_single": "{{to}} は {{accounts}} 件のアカウントから {{amount}} を受け取りました（確認したのはこの 1 件のみ）"
+    }
+  },
   "settings": {
     "activity": "アクティビティの設定",
     "activity_hint": "概要が最初に読み込む量と、アクティビティに表示するマイルストーン。",
     "remember": "このデバイスで閲覧したアカウントを記憶する",
     "remember_hint": "この Hub アカウント用に、アドレスのみを保存します。オフにすると消去されます。",
     "title": "エクスプローラーの設定"
+  },
+  "sponsees": {
+    "list_title": "スポンサーしたアカウント",
+    "loading": "スポンサーしたアカウントを読み込んでいます",
+    "minting_now_one": "そのうち {{shown}} 件が現在ミンティング中です。",
+    "minting_now_other": "そのうち {{shown}} 件が現在ミンティング中です。",
+    "none": "他のアカウントへのリワードシェアはありません。",
+    "none_so_far": "読み込んだ最新のミンティングのトランザクションには、他のアカウントへのリワードシェアはありません。それより前のものがある可能性があります。",
+    "pick": "{{name}} を比較用に選択",
+    "pick_hint": "2〜{{max}} 件のアカウントを選ぶと、横に並べて比較できます。",
+    "row": {
+      "about": "{{name}} について",
+      "again": "その後再びスポンサー",
+      "failed": "レベルと MINTER での状況を読み込めませんでした。",
+      "not_removed": "解除されていません",
+      "removed_one": "{{blocks}} ブロック後に解除（ブロック {{block}}）",
+      "removed_other": "{{blocks}} ブロック後に解除（ブロック {{block}}）",
+      "shares_one": "リワードシェア合計 {{shown}} 件",
+      "shares_other": "リワードシェア合計 {{shown}} 件",
+      "shares_read_one": "読み込んだ範囲でリワードシェア {{shown}} 件",
+      "shares_read_other": "読み込んだ範囲でリワードシェア {{shown}} 件",
+      "sponsored": "{{date}} に {{percent}} でスポンサー（ブロック {{block}}）"
+    },
+    "sort": {
+      "active": "シェアが有効なものを先に",
+      "first": "スポンサーした日が古い順",
+      "latest": "スポンサーした日が新しい順",
+      "minting": "ミンティング中を先に",
+      "shares": "リワードシェアが多い順"
+    },
+    "summary_more_one": "読み込んだ最新のミンティングのトランザクションでは {{shown}} 件のアカウントをスポンサーしました（{{span}}）。さらにある可能性があります。",
+    "summary_more_other": "読み込んだ最新のミンティングのトランザクションでは {{shown}} 件のアカウントをスポンサーしました（{{span}}）。さらにある可能性があります。",
+    "summary_one": "{{shown}} 件のアカウントをスポンサーしました（{{span}}）。",
+    "summary_other": "{{shown}} 件のアカウントをスポンサーしました（{{span}}）。",
+    "title": "{{name}} がスポンサーしたアカウント"
   },
   "start": {
     "clear": "クリア",

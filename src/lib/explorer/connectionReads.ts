@@ -84,13 +84,66 @@ export const fundingRead = (
 export const EXCHANGE_PAGE = 100;
 export const EXCHANGE_PAGES = 10;
 
+/** QORT payments from one account to another, newest first, as far as they were read. */
+export interface PaymentsBetween {
+  rows: TxRow[];
+  /** One more row past the most read says there are older ones. */
+  more: boolean;
+}
+
 /**
- * What an account paid each known exchange, and got from it, exactly: the
- * node's payments between two accounts (`/transactions/payments/between`
- * with both the sender and the recipient given, a few milliseconds a
- * read), 100 a read, at most 1,000 a way (then `more`, when one more row
- * says there are older ones). Null on a node
- * that can't answer that read: the Connections lists' payments say it then.
+ * The QORT payments `from` made to `to`, exactly: the node's payments
+ * between two accounts (`/transactions/payments/between` with both the
+ * sender and the recipient given, a few milliseconds a read), newest
+ * first, 100 a read, at most 1,000 (then `more`, when one more row says
+ * there are older ones). A failed read throws, and so does a node without
+ * that read (a 404 with no Core error number).
+ */
+export async function readPaymentsBetween(
+  from: string,
+  to: string
+): Promise<PaymentsBetween> {
+  const rows: TxRow[] = [];
+  for (let page = 0; page < EXCHANGE_PAGES; page++) {
+    const chunk = toTxRows(
+      await getJson<unknown>(
+        `/transactions/payments/between?${queryString({
+          senderAddress: from,
+          recipientAddress: to,
+          confirmationStatus: 'CONFIRMED',
+          limit: EXCHANGE_PAGE,
+          offset: page * EXCHANGE_PAGE,
+          reverse: true,
+        })}`
+      )
+    );
+    rows.push(...chunk);
+    if (chunk.length < EXCHANGE_PAGE) return { rows, more: false };
+  }
+  // Every read was full: one more row says whether there are older ones.
+  const next = toTxRows(
+    await getJson<unknown>(
+      `/transactions/payments/between?${queryString({
+        senderAddress: from,
+        recipientAddress: to,
+        confirmationStatus: 'CONFIRMED',
+        limit: 1,
+        offset: EXCHANGE_PAGES * EXCHANGE_PAGE,
+        reverse: true,
+      })}`
+    )
+  );
+  return { rows, more: next.length > 0 };
+}
+
+/** The node has no such route (not one of Core's own error answers): it can't read payments between two accounts. */
+export const noPaymentsBetween = (error: unknown): boolean =>
+  error instanceof CoreHttpError && error.status === 404 && error.code === null;
+
+/**
+ * What an account paid each known exchange, and got from it, exactly
+ * (readPaymentsBetween, each way). Null on a node that can't answer that
+ * read: the Connections lists' payments say it then.
  */
 export const exchangePaymentsRead = (
   address: string
@@ -98,48 +151,15 @@ export const exchangePaymentsRead = (
   key: `exchanges:${address}`,
   ttlMs: 10 * MINUTE,
   load: async () => {
-    const readWay = async (from: string, to: string) => {
-      const rows: TxRow[] = [];
-      for (let page = 0; page < EXCHANGE_PAGES; page++) {
-        const chunk = toTxRows(
-          await getJson<unknown>(
-            `/transactions/payments/between?${queryString({
-              senderAddress: from,
-              recipientAddress: to,
-              confirmationStatus: 'CONFIRMED',
-              limit: EXCHANGE_PAGE,
-              offset: page * EXCHANGE_PAGE,
-              reverse: true,
-            })}`
-          )
-        );
-        rows.push(...chunk);
-        if (chunk.length < EXCHANGE_PAGE) return { rows, more: false };
-      }
-      // Every read was full: one more row says whether there are older ones.
-      const next = toTxRows(
-        await getJson<unknown>(
-          `/transactions/payments/between?${queryString({
-            senderAddress: from,
-            recipientAddress: to,
-            confirmationStatus: 'CONFIRMED',
-            limit: 1,
-            offset: EXCHANGE_PAGES * EXCHANGE_PAGE,
-            reverse: true,
-          })}`
-        )
-      );
-      return { rows, more: next.length > 0 };
-    };
     try {
       const flows: Array<ExchangeFlow | null> = [];
       for (const exchange of Object.keys(KNOWN_EXCHANGES)) {
         if (exchange === address) continue;
-        const sent = await readWay(address, exchange);
+        const sent = await readPaymentsBetween(address, exchange);
         flows.push(
           exchangeFlow(exchange, 'sent', sent.rows, sent.more ? 'older' : false)
         );
-        const received = await readWay(exchange, address);
+        const received = await readPaymentsBetween(exchange, address);
         flows.push(
           exchangeFlow(
             exchange,
@@ -151,13 +171,7 @@ export const exchangePaymentsRead = (
       }
       return flows.filter((flow): flow is ExchangeFlow => flow !== null);
     } catch (error) {
-      // No such route on this node (not one of Core's own error answers).
-      if (
-        error instanceof CoreHttpError &&
-        error.status === 404 &&
-        error.code === null
-      )
-        return null;
+      if (noPaymentsBetween(error)) return null;
       throw error;
     }
   },

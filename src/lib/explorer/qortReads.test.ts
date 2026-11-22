@@ -246,6 +246,8 @@ describe('its trades on the Trade Portal', () => {
     expect(await spec.load()).toEqual({
       bought: 1_050_000_000n,
       sold: 700_000_000n,
+      // Its one sale doesn't name its seller and buyer: counted, never listed.
+      sales: [],
     });
     expect(paths).toHaveLength(2);
     for (const path of paths) {
@@ -256,6 +258,55 @@ describe('its trades on the Trade Portal', () => {
     expect(paths.map((path) => [...query(path).keys()][0]).sort()).toEqual([
       'buyerPublicKey',
       'sellerPublicKey',
+    ]);
+  });
+
+  it('keeps its sales for Compare, newest first, the buyer by where it received the QORT, each once', async () => {
+    const SELLER = `Q${'S'.repeat(33)}`;
+    const BUYER = `Q${'B'.repeat(33)}`;
+    const sale = (at: string, timestamp: number, qort: string) => ({
+      tradeTimestamp: timestamp,
+      qortAmount: qort,
+      btcAmount: '0.10000000',
+      foreignAmount: '0.20000000',
+      atAddress: at,
+      sellerAddress: SELLER,
+      buyerReceivingAddress: BUYER,
+    });
+    // As Core 6.1.9 answers without a limit: every coin's trades, merged.
+    answer = (path) =>
+      query(path).get('sellerPublicKey')
+        ? {
+            body: [
+              sale(`A${'1'.repeat(33)}`, 100, '1.00000000'),
+              sale(`A${'2'.repeat(33)}`, 300, '2.50000000'),
+              sale(`A${'2'.repeat(33)}`, 300, '2.50000000'),
+              {
+                ...sale(`A${'3'.repeat(33)}`, 200, '4'),
+                buyerReceivingAddress: '',
+              },
+            ],
+          }
+        : { body: [] };
+    const read = await portalTradesRead(ADDRESS, KEY).load();
+    expect(read.sold).toBe(750_000_000n);
+    expect(read.sales).toEqual([
+      {
+        timestamp: 300,
+        qortAmount: '2.50000000',
+        foreignAmount: '0.20000000',
+        atAddress: `A${'2'.repeat(33)}`,
+        seller: SELLER,
+        buyer: BUYER,
+      },
+      {
+        timestamp: 100,
+        qortAmount: '1.00000000',
+        foreignAmount: '0.20000000',
+        atAddress: `A${'1'.repeat(33)}`,
+        seller: SELLER,
+        buyer: BUYER,
+      },
     ]);
   });
 

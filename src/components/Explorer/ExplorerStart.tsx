@@ -1,7 +1,8 @@
 /**
  * The Explorer's start page: one field for any account, your own account,
- * the accounts explored on this device (when remembering is on), and the
- * whole chain's latest transactions (chain/ChainLatest.tsx).
+ * the accounts explored on this device (when remembering is on), the whole
+ * chain's latest transactions (chain/ChainLatest.tsx), and, for a viewer the
+ * level 5+ rule lets in, the accounts picked to compare.
  * Read-only: nothing here sends anything.
  */
 import { Box, Button, ButtonBase, Typography } from '@mui/material';
@@ -10,6 +11,7 @@ import { shortAddress } from '../../lib/explorer/addresses';
 import { primaryNameRead } from '../../lib/explorer/reads';
 import { visibleName } from '../../lib/explorer/rules';
 import { ChainLatest } from './chain/ChainLatest';
+import { ComparePicks } from './compare/ComparePicks';
 import { useExplorer, useExplorerRead } from './ExplorerContext';
 import { ExplorerAvatar, ExplorerSearchField } from './ExplorerSearchField';
 import { cap, mutedText, panelSx, Section } from './parts';
@@ -108,6 +110,7 @@ export function ExplorerStart({
           </Box>
         </Section>
       ) : null}
+      <ComparePicks />
       {recent.length ? (
         <Section
           id="explorer-recent"

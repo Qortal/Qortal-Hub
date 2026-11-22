@@ -344,6 +344,120 @@ closed asset order).
 **An AT's page** has none of it: an AT never mints, and what its QORT does
 is the trades it settles, which the traders' QORT purchased / sold add up.
 
+## Compare
+
+Two to four accounts side by side, for a viewer the level 5+ rule lets in: a
+step of the window of its own, with Back, Forward and the trail. Like
+Connections, it is evidence, never a verdict.
+
+- **Picking:** "Add to compare" in the account header (it says how many are
+  picked, with "Compare now"; its name for a screen reader starts with the
+  words it shows), "Compare with…" there to find the other account,
+  and the start page's "Picked to compare", each with Remove, then Clear and
+  Compare. At most 4, no duplicates; a name, an AT, a transaction or a mistyped
+  address in the page's own field is handled as on the start page, and a name
+  looked up is dropped when another was typed since. The picks are kept for
+  each Hub account apart while Hub runs (`explorer-compare:<address>`, session
+  storage), cleared when the Hub account changes; when that storage fails,
+  picking still works in the window. Adding or removing an account on the page
+  is a new step, so Back shows the comparison before.
+- **The cards:** a letter (A to D) for each account, its picture and name, its
+  address with Copy, its chips; an address never used says so and reads
+  nothing more. "Add another account" shows only when fewer than two of the
+  accounts picked can be compared (not when one is still being read, or its
+  read failed: its card says so, with Retry).
+- **Recorded between them,** for each pair: the QORT payments each way, read
+  exactly by sender and recipient (`readPaymentsBetween`, Connections' read
+  for exchanges: 100 a read, up to 1,000 a way, one more row then says whether
+  there are older ones); trade portal sales, from the Overview's Trade Portal
+  read (`portalTradesRead`, the same cache entry: each side once, without a
+  limit, since Core applies a limit to each coin's trades apart and its pages
+  skip sales), matched to the other account by the address the buyer received
+  the QORT at, so a buyer without a public key is found too (a sale Core gives
+  no time, as a pruned node can, says "time not known" instead of a date; the
+  row's dates are those of the sales with a time, and it says how many have
+  none);
+  and, from each account's own lists (Connections' reads and findings, never a
+  second copy), Q-Asset transfers, multi-payments, reward shares, level moves
+  (once, from whichever side's list holds it), name sales and Q-Asset trades.
+  Each row opens to the transactions behind it. "Checked, nothing found" names
+  only what was read in full; what was read in part says "In what was read so
+  far". On a node without the payments read, payments come from the lists, and
+  the section says so. A Refresh that couldn't read the payments between them
+  again keeps the ones read before on screen, with Retry.
+- **Timeline together:** where each one's first QORT came from, its name
+  (bought, or registered when its name transactions were all read), its first
+  reward share to itself and its level moves, oldest first, with the blocks or
+  the time between them. It says when older ones may be missing, and when a
+  read it needs failed (when an account was first seen, which places its
+  name, too).
+- **In common:** a shared first sponsor (from Minting lists read to their end;
+  with how many accounts the sponsor sponsored, "there may be more" when its
+  list stopped short), a shared first payer (a first QORT payment is a
+  PAYMENT, as on the Funded page: a multi-payment is another first
+  transaction), the same accounts in their
+  payments (both paid it, it paid both, or one paid it and it paid the other),
+  and groups two or more of them are in, smallest first, MINTER aside. The
+  compared accounts, AT addresses and accounts that have sent 1,000 QORT
+  payments or more (one row at offsets 99, 499 and 999 says it) are left out
+  of the accounts in their payments, and counted.
+- **Side by side:** names, first seen, first QORT from, level, blocks minted
+  (with the adjustment, as the Overview's Total blocks minted), minting
+  penalty (with a minus sign, as the Overview writes it), balance, MINTER,
+  first sponsor, sponsored, minting now, last sent and groups, a row each;
+  "same for all" when they match. In a narrow window the table stacks.
+- **What was read,** for each account as on Connections, and for each pair.
+- **Reads:** the Connections tab's reads, the same cache entries, two accounts
+  at a time (the third and fourth start once each of the first two was read
+  with its lists, or its read failed, or the node doesn't know it; one still
+  being looked up holds them back); the
+  pairs two at a time; In common's, the timeline's and Side by side's own reads
+  once they near the screen. A failed read keeps what was read and is named,
+  with one Retry for all. Answers for an account no longer compared are
+  dropped.
+
+## Sponsees and Funded
+
+Two more steps for the same viewers, each opened from a sentence on Connections
+or Compare, with Back, Forward and the trail.
+
+- **The accounts it sponsored** (from Connections' row of the accounts it
+  sponsored, In common's shared sponsor, and Compare's): every account it made
+  a reward share to, from its Minting list (the same cache entry as its
+  Connections tab's: 100 a read, Read older up to 1,000), each with when and at
+  what percent, whether the share was removed and how many blocks later, how
+  many shares in all ("in what was read" when its list stopped short), and,
+  once near the screen, its level and where it stands in MINTER. Sorted the
+  first sponsored first, the latest first, shares still running first, minting
+  now first, or most shares first. "None" only from a list read to its end;
+  otherwise the count says "there may be more". Pick 2 to 4 of them to compare
+  (with four picked, the other boxes are off).
+- **Whose first QORT payment came from it** (from "where its first QORT came
+  from"): its QORT payments sent, oldest first
+  (`/transactions/payments/between?senderAddress=…&reverse=false`, 100 a read,
+  up to 1,000; one more row then says whether it sent more), the accounts it
+  paid in the order it first paid each, and for each the earliest QORT payment
+  it received (`recipientAddress`, one row): 50 checked at once, 4 at a time,
+  then "Check more" for the next 50. A first QORT payment is a PAYMENT here,
+  as in In common and the checks below. Payments to AT addresses are left out
+  and counted, once per address. On a node without the payments read, it says
+  so. A Refresh that couldn't read its payments again keeps the ones read
+  before on screen, with Retry.
+- **Checks across these accounts,** on the Sponsees page (Funded has none):
+  who made their first QORT payment (grouped by who paid it) and where their
+  QORT went (each one's first 1,000 QORT payments sent at most, grouped by who
+  received them, saying which sent more), each on request, two accounts at a
+  time, with Stop. Stop and leaving the page end them: no account starts
+  after, and one being checked makes no more reads (it isn't counted). Their
+  sentences count the accounts checked ("of the 2 accounts checked"), one
+  account checked has a sentence of its own, and a node that can't read
+  payments between accounts says so. A check's results belong to its step:
+  Back and Forward show them as they were left.
+- **Silent for everyone else:** no "Add to compare", no picks on the start
+  page, no links to these steps, nothing read; a Compare, Sponsees or Funded
+  step a viewer may no longer see shows the account it was about, on its
+  Overview.
+
 ## Transactions
 
 - **Read 100 at a time,** newest first, by address
@@ -574,6 +688,8 @@ that block alone, oldest first).
 | `src/components/Explorer/names/`        | the Names tab, a name's parts and history, a name's own page (`NameLifeView.tsx`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `src/components/Explorer/chain/`        | Transactions on Qortal: the step, its pickers and pages, what waits, the start page's latest transactions and the link from a transaction's block; its reads and rules are `src/lib/explorer/chainTx.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `src/components/Explorer/connections/`  | the Connections tab, its rows, payments, In common and the exchange notice; `useExplorerAccess.ts` runs the rule in the window; the Overview's Direct links (`overview/DirectLinksPreview.tsx`)                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `src/components/Explorer/compare/`      | Compare: its step, cards, sections and picks (`compareSteps.tsx`, `useCompareData.ts`); its rules, reads and picks in `src/lib/explorer/` (`compare.ts`, `compareReads.ts`, `comparePicks.ts`)                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `src/components/Explorer/sets/`         | the Sponsees and Funded steps and the checks across a set (`SetChecks.tsx`); their rules in `src/lib/explorer/sets.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `src/components/Explorer/overview/`     | the Overview's sections; the All list it holds (`useAccountHistory.ts`), the QORT figures (`QortFacts.tsx`, `Fact.tsx`) and Activity (`activity/`: the section, the chart, its colours and words, the settings dialog)                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `src/i18n/locales/<lang>/explorer.json` | its text, in all 12 languages                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 

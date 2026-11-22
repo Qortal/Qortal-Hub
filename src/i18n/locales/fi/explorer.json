@@ -211,6 +211,221 @@
     "minting_penalty": "minttausrangaistus",
     "minting_penalty_explained": "Solmu on kirjannut tälle tilille minttausrangaistuksen. Määrä näkyy kohdassa ”Huomiot”."
   },
+  "compare": {
+    "add": {
+      "already": "On jo tässä vertailussa kirjaimella {{letter}}.",
+      "at": "Tämä on AT-osoite (ohjelma lohkoketjussa), ei henkilökohtainen tili.",
+      "full": "Vertailuun mahtuu 4 tiliä. Poista ensin yksi.",
+      "label": "lisää vertailtava tili",
+      "looking_up": "Haetaan ”{{name}}”…",
+      "more": "Lisää vielä yksi tili, johon sitä verrataan.",
+      "transaction": "Tämä on tapahtuma, ei tili."
+    },
+    "card": {
+      "about": "tietoja: {{name}} ({{letter}})",
+      "copy_address": "kopioi tilin {{name}} ({{letter}}) osoite",
+      "letter": "tili {{letter}}",
+      "list": "vertailtavat tilit",
+      "loading": "luetaan tiliä {{letter}}",
+      "remove": "poista {{name}} ({{letter}}) tästä vertailusta",
+      "remove_short": "poista tästä vertailusta"
+    },
+    "check": {
+      "payments": "maksut kumpaankin suuntaan",
+      "portal_trades": "myynnit kauppaportaalissa",
+      "reward_shares": "palkkionjaot niiden välillä"
+    },
+    "common": {
+      "band": "se on lähettänyt {{band}}+ QORT-maksua",
+      "bands_failed": "Joidenkin näiden tilien lähettämien maksujen määrää ei voitu lukea, joten erittäin aktiivinen tili voi yhä olla listalla.",
+      "blocks": "lohkot {{list}}",
+      "check": {
+        "counterparties": "samat tilit niiden maksuissa",
+        "first_payer": "yhteinen ensimmäinen maksaja",
+        "groups": "yhteiset ryhmät (MINTER pois lukien)",
+        "sponsor": "yhteinen ensimmäinen sponsori"
+      },
+      "count_both": "{{letter}} lähetti {{sent}} ja vastaanotti {{received}}",
+      "count_received": "{{letter}} vastaanotti {{payments}}",
+      "count_sent": "{{letter}} lähetti {{payments}}",
+      "counterparties": "samat tilit niiden maksuissa",
+      "failed": "Kaikkea, mitä ”Yhteistä” tarvitsee, ei voitu lukea.",
+      "firsts": "yhteinen sponsori tai ensimmäinen maksaja",
+      "groups": "ryhmät, joissa on kaksi tai useampi niistä, pienin ensin",
+      "left_ats_one": "{{shown}} AT-osoite (ohjelma lohkoketjussa)",
+      "left_ats_other": "{{shown}} AT-osoitetta (ohjelmia lohkoketjussa)",
+      "left_busy_one": "{{shown}} tili, joka on lähettänyt 1000+ QORT-maksua",
+      "left_busy_other": "{{shown}} tiliä, jotka ovat lähettäneet 1000+ QORT-maksua",
+      "left_out": "Jätetty pois: {{list}}.",
+      "payments_note": "Kunkin tilin luetuista maksuista, omaisuuserien siirroista ja monimaksuista (alla); vertailtavat tilit itse on jätetty pois.",
+      "payments_one": "{{shown}} maksu",
+      "payments_other": "{{shown}} maksua",
+      "reading": "luetaan, mitä niillä on yhteistä",
+      "sponsor_count_more_one": "Se sponsoroi {{shown}} tilin uusimmissa luetuissa minttaustapahtumissaan: niitä voi olla enemmän.",
+      "sponsor_count_more_other": "Se sponsoroi {{shown}} tiliä uusimmissa luetuissa minttaustapahtumissaan: niitä voi olla enemmän.",
+      "sponsor_count_one": "Se sponsoroi kaikkiaan {{shown}} tilin.",
+      "sponsor_count_other": "Se sponsoroi kaikkiaan {{shown}} tiliä.",
+      "title": "yhteistä"
+    },
+    "coverage": {
+      "pair": "{{a}} ja {{b}}",
+      "pairs_more": "Pareissa {{pairs}} luettiin 1000 uusinta QORT-maksua kumpaankin suuntaan: vanhempiakin on.",
+      "title": "mitä luettiin"
+    },
+    "failed": {
+      "list": "Ei voitu lukea: {{list}}.",
+      "of": "{{part}} ({{letter}})",
+      "pair_payments": "QORT-maksut tilien {{a}} ja {{b}} välillä",
+      "portal": "sen myynnit kauppaportaalissa"
+    },
+    "neutral": "Mitä lohkoketju kirjasi näistä tileistä, lukuineen, lohkoineen ja päivämäärineen: ei koskaan sitä, mitä se tarkoittaa.",
+    "none": "Tarkistettu, mitään ei löytynyt: {{list}}.",
+    "none_so_far": "Tähän mennessä luetuista ei löytynyt mitään: {{list}}.",
+    "picks": {
+      "clear": "tyhjennä vertailuun valitut tilit",
+      "compare": "vertaa ({{picked}})",
+      "one_more": "Valitse vielä yksi tili, niin voit verrata niitä rinnakkain.",
+      "remove": "poista {{name}} vertailusta",
+      "remove_short": "poista vertailusta",
+      "title": "valittu vertailuun"
+    },
+    "portal": {
+      "row": "{{amount}} QORT · {{date}}",
+      "row_no_time": "{{amount}} QORT · aika ei tiedossa",
+      "trades_one": "{{shown}} myynti",
+      "trades_other": "{{shown}} myyntiä",
+      "when_some_unknown_one": "{{when}} ({{shown}} myynti: aika ei tiedossa)",
+      "when_some_unknown_other": "{{when}} ({{shown}} myyntiä: aika ei tiedossa)",
+      "when_unknown": "aika ei tiedossa"
+    },
+    "reading": "Luetaan vielä: {{list}}.",
+    "recorded": {
+      "list": "{{words}} tilien {{actor}} ja {{other}} välillä",
+      "note": "Kunkin parin väliset QORT-maksut luetaan tarkasti kumpaankin suuntaan, enintään 1000 kumpaankin suuntaan, ja kunkin tilin myynnit kauppaportaalissa sen omalla avaimella (kaikki). Omaisuuserien siirrot, monimaksut, palkkionjaot, minttaustason siirrot, nimien myynnit ja omaisuuserien kaupat ovat kunkin tilin omista tapahtumista, siltä osin kuin ne luettiin (alla).",
+      "note_lists": "Tämä solmu ei pysty lukemaan kahden tilin välisiä maksuja tarkasti: jokainen maksu tässä on kunkin tilin omista tapahtumista, siltä osin kuin ne luettiin (alla). Myynnit kauppaportaalissa luetaan kunkin myyjän omalla avaimella (kaikki).",
+      "pair": "{{a}} ja {{b}}",
+      "show": "näytä: {{words}} tilien {{actor}} ja {{other}} välillä",
+      "title": "kirjattu niiden välillä"
+    },
+    "say": {
+      "common": {
+        "first_payer": {
+          "all": "Kaikki {{accounts}} tiliä saivat ensimmäisen QORT-maksunsa tililtä {{from}}",
+          "both": "Molemmat saivat ensimmäisen QORT-maksunsa tililtä {{from}}",
+          "some": "{{letters}} saivat ensimmäisen QORT-maksunsa tililtä {{from}}"
+        },
+        "paid": {
+          "all": "Kaikki {{accounts}} tiliä maksoivat tilille {{other}}",
+          "both": "Molemmat maksoivat tilille {{other}}",
+          "some": "{{letters}} maksoivat tilille {{other}}"
+        },
+        "paid_by": {
+          "all": "{{other}} maksoi kaikille {{accounts}} tilille",
+          "both": "{{other}} maksoi molemmille",
+          "some": "{{other}} maksoi tileille {{letters}}"
+        },
+        "sponsor": {
+          "all": "Kaikkien {{accounts}} tilin ensimmäinen sponsori oli {{sponsor}}",
+          "both": "Molempien ensimmäinen sponsori oli {{sponsor}}",
+          "some": "Tilien {{letters}} ensimmäinen sponsori oli {{sponsor}}"
+        },
+        "through": "{{from}} maksoi tilille {{other}}, ja {{other}} maksoi tilille {{to}}"
+      },
+      "portal_sold_one": "Myi {{amount}} tilille {{other}} kauppaportaalissa {{trades}} myynnissä",
+      "portal_sold_other": "Myi {{amount}} tilille {{other}} kauppaportaalissa {{trades}} myynnissä",
+      "registered_name": "Rekisteröi nimen {{name}} (nyt sen ensisijainen nimi)",
+      "side_account": "{{account}}",
+      "side_first_level": "Sen minttaustaso tililtä {{from}}",
+      "side_first_payment": "{{from}}",
+      "side_first_share": "Palkkionjako tililtä {{from}}",
+      "side_first_transfer": "Omaisuuserän siirto tililtä {{from}}",
+      "side_primary": "{{name}}",
+      "side_primary_more_one": "{{name}} ja {{others}} muu",
+      "side_primary_more_other": "{{name}} ja {{others}} muuta",
+      "side_primary_more_plus_one": "{{name}} ja {{others}}+ muuta",
+      "side_primary_more_plus_other": "{{name}} ja {{others}}+ muuta"
+    },
+    "side": {
+      "accounts_more_one": "{{shown}} tili luetuissa",
+      "accounts_more_other": "{{shown}} tiliä luetuissa",
+      "accounts_one": "{{shown}} tili",
+      "accounts_other": "{{shown}} tiliä",
+      "blocks_one": "{{shown}} lohko",
+      "blocks_other": "{{shown}} lohkoa",
+      "caption": "tilit rinnakkain",
+      "fact": "tieto",
+      "failed": "ei voitu lukea",
+      "failed_line": "Osaa näistä ei voitu lukea.",
+      "first": {
+        "at": "AT (ohjelma lohkoketjussa)",
+        "genesis": "genesis-lohko",
+        "level": "minttaustaso",
+        "payment": "maksu",
+        "share": "palkkionjako",
+        "transfer": "omaisuuserän siirto"
+      },
+      "label": {
+        "blocks": "mintatut lohkot",
+        "first_qort": "ensimmäisen QORTin lähde",
+        "last_sent": "lähetti viimeksi tapahtuman",
+        "level": "taso",
+        "minting_now": "minttaa nyt",
+        "names": "nimet",
+        "penalty": "minttausrangaistus",
+        "sponsor": "ensimmäinen sponsori",
+        "sponsored": "sponsoroidut"
+      },
+      "never": "ei koskaan",
+      "no": "ei",
+      "no_primary_more_one": "ei ensisijaista nimeä ({{shown}}+ nimeä)",
+      "no_primary_more_other": "ei ensisijaista nimeä ({{shown}}+ nimeä)",
+      "no_primary_one": "ei ensisijaista nimeä ({{shown}} nimi)",
+      "no_primary_other": "ei ensisijaista nimeä ({{shown}} nimeä)",
+      "none": "ei yhtään",
+      "none_found": "ei löytynyt",
+      "none_so_far": "ei luetuissa",
+      "not_found": "ei löytynyt",
+      "number": "{{value}}",
+      "of": "{{letter}}:",
+      "qort": "{{amount}} QORT",
+      "same": "kaikilla sama:",
+      "sponsor_partial": "ei tiedossa luetun perusteella",
+      "title": "rinnakkain",
+      "yes": "kyllä"
+    },
+    "timeline": {
+      "block": "lohko {{block}}",
+      "blocks_later_one": "{{blocks}} lohko myöhemmin",
+      "blocks_later_other": "{{blocks}} lohkoa myöhemmin",
+      "failed": "Kaikkea, mitä aikajana tarvitsee, ei voitu lukea.",
+      "label": "yhteinen aikajana, vanhin ensin",
+      "moments_later": "hetkeä myöhemmin",
+      "open": "{{when}}: avaa tapahtuma",
+      "partial": "Luetun perusteella: tilien {{letters}} vanhempia palkkionjakoja, minttaustason siirtoja tai nimiä voi puuttua.",
+      "reading": "luetaan, mistä niiden ensimmäinen QORT tuli, sekä niiden palkkionjakoja, minttaustason siirtoja ja nimiä",
+      "same_block": "samassa lohkossa",
+      "time_later": "{{time}} myöhemmin",
+      "title": "yhteinen aikajana",
+      "who": "{{letter}}:"
+    },
+    "title": "tilien vertailu",
+    "toggle": {
+      "add": "lisää vertailuun",
+      "add_label": "lisää vertailuun: {{name}}",
+      "added": "Lisätty vertailuun ({{picked}}/{{max}}).",
+      "compare_now": "vertaa nyt",
+      "picked": "valittu vertailuun",
+      "picked_label": "valittu vertailuun: {{name}}",
+      "removed": "Poistettu vertailusta."
+    },
+    "with": {
+      "button": "vertaa tiliin…",
+      "field": "nimi tai osoite",
+      "lead": "Etsi tili, johon {{name}} verrataan.",
+      "same": "Tämä on sama tili. Etsi toinen.",
+      "title": "vertaa tiliin…"
+    }
+  },
   "connections": {
     "at_label": "AT {{address}}",
     "block": "lohko {{block}}",
@@ -522,6 +737,37 @@
     "trades_info": "Sen valmiit kaupat Trade Portalissa, kaikissa ketjuissa: ostettu {{bought}} QORT, myyty {{sold}} QORT.",
     "trades_no_key_info": "Se ei ole koskaan tehnyt omaa tapahtumaa, joten se ei ole myynyt Trade Portalissa (myynti alkaa omalla kauppasopimuksella). Ostettu {{bought}} QORT on se, mitä muiden tilien kauppasopimukset ovat sille maksaneet koko sen historian aikana."
   },
+  "funded": {
+    "ats_one": "Maksut {{shown}} AT-osoitteeseen (ohjelma lohkoketjussa) on jätetty pois.",
+    "ats_other": "Maksut {{shown}} AT-osoitteeseen (ohjelmia lohkoketjussa) on jätetty pois.",
+    "check_failed_one": "{{shown}} tilin tarkistus epäonnistui.",
+    "check_failed_other": "{{shown}} tilin tarkistus epäonnistui.",
+    "check_more_one": "tarkista vielä {{shown}}",
+    "check_more_other": "tarkista vielä {{shown}}",
+    "checking": "Tarkistetaan, kenen ensimmäinen QORT-maksu se oli: {{done}}/{{total}}…",
+    "list_title": "niiden ensimmäinen QORT-maksu tuli siltä",
+    "loading": "luetaan sen maksuja",
+    "none": "Se ei ole lähettänyt QORT-maksuja muille tileille.",
+    "none_so_far": "Yksikään luetuista maksuista ei mennyt toiselle tilille.",
+    "note": "Tilin ensimmäinen QORT-maksu on tässä varhaisin QORT-maksu, jonka se vastaanotti: omaisuuserien siirtoja, monimaksuja ja AT-ohjelmien maksuja ei lasketa.",
+    "paid_one": "Luetuissa maksuissa se maksoi {{shown}} tilille.",
+    "paid_other": "Luetuissa maksuissa se maksoi {{shown}} tilille.",
+    "read_all_one": "kaikki sen lähetetyt QORT-maksut ({{shown}})",
+    "read_all_other": "kaikki sen {{shown}} lähetettyä QORT-maksua",
+    "read_ceiling_one": "sen ensimmäiset lähetetyt QORT-maksut ({{shown}}; se lähetti enemmän, Lohkoketjuselain lukee enintään 1000)",
+    "read_ceiling_other": "sen {{shown}} ensimmäistä lähetettyä QORT-maksua (se lähetti enemmän; Lohkoketjuselain lukee enintään 1000)",
+    "read_first_one": "sen ensimmäiset lähetetyt QORT-maksut ({{shown}}; se on voinut lähettää enemmän)",
+    "read_first_other": "sen {{shown}} ensimmäistä lähetettyä QORT-maksua (se on voinut lähettää enemmän)",
+    "read_later": "lue myöhemmät maksut",
+    "read_single": "sen ainoa lähetetty QORT-maksu",
+    "result_all_one": "Se teki ensimmäisen QORT-maksun {{shown}} tilille niistä.",
+    "result_all_other": "Se teki ensimmäisen QORT-maksun {{shown}} tilille niistä.",
+    "result_some_one": "Tähän mennessä tarkistetuista {{checked}} tilistä se teki ensimmäisen QORT-maksun {{shown}} tilille.",
+    "result_some_other": "Tähän mennessä tarkistetuista {{checked}} tilistä se teki ensimmäisen QORT-maksun {{shown}} tilille.",
+    "row": "{{amount}} QORT, {{date}} · lohko {{block}}",
+    "title": "ensimmäiset QORT-maksut tililtä {{name}}",
+    "unsupported": "Tämä solmu ei pysty lukemaan tilien välisiä maksuja, joita tämä tarvitsee."
+  },
   "groups": {
     "admin": "ylläpitäjä",
     "closed": "suljettu ryhmä",
@@ -706,12 +952,94 @@
     "label": "etsi tili tai tapahtuma",
     "placeholder": "nimi, osoite tai tapahtuman allekirjoitus"
   },
+  "set_checks": {
+    "again": "tarkista uudelleen",
+    "done_one": "Tarkistettu {{shown}} tili.",
+    "done_other": "Tarkistettu kaikki {{shown}} tiliä.",
+    "failed_one": "{{shown}} tilin lukeminen epäonnistui.",
+    "failed_other": "{{shown}} tilin lukeminen epäonnistui.",
+    "first": {
+      "about": "Mistä kunkin tilin ensimmäinen QORT tuli, ryhmiteltynä maksajan mukaan. Kaksi tiliä kerrallaan.",
+      "empty": "Tarkistetuista ei löytynyt ensimmäisiä QORT-maksuja.",
+      "none_one": "Ensimmäistä QORTia ei löytynyt {{shown}} tilille.",
+      "none_other": "Ensimmäistä QORTia ei löytynyt {{shown}} tilille.",
+      "other_one": "{{shown}} tilillä oli muu ensimmäinen tapahtuma (monimaksu, palkkionjako, minttaustason siirto, omaisuuserän siirto, AT tai genesis-lohko).",
+      "other_other": "{{shown}} tilillä oli muu ensimmäinen tapahtuma (monimaksu, palkkionjako, minttaustason siirto, omaisuuserän siirto, AT tai genesis-lohko).",
+      "title": "kuka teki niiden ensimmäisen QORT-maksun"
+    },
+    "progress": "Tarkistettu {{done}}/{{total}}…",
+    "start_one": "tarkista {{shown}} tili",
+    "start_other": "tarkista {{shown}} tiliä",
+    "stop": "pysäytä",
+    "stopped": "Pysäytetty, kun {{done}}/{{total}} oli tarkistettu.",
+    "title": "tarkistukset näille tileille",
+    "went": {
+      "about": "Kunkin tilin lähettämät QORT-maksut (enintään sen 1000 ensimmäistä), ryhmiteltynä vastaanottajan mukaan. Kaksi tiliä kerrallaan.",
+      "ats_one": "Maksut {{shown}} AT-osoitteeseen (ohjelma lohkoketjussa) on jätetty pois.",
+      "ats_other": "Maksut {{shown}} AT-osoitteeseen (ohjelmia lohkoketjussa) on jätetty pois.",
+      "beyond_one": "{{shown}} niistä lähetti enemmän kuin Lohkoketjuselain lukee (1000 kultakin): sen myöhempiä maksuja ei lasketa.",
+      "beyond_other": "{{shown}} niistä lähetti enemmän kuin Lohkoketjuselain lukee (1000 kultakin): niiden myöhempiä maksuja ei lasketa.",
+      "empty": "Tarkistetuilla ei ole lähetettyjä QORT-maksuja.",
+      "title": "minne niiden QORT meni"
+    }
+  },
+  "sets": {
+    "link": {
+      "funded": "kuka sai ensimmäisen QORT-maksunsa tililtä {{name}}",
+      "funded_own": "kuka sai ensimmäisen QORT-maksunsa tältä tililtä",
+      "sponsees": "tilit, joita {{name}} sponsoroi",
+      "sponsees_own": "tilit, joita se sponsoroi"
+    },
+    "say": {
+      "first_payer_one": "{{from}} teki ensimmäisen QORT-maksun {{accounts}} tilille {{total}} tarkistetusta tilistä",
+      "first_payer_other": "{{from}} teki ensimmäisen QORT-maksun {{accounts}} tilille {{total}} tarkistetusta tilistä",
+      "first_payer_single": "{{from}} teki ensimmäisen QORT-maksun {{accounts}} tilille (ainoa tarkistettu)",
+      "went_to_one": "{{to}} vastaanotti {{amount}} {{accounts}} tililtä {{total}} tarkistetusta tilistä",
+      "went_to_other": "{{to}} vastaanotti {{amount}} {{accounts}} tililtä {{total}} tarkistetusta tilistä",
+      "went_to_single": "{{to}} vastaanotti {{amount}} {{accounts}} tililtä (ainoa tarkistettu)"
+    }
+  },
   "settings": {
     "activity": "aktiivisuuden asetukset",
     "activity_hint": "Kuinka paljon yleiskatsaus lukee ensin ja mitkä virstanpylväät sen aktiivisuus näyttää.",
     "remember": "muista selaamani tilit tällä laitteella",
     "remember_hint": "Vain niiden osoitteet, tälle Hub-tilille. Kun poistat tämän käytöstä, ne unohdetaan.",
     "title": "lohkoketjuselaimen asetukset"
+  },
+  "sponsees": {
+    "list_title": "sponsoroidut",
+    "loading": "luetaan tilejä, joita se sponsoroi",
+    "minting_now_one": "{{shown}} niistä minttaa nyt.",
+    "minting_now_other": "{{shown}} niistä minttaa nyt.",
+    "none": "Se ei tehnyt palkkionjakoja muille tileille.",
+    "none_so_far": "Se ei tehnyt palkkionjakoja muille tileille uusimmissa luetuissa minttaustapahtumissaan: vanhempia voi olla.",
+    "pick": "valitse {{name}} vertailuun",
+    "pick_hint": "Valitse 2–{{max}} tiliä, niin voit verrata niitä rinnakkain.",
+    "row": {
+      "about": "tietoja: {{name}}",
+      "again": "sponsoroitu sen jälkeen uudelleen",
+      "failed": "Sen tasoa ja asemaa MINTERissä ei voitu lukea.",
+      "not_removed": "ei poistettu",
+      "removed_one": "poistettu {{blocks}} lohko myöhemmin (lohko {{block}})",
+      "removed_other": "poistettu {{blocks}} lohkoa myöhemmin (lohko {{block}})",
+      "shares_one": "yhteensä {{shown}} palkkionjako",
+      "shares_other": "yhteensä {{shown}} palkkionjakoa",
+      "shares_read_one": "{{shown}} palkkionjako luetuissa",
+      "shares_read_other": "{{shown}} palkkionjakoa luetuissa",
+      "sponsored": "Sponsoroitu {{date}}, osuus {{percent}} (lohko {{block}})"
+    },
+    "sort": {
+      "active": "voimassa oleva jako ensin",
+      "first": "varhaisin sponsorointi ensin",
+      "latest": "viimeisin sponsorointi ensin",
+      "minting": "nyt minttaavat ensin",
+      "shares": "eniten palkkionjakoja ensin"
+    },
+    "summary_more_one": "{{shown}} tili sponsoroitu ({{span}}) sen uusimmissa luetuissa minttaustapahtumissa: niitä voi olla enemmän.",
+    "summary_more_other": "{{shown}} tiliä sponsoroitu ({{span}}) sen uusimmissa luetuissa minttaustapahtumissa: niitä voi olla enemmän.",
+    "summary_one": "{{shown}} tili sponsoroitu ({{span}}).",
+    "summary_other": "{{shown}} tiliä sponsoroitu ({{span}}).",
+    "title": "tilit, joita {{name}} sponsoroi"
   },
   "start": {
     "clear": "tyhjennä",

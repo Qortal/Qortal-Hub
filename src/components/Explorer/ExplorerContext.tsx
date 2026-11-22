@@ -223,6 +223,8 @@ interface ReadsShown<T> {
   joined: string;
   data: Map<string, T>;
   failed: Set<string>;
+  /** Answers kept from before while their keys are read again (`keep`). */
+  stale: Set<string>;
 }
 
 /** How many keys `joined` holds. */
@@ -236,10 +238,18 @@ const keyCount = (joined: string) => (joined ? joined.split('\n').length : 0);
  * Retry) shows here too. Answers that come back after the keys changed,
  * the window refreshed, or the part went are dropped; a failure is kept
  * apart, never an answer.
+ *
+ * With `keep`, a Refresh or Retry of the same keys keeps each answer shown
+ * before on screen while it is read again, and when that read fails (the
+ * key is then in `failed` too, with Retry): what was read is never wiped
+ * by a read that couldn't be made again.
  */
 export function useExplorerReads<T>(
   specs: readonly ReadSpec<T>[] | null,
-  { concurrency = Number.POSITIVE_INFINITY }: { concurrency?: number } = {}
+  {
+    concurrency = Number.POSITIVE_INFINITY,
+    keep = false,
+  }: { concurrency?: number; keep?: boolean } = {}
 ): ReadsState<T> {
   const { cache, version } = useExplorer();
   const joined = (specs ?? []).map((spec) => spec.key).join('\n');
@@ -250,6 +260,7 @@ export function useExplorerReads<T>(
     joined: '',
     data: new Map(),
     failed: new Set(),
+    stale: new Set(),
   });
 
   const start = useCallback(
@@ -264,7 +275,18 @@ export function useExplorerReads<T>(
         if (kept !== undefined) data.set(spec.key, kept);
         else todo.push(spec);
       }
-      setShown({ joined: keysOf, data, failed: new Set() });
+      setShown((was) => {
+        const shownData = new Map(data);
+        const stale = new Set<string>();
+        // The same keys read again: what was shown stays until its new answer.
+        if (keep && was.joined === keysOf)
+          for (const spec of todo)
+            if (was.data.has(spec.key)) {
+              shownData.set(spec.key, was.data.get(spec.key) as T);
+              stale.add(spec.key);
+            }
+        return { joined: keysOf, data: shownData, failed: new Set(), stale };
+      });
       let next = 0;
       const settle = (patch: (was: ReadsShown<T>) => ReadsShown<T>) =>
         setShown((was) => (was.joined === keysOf ? patch(was) : was));
@@ -277,15 +299,22 @@ export function useExplorerReads<T>(
               force: forced.has(spec.key),
             });
             if (run.current !== id) return;
-            settle((was) =>
-              was.data.get(spec.key) === value
-                ? was
-                : { ...was, data: new Map(was.data).set(spec.key, value) }
-            );
+            settle((was) => {
+              if (was.data.get(spec.key) === value && !was.stale.has(spec.key))
+                return was;
+              const stale = new Set(was.stale);
+              stale.delete(spec.key);
+              return {
+                ...was,
+                data: new Map(was.data).set(spec.key, value),
+                stale,
+              };
+            });
           } catch {
             if (run.current !== id) return;
+            // An answer from before stays (with the failure said); a new one from another part wins.
             settle((was) =>
-              was.data.has(spec.key)
+              was.data.has(spec.key) && !was.stale.has(spec.key)
                 ? was
                 : { ...was, failed: new Set(was.failed).add(spec.key) }
             );
@@ -295,7 +324,7 @@ export function useExplorerReads<T>(
       const lanes = Math.min(Math.max(1, concurrency), todo.length);
       for (let lane_ = 0; lane_ < lanes; lane_++) void lane();
     },
-    [cache, concurrency]
+    [cache, concurrency, keep]
   );
 
   useEffect(() => {
@@ -313,7 +342,14 @@ export function useExplorerReads<T>(
           if (was.joined !== joined || was.data.get(key) === kept) return was;
           const failed = new Set(was.failed);
           failed.delete(key);
-          return { ...was, data: new Map(was.data).set(key, kept), failed };
+          const stale = new Set(was.stale);
+          stale.delete(key);
+          return {
+            ...was,
+            data: new Map(was.data).set(key, kept),
+            failed,
+            stale,
+          };
         });
       })
     );
@@ -339,13 +375,18 @@ export function useExplorerReads<T>(
     if (failedJoined) start(new Set(failedJoined.split('\n')));
   }, [start, failedJoined]);
 
-  if (shown.joined === joined)
+  if (shown.joined === joined) {
+    // An answer kept from before, read again, isn't settled until its new answer or failure.
+    let settled = shown.failed.size;
+    for (const key of shown.data.keys())
+      if (!shown.stale.has(key) && !shown.failed.has(key)) settled += 1;
     return {
       data: shown.data,
       failed: failedKeys,
-      loading: shown.data.size + shown.failed.size < keyCount(joined),
+      loading: settled < keyCount(joined),
       retry,
     };
+  }
   // The keys changed and their reads haven't started yet: what the cache has.
   const data = new Map<string, T>();
   for (const spec of specs ?? []) {
