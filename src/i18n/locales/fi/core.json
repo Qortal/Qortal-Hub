@@ -189,7 +189,7 @@
     "no_end": "ei päättymispäivää",
     "none_yet": "ei vielä budjetteja. Avaa Q-App tai verkkosivusto ja lisää budjetti tästä.",
     "not_covered": {
-      "publishing": "{{name}} julkaisee tätä jo, joten budjetti ei kata sitä uudelleen. Jos hyväksyt, se julkaistaan toiseen kertaan.",
+      "publishing": "Tätä julkaistaan jo, joten sovelluksen {{name}} budjetti ei kata sitä uudelleen. Jos hyväksyt, se julkaistaan toiseen kertaan.",
       "replaces": "sovelluksen {{name}} budjetti ei kata tätä: se korvaa jo julkaistun."
     },
     "not_saved": "budjettia ei voitu tallentaa tälle tietokoneelle.",

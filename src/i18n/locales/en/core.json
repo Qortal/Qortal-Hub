@@ -189,7 +189,7 @@
     "no_end": "no end date",
     "none_yet": "no budgets yet. Open a Q-App or website, then add one here.",
     "not_covered": {
-      "publishing": "{{name}} is already publishing this, so its budget doesn't cover it again. Approving publishes it a second time.",
+      "publishing": "This is already being published, so {{name}}'s budget doesn't cover it again. Approving publishes it a second time.",
       "replaces": "{{name}}'s budget doesn't cover this: it replaces something already published."
     },
     "not_saved": "the budget couldn't be saved on this PC.",

@@ -189,7 +189,7 @@
     "no_end": "sin fecha de fin",
     "none_yet": "aún no hay presupuestos. Abre una Q-App o un sitio web y añade uno aquí.",
     "not_covered": {
-      "publishing": "{{name}} ya está publicando esto, así que su presupuesto no lo cubre otra vez. Si lo apruebas, se publicará por segunda vez.",
+      "publishing": "Esto ya se está publicando, así que el presupuesto de {{name}} no lo cubre otra vez. Si lo apruebas, se publicará por segunda vez.",
       "replaces": "el presupuesto de {{name}} no cubre esto: reemplaza algo ya publicado."
     },
     "not_saved": "no se pudo guardar el presupuesto en este PC.",

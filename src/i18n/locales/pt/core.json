@@ -189,7 +189,7 @@
     "no_end": "sem data de término",
     "none_yet": "nenhum orçamento ainda. Abra um Q-App ou site e adicione um aqui.",
     "not_covered": {
-      "publishing": "{{name}} já está publicando isto, então o orçamento não cobre de novo. Se você aprovar, será publicado uma segunda vez.",
+      "publishing": "Isto já está sendo publicado, então o orçamento de {{name}} não cobre de novo. Se você aprovar, será publicado uma segunda vez.",
       "replaces": "o orçamento de {{name}} não cobre isto: substitui algo já publicado."
     },
     "not_saved": "não foi possível salvar o orçamento neste PC.",

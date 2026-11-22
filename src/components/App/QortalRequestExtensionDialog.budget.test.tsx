@@ -193,10 +193,10 @@ describe('the approval window when an app budget is used up or ended', () => {
     expect(onAccept).toHaveBeenCalledTimes(1);
   });
 
-  it('says when the app is already publishing the same thing', () => {
+  it('says when the same thing is already being published', () => {
     renderDialog({ ...usedUp, budget: { state: 'publishing' } } as Message);
     expect(screen.getByTestId('budget-not-covered-note').textContent).toBe(
-      "Opened-App is already publishing this, so its budget doesn't cover it again. Approving publishes it a second time."
+      "This is already being published, so Opened-App's budget doesn't cover it again. Approving publishes it a second time."
     );
     expect(screen.queryByTestId('budget-limit-note')).toBeNull();
   });

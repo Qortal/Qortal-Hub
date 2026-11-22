@@ -23,9 +23,9 @@ A resource is new when the node answers `NOT_PUBLISHED` for its service, name
 and identifier (`/arbitrary/resource/status/...`), it isn't being published
 right now, and it wasn't published from this Hub earlier this session (the
 node may not list it yet). Publishes the user approved in the window count
-too. An answer that can't be read counts as "exists". A request that waited
-its turn in the window's queue is checked with the node again before a
-budget pays for it. The identifier
+too. An answer that can't be read doesn't count as new, so the window asks.
+A request that waited its turn in the window's queue is checked with the
+node again before a budget pays for it. The identifier
 is the one Core publishes to: none, `''` and `default` are the default
 resource; the text `null` is an identifier of its own.
 
@@ -119,8 +119,9 @@ countdown, Accept delay, lock handling), with `budget` in its payload:
 - **replaces** or **publishing**: one line saying why the budget doesn't pay
   for a publish it would otherwise pay for: the node lists one of its
   resources, or this Hub published it earlier this session (`replaces`), or
-  the app is publishing the same resource right now (`publishing`, e.g. a
-  second tap on a like before the first one is published). When the node
+  the same resource is being published right now (`publishing`, by this app
+  or another one, e.g. a second tap on a like before the first one is
+  published). When the node
   can't say whether a resource exists, the window says nothing.
 
 A request that waited its turn shows the budget as it is when its window

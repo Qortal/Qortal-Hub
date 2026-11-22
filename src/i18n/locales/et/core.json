@@ -189,7 +189,7 @@
     "no_end": "lõppkuupäevata",
     "none_yet": "eelarveid veel pole. Ava Q-App või veebisait ja lisa eelarve siin.",
     "not_covered": {
-      "publishing": "{{name}} juba avaldab seda, seega eelarve ei kata seda uuesti. Kinnitamisel avaldatakse see teist korda.",
+      "publishing": "Seda juba avaldatakse, seega rakenduse {{name}} eelarve ei kata seda uuesti. Kinnitamisel avaldatakse see teist korda.",
       "replaces": "rakenduse {{name}} eelarve seda ei kata: see asendab juba avaldatut."
     },
     "not_saved": "eelarvet ei õnnestunud selles arvutis salvestada.",
