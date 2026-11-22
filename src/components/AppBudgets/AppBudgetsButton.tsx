@@ -24,6 +24,8 @@ type AppBudgetsButtonProps = {
   address: string | null | undefined;
   /** The Q-App or website on screen, when there is one. */
   currentApp: BudgetApp | null;
+  /** The tab it is open in. */
+  currentTabId?: string | null;
   buttonSx: SxProps<Theme>;
   tooltipTitle: (text: string) => ReactNode;
   tooltipSlotProps: object;
@@ -36,6 +38,7 @@ type AppBudgetsButtonProps = {
 export function AppBudgetsButton({
   address,
   currentApp,
+  currentTabId = null,
   buttonSx,
   tooltipTitle,
   tooltipSlotProps,
@@ -130,7 +133,11 @@ export function AppBudgetsButton({
         transformOrigin={{ horizontal: 'right', vertical: 'top' }}
       >
         {address && (
-          <AppBudgetsPanel address={address} currentApp={currentApp} />
+          <AppBudgetsPanel
+            address={address}
+            currentApp={currentApp}
+            currentTabId={currentApp ? currentTabId : null}
+          />
         )}
       </Popover>
     </>

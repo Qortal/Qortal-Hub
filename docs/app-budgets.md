@@ -79,7 +79,9 @@ as before; a request they allow doesn't touch the budget.
     expiresAt: number | null,
     limits: 'standard' | 'higher' | 'none',
     times: number[],    // when the actions of the last 24 h happened
-    recent: { at, kind, fee, service?, identifier?, poll?, groupId? }[], // last 50
+    // the last 50, oldest first; `recipient` for a direct message
+    recent: { at, kind, fee, service?, identifier?, poll?, groupId?, recipient? }[],
+    notice: { at: number, count: number, seen: boolean } | null,
   }]
 }
 ```
@@ -104,6 +106,10 @@ Anything unreadable counts as no budget, so the app asks.
 - **Top up** adds to what is left. On an ended budget the leftover is dropped:
   what is left is the new amount. `used` and `total` count for the life of the
   budget. **Remove** deletes it.
+- **Notice**: the action that brings a budget's last 24 hours to 50 actions
+  (`APP_BUDGET_NOTICE_AT`) sets `notice`, unless one was set less than 24
+  hours before. `seen` is set when the user closes it or opens the budget
+  from it.
 
 ## The approval window
 
@@ -135,6 +141,80 @@ website's tab on screen (not a launcher tab, one of Hub's own pages or a
 private app) it starts with that app: add a budget, top it up, change its end
 and limits, or remove it. Below that, and on Home, every other budget of the
 account, then the ended ones with Renew.
+
+Each budget shows its **recent activity**: its last 50 actions, newest first,
+with what each was (the resource published, the poll, the group or the
+recipient of a direct message), when, and its fee. What an app named there
+(and a coin in a box's label) sits in a Unicode isolate of its own, with the
+direction marks it held taken out, so nothing in it can end the isolate early
+or turn the words around it.
+
+Under the app on screen, **also allowed without asking** lists what else lets
+its requests through without a window, each with **Turn off**:
+
+- remembered for the signed-in account: the "always allow" boxes ticked for
+  it (kept per account and per app name, so a Q-App and a website of one name
+  share them), the lists box, which covers every app, and its notifications;
+- what its tab may do until it closes (session permissions), by the action's
+  name, as the approval window showed them, folded under "Until this tab
+  closes (n)" until opened. Each one says what it allows in words on hover
+  (`sessionPermissionText`; every action in `VALID_SESSION_PERMISSIONS` that
+  a request reads has its own), and an (i) by the heading says what the list
+  is and that taking one back makes the app ask first, or leaves it unable to
+  do it. Permissions no request reads aren't listed
+  (`SESSION_PERMISSIONS_NOT_READ`): the group actions ask with or without
+  them, and `GET_SERVER_CONNECTION_HISTORY` never asks.
+
+Turn off works only while that account is signed in:
+
+- A box is stored as not allowed. A box's own use gives the tab a session
+  permission too (a sign-in gives `GET_USER_ACCOUNT` and the look-ups), so
+  turning the box off also takes its counterpart (`SESSION_TWIN`) out of this
+  tab. While the box is on, that counterpart isn't listed apart.
+- Notifications are turned off as the notification settings do: the stored
+  permission is set to false and the websocket reconnects without the app's
+  rules. The tab's `NOTIFICATION_PERMISSION` goes too.
+- `PRIVATE_DATA_CHANNEL` takes the tab's approved Reticulum destinations with
+  it, as reaching one of them would give it back without asking.
+
+The next such request asks again; one already approved finishes. Coins in a
+box's key are read only when they look like one (letters and digits, 2 to 10).
+At the end of the panel, the boxes ticked for other apps, in a grid of small
+tiles: one per app with its picture, and the lists box under Every app. Their
+tabs aren't known there, so Turn off leaves the box only.
+
+Nothing turned off leaves the list, so it can be turned on again:
+
+- A box or the notifications stay under the app with **Turn on**
+  (`turnOnAccountChoice`, `turnOnNotifications`: stored as allowed again,
+  and the websocket reconnects with the app's rules). Only a tick or a Turn
+  off is stored, so a box stored as not allowed was turned off. Under other
+  apps, a box turned off stays with Turn on while the panel is open.
+- What the user took back from the tab stays, greyed, with **Allow again**
+  until the tab closes, also across a refresh of the app
+  (`revokeSessionPermission(..., { takeBack: true })`,
+  `getTakenBackSessionPermissions`, `allowSessionPermissionAgain`). A
+  sign-in's look-ups (`AUTO_GRANTED_PERMISSIONS_ON_AUTH`) leave out what was
+  taken back from that tab; the sign-in itself is given as before. Allowing
+  it again ends that, and so does a window that gives the permission itself:
+  a sign-in gives `GET_USER_ACCOUNT`, the notification prompt
+  `NOTIFICATION_PERMISSION`, a backend connection `PRIVATE_DATA_CHANNEL`, and
+  the app's `SESSION_PERMISSIONS` request what it lists. A request approved
+  once in its own window, such as a look-up, is answered without giving it
+  back.
+- `START_CROSSCHAIN_SERVER` is refused, not asked, without its session
+  permission (`SESSION_PERMISSIONS_REFUSED_WITHOUT`): taken back, the app
+  can't start a coin's server in that tab until it is allowed again, and its
+  chip says so.
+
+## The notice
+
+`AppBudgetNotices`, in Group's card dock at the bottom of the page, shows the
+oldest notice the signed-in account hasn't seen: "<app> used its budget for 50
+actions in the last day", with See them (the budget, with its activity open,
+in a window of its own) and OK. Nothing shows while Hub is locked, and the window
+closes when Hub locks or the account changes. Only budget actions count:
+the boxes and session permissions keep no record.
 
 ## Not covered
 

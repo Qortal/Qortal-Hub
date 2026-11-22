@@ -26,6 +26,7 @@ import {
   type BudgetApp,
 } from '../../qortal/appBudgets';
 import { SidePanelAppIcon } from '../Desktop/SidePanelAppIcon';
+import { BudgetActivity } from './BudgetActivity';
 import { BudgetChoices, isDraftValid } from './BudgetChoices';
 import {
   changeDraft,
@@ -45,6 +46,8 @@ type AppBudgetCardProps = {
   now: number;
   /** Shown folded, as one line, until clicked. */
   collapsible?: boolean;
+  /** The list of its last actions starts open. */
+  activityOpen?: boolean;
 };
 
 export const formatBudgetDate = (time: number, language: string): string => {
@@ -64,6 +67,7 @@ export function AppBudgetCard({
   budget,
   now,
   collapsible = false,
+  activityOpen = false,
 }: AppBudgetCardProps) {
   const theme = useTheme();
   const { t, i18n } = useTranslation(['core']);
@@ -323,6 +327,12 @@ export function AppBudgetCard({
             >
               {t(`core:app_budgets.limits_${budget.limits}_desc`, capital)}
             </Typography>
+            {shownMode === 'view' && (
+              <BudgetActivity
+                actions={budget.recent}
+                defaultOpen={activityOpen}
+              />
+            )}
             {shownMode === 'view' && (
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 0.5 }}>
                 {state === 'ended' ? (

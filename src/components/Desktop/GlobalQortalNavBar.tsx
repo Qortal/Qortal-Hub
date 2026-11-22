@@ -2116,6 +2116,7 @@ export function GlobalQortalNavBar({
                 address={userInfo?.address}
                 buttonSx={endButtonSx}
                 currentApp={budgetApp}
+                currentTabId={selectedTab?.tabId ?? null}
                 tooltipSlotProps={tooltipSlotProps}
                 tooltipTitle={tooltipTitle}
               />

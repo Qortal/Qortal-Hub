@@ -133,6 +133,7 @@ import {
   setPermission,
   setSessionPermissions,
   hasSessionPermission,
+  isSessionPermissionTakenBack,
   VALID_SESSION_PERMISSIONS,
   AUTO_GRANTED_PERMISSIONS_ON_AUTH,
 } from './qortal-requests.ts';
@@ -730,12 +731,22 @@ export const getUserAccount = async ({ isFromExtension, appInfo }) => {
       setPermission(`qAPPAutoAuth-${appInfo?.name}`, checkbox1);
     }
     if (accepted || skip) {
-      // Auto-grant read-only permissions for authenticated session
+      // Auto-grant read-only permissions for authenticated session, but not
+      // the ones the user took back from this tab: those wait until the user
+      // allows them again or the tab closes. The sign-in itself just happened.
       if (!hadSessionPermissions && appInfo?.tabId && appInfo?.name) {
         setSessionPermissions(
           appInfo.tabId,
           appInfo.name,
-          AUTO_GRANTED_PERMISSIONS_ON_AUTH
+          AUTO_GRANTED_PERMISSIONS_ON_AUTH.filter(
+            (permission) =>
+              permission === 'GET_USER_ACCOUNT' ||
+              !isSessionPermissionTakenBack(
+                appInfo.tabId,
+                appInfo.name,
+                permission
+              )
+          )
         );
       }
 
@@ -2962,7 +2973,7 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
   }
   try {
     const sent = await sendTheMessage();
-    budgetTicket?.done({ groupId: isRecipient ? undefined : groupId });
+    budgetTicket?.done(isRecipient ? { recipient } : { groupId });
     return sent;
   } finally {
     budgetTicket?.release();

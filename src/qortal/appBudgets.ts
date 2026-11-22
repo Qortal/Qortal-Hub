@@ -40,7 +40,15 @@ export type AppBudgetAction = {
   poll?: string;
   /** For a chat message to a group; none for a direct message. */
   groupId?: number;
+  /** For a direct message: who it went to, as the request named them. */
+  recipient?: string;
 };
+
+/**
+ * Raised when the app's budget let {@link APP_BUDGET_NOTICE_AT} actions or
+ * more through in a day, at most once a day; `seen` once the user saw it.
+ */
+export type AppBudgetNotice = { at: number; count: number; seen: boolean };
 
 export type AppBudget = {
   /** This budget, apart from one removed before it: actions under way stay
@@ -61,6 +69,7 @@ export type AppBudget = {
   times: number[];
   /** Its last actions, oldest first. */
   recent: AppBudgetAction[];
+  notice: AppBudgetNotice | null;
 };
 
 export type AppBudgetState = 'active' | 'used_up' | 'ended';
@@ -90,6 +99,9 @@ export const APP_BUDGET_MAX_ATOMIC = BigInt(100000000000);
 export const USUAL_ACTION_FEE_ATOMIC = BigInt(1000000);
 
 export const APP_BUDGET_RECENT_MAX = 50;
+
+/** Actions in a day after which Hub tells the user what the app is doing. */
+export const APP_BUDGET_NOTICE_AT = 50;
 
 const SERVICES: AppBudgetService[] = ['APP', 'WEBSITE'];
 const KINDS: AppBudgetActionKind[] = ['publish', 'vote', 'chat'];
@@ -269,11 +281,20 @@ function readAction(value: unknown): AppBudgetAction | null {
   const service = shortText(raw.service);
   const identifier = shortText(raw.identifier);
   const poll = shortText(raw.poll);
+  const recipient = shortText(raw.recipient);
   if (service) action.service = service;
   if (identifier) action.identifier = identifier;
   if (poll) action.poll = poll;
   if (Number.isSafeInteger(raw.groupId)) action.groupId = raw.groupId as number;
+  if (recipient) action.recipient = recipient;
   return action;
+}
+
+function readNotice(value: unknown): AppBudgetNotice | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  if (!isTime(raw.at) || !Number.isSafeInteger(raw.count)) return null;
+  return { at: raw.at, count: raw.count as number, seen: raw.seen === true };
 }
 
 function readBudget(value: unknown): AppBudget | null {
@@ -307,6 +328,7 @@ function readBudget(value: unknown): AppBudget | null {
     recent: Array.isArray(raw.recent)
       ? raw.recent.map(readAction).filter(Boolean).slice(-APP_BUDGET_RECENT_MAX)
       : [],
+    notice: readNotice(raw.notice),
   };
 }
 
@@ -595,6 +617,7 @@ export function refillAppBudget(
           limits: choice.limits,
           times: [],
           recent: [],
+          notice: null,
         },
       ];
     }
@@ -662,6 +685,32 @@ export function removeAppBudget(address: string, app: BudgetApp): boolean {
     const next = budgets.filter((b) => !isSameBudgetApp(b, app));
     return next.length === budgets.length ? null : next;
   });
+}
+
+/** The user saw the budget's notice: it isn't shown again. */
+export function markAppBudgetNoticeSeen(
+  address: string,
+  budgetId: string
+): boolean {
+  return updateBudgets(address, (budgets) => {
+    const index = budgets.findIndex((b) => b.id === budgetId);
+    if (index < 0 || !budgets[index].notice || budgets[index].notice.seen) {
+      return null;
+    }
+    const next = [...budgets];
+    next[index] = {
+      ...budgets[index],
+      notice: { ...budgets[index].notice, seen: true },
+    };
+    return next;
+  });
+}
+
+/** The account's notices not seen yet, the oldest first. */
+export function unseenAppBudgetNotices(budgets: AppBudget[]): AppBudget[] {
+  return budgets
+    .filter((budget) => budget.notice && !budget.notice.seen)
+    .sort((a, b) => a.notice.at - b.notice.at);
 }
 
 // ── Taking from a budget ─────────────────────────────────────────────────────
@@ -739,6 +788,8 @@ export type AppBudgetActionDetails = {
   poll?: unknown;
   /** A chat message to a group. */
   groupId?: unknown;
+  /** A direct message: who it went to. */
+  recipient?: unknown;
 };
 
 /**
@@ -901,6 +952,9 @@ function newTicket(
     const groupId = Number(details.groupId);
     if (details.groupId != null && Number.isSafeInteger(groupId)) {
       action.groupId = groupId;
+    } else if (kind === 'chat') {
+      const recipient = shortText(details.recipient);
+      if (recipient) action.recipient = recipient;
     }
     let found = false;
     const saved = updateBudgets(address, (budgets) => {
@@ -909,15 +963,21 @@ function newTicket(
       if (index < 0) return null;
       found = true;
       const current = budgets[index];
+      const times = [...current.times.filter((t) => t > at - DAY_MS), at];
+      // A day with this many actions is worth a word, once a day at most.
+      const notice =
+        times.length >= APP_BUDGET_NOTICE_AT &&
+        (!current.notice || at - current.notice.at >= DAY_MS)
+          ? { at, count: times.length, seen: false }
+          : current.notice;
       const next = [...budgets];
       next[index] = {
         ...current,
         used: (BigInt(current.used) + fee).toString(),
         actions: current.actions + 1,
-        times: [...current.times.filter((t) => t > at - DAY_MS), at].slice(
-          -TIMES_MAX
-        ),
+        times: times.slice(-TIMES_MAX),
         recent: [...current.recent, action].slice(-APP_BUDGET_RECENT_MAX),
+        notice,
       };
       return next;
     });

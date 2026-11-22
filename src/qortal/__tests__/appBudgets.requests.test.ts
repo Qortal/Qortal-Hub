@@ -88,6 +88,7 @@ vi.mock('../qapp-save-file', async () =>
 
 import { getDefaultStore } from 'jotai';
 import Base58Untyped from '../../encryption/Base58';
+import publicKeyToAddressUntyped from '../../utils/generateWallet/publicKeyToAddress';
 import { appLockedAtom } from '../../atoms/presence';
 import {
   publishMultipleQDNResources,
@@ -126,6 +127,7 @@ import {
 import { HUB_REQUEST } from '../requestingApp';
 
 const Base58 = Base58Untyped as any;
+const publicKeyToAddress = publicKeyToAddressUntyped as any;
 
 const ACCOUNT = 'QaccountOne';
 const OTHER_ACCOUNT = 'QaccountTwo';
@@ -573,6 +575,32 @@ describe('votes and chat messages', () => {
     expect(shown).toHaveLength(0);
     expect(budget()).toMatchObject({ used: '0', actions: 1 });
     expect(budget().recent[0]).toMatchObject({ kind: 'chat', groupId: 7 });
+  });
+
+  it('keeps who a direct message went to in the list of actions', async () => {
+    giveBudget(QORT);
+    const node = stubNode();
+    // A recipient whose key the node knows, and the address it derives.
+    const keyBytes = Uint8Array.from({ length: 32 }, (_, i) => i + 1);
+    const recipient = String(publicKeyToAddress(keyBytes));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        new URL(url).pathname === `/addresses/publickey/${recipient}`
+          ? new Response(Base58.encode(keyBytes), {
+              headers: { 'content-type': 'text/plain' },
+            })
+          : node(url)
+      )
+    );
+    const { shown } = watchWindows();
+    await expect(
+      sendChatMessage({ recipient, message: 'hello' }, true, OPENED_APP)
+    ).resolves.toEqual({ signature: 'CHAT_SIG' });
+    expect(shown).toHaveLength(0);
+    expect(budget().recent).toEqual([
+      { at: expect.any(Number), kind: 'chat', fee: '0', recipient },
+    ]);
   });
 });
 

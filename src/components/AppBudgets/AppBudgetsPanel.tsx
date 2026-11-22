@@ -6,6 +6,7 @@ import {
   type AppBudget,
   type BudgetApp,
 } from '../../qortal/appBudgets';
+import { AllowedForApp, AllowedForOtherApps } from './AllowedWithoutAsking';
 import { AppBudgetCard } from './AppBudgetCard';
 import { useAppBudgets, useNow } from './useAppBudgets';
 
@@ -14,16 +15,23 @@ type AppBudgetsPanelProps = {
   address: string;
   /** The Q-App or website on screen, when there is one. */
   currentApp: BudgetApp | null;
+  /** The tab it is open in. */
+  currentTabId?: string | null;
 };
 
 const byName = (a: AppBudget, b: AppBudget) =>
   a.name.localeCompare(b.name) || a.service.localeCompare(b.service);
 
 /**
- * The search bar's budget panel: the app on screen first, then the other
- * budgets of this account, then the ones that have ended.
+ * The search bar's budget panel: the app on screen first, with what else it
+ * may do without asking, then the other budgets of this account, the ones
+ * that have ended, and the "always allow" boxes ticked for other apps.
  */
-export function AppBudgetsPanel({ address, currentApp }: AppBudgetsPanelProps) {
+export function AppBudgetsPanel({
+  address,
+  currentApp,
+  currentTabId = null,
+}: AppBudgetsPanelProps) {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
   const capital = { postProcess: 'capitalizeFirstChar' };
@@ -88,6 +96,12 @@ export function AppBudgetsPanel({ address, currentApp }: AppBudgetsPanelProps) {
             key={keyOf(currentApp)}
             now={now}
           />
+          <AllowedForApp
+            address={address}
+            app={currentApp}
+            key={`allowed-${keyOf(currentApp)}`}
+            tabId={currentTabId}
+          />
         </>
       )}
 
@@ -132,6 +146,12 @@ export function AppBudgetsPanel({ address, currentApp }: AppBudgetsPanelProps) {
           </Box>
         </>
       )}
+
+      <AllowedForOtherApps
+        address={address}
+        except={currentApp}
+        sectionSx={sectionSx}
+      />
 
       {!currentApp && budgets.length === 0 && (
         <Typography
