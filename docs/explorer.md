@@ -80,9 +80,10 @@ as User search showed it.
 
 ## The level 5+ rule
 
-Some parts of the Explorer are detailed parts: the Connections tab, the
-Overview's Direct links, its QORT figures over the whole history (QORT minted,
-purchased / sold, received / sent), its Activity, the Activity row of the
+Some parts of the Explorer are detailed parts: the Connections tab (its
+circle and Account report too), the Overview's Direct links, its QORT
+figures over the whole history (QORT minted, purchased / sold, received /
+sent), its Activity, the Activity row of the
 settings, and exchanges' accounts named as such. They show only
 to the signed-in Hub account when it is a Minter Admin (an admin of MINTER,
 group 694), a MINTER member at level 5 or above, or a Dev Admin (an admin of
@@ -202,6 +203,166 @@ transactions behind it (as the Transactions tab's rows). Never a verdict.
   account without a name of its own shows the exchange's name wherever an
   account shows (sentences, the people of a transaction, the trail, the start
   page, its header with an "exchange" chip); for anyone else, its address.
+- **As a circle, and the Account report:** see below.
+
+### As a circle
+
+Connections opens with what was recorded between them drawn as a circle, as
+Q-Mintership+ does ("Connections circle", from its ConnectionsCircle); the list
+("Recorded between them") is one click away, with the List / Circle toggle
+beside the search or "See the list" under the circle. The account is in the
+middle, the accounts it received payments and transfers from on the left, those
+it sent them to on the right, and an account paid both ways (a Q-Asset trade's
+partner too: what it got came in, what it gave went out) at the bottom, its
+ring and line green and red in proportion to what came in and went out (by
+QORT, or by transactions when no QORT moved), with a line under its name for
+each asset that moved ("7 QORT in, 542 out"). Each avatar is sized by its
+transactions, or with "Most QORT" (the toggle between the two side headings) by
+the QORT that moved, and carries that number; at most 10 a side and 4 at the
+bottom (8 and 3 in a narrow window, 6 and 1 on a phone), the rest counted under
+each side's heading ("12 more in the list") and on the button under it ("3 more
+accounts with fewer transactions: see the list"). The links that aren't
+transfers (reward shares, minting level, names) are a row under it, the first
+20 and then "Show all" (only those shown read their names), and a link with no
+one other account (the accounts it sponsored, a level move whose recipient
+couldn't be read) is listed under it as the list's own row, with its link,
+never dropped. AT addresses aren't drawn; the list has them. Avatars pop in one
+after another and the lines fade in, never with reduced motion.
+
+- **Each avatar opens what links them:** the list's own sentences with when
+  and the list's tags, then the transactions behind them as the Transactions
+  tab's rows (a Q-Asset trade's orders are read when it opens), and "Explore",
+  which opens that account as a step of the trail.
+- **Its number is what that lists:** each transaction once, so a reward share
+  that is both its sponsor's and the one it mints with now is one; a Q-Asset
+  trade counts its orders, never one each way ("Second, 6 transactions: 1
+  received (7 QORT); 3 sent (13 QORT); traded in 2 orders (got 23 GBQ for 529
+  QORT)").
+- **The text alternative is the list itself:** the avatars are lists of
+  buttons, one per side, named with what they stand for, reached and pressed by
+  keyboard; the lines are decoration. "See the list" shows the same connections
+  as text, with every account the circle leaves out, its payments sorted the
+  circle's way (Most QORT sorts them by the most QORT).
+- **Drawn from what Connections read, and it says what it is drawn without:**
+  it waits until its lists are in; a list that couldn't be read stays above it
+  with Retry ("Nothing to draw in what could be read so far", never "no other
+  account is linked to it"; with other links drawn, "Drawn without the lists
+  that couldn't be read, named above"); a Refresh that couldn't read a list
+  again says it is drawn from what was read before it; and a list read only in
+  part says "Drawn from what could be read so far: older transactions may link
+  more accounts". With only other links drawn, the legend says nothing of
+  avatars and lines.
+- **Its layout is a pure rule** (`src/lib/explorer/circle.ts`): the same data
+  gives the same order and places (ties by address), every avatar at its own
+  angle, so no line crosses another or passes under an avatar. Its height is
+  worked out from its width so that no two avatars (each a 44 px button), no
+  name and another avatar, and nothing and the middle overlap (`circleHeight`;
+  `circleOverlaps` checks it at every width, in the tests). Names sit beside
+  the avatars only from 600 px; narrower, the buttons say them. A bottom
+  avatar's amounts wrap where its name is narrow, and the room under it is
+  made for the rows they take: counted at the whole px the name is drawn at,
+  less 1 px, from widths estimated never narrower than Hub draws them
+  (`lib/explorer/textWidth.ts`: Inter Medium's own widths, with room for how
+  Chromium places glyphs down to Hub's smallest zoom (about 25 %), and the
+  pairs Inter kerns wider than their two letters; Inter's wider letters
+  (Њ, Љ, Ǳ, ...) at their own width; and for everything Inter lacks, by
+  ranges, the widest Hub's Chromium draws there with the fonts it falls
+  back to: emoji in a Q-Asset's name, Arabic, the Indic scripts, CJK, and
+  the few far wider than an em). Hub's palette, light and dark.
+- **It grows with the window** (`fitCircle`). In an ordinary Explorer window
+  (its content area, the part that scrolls, at most 1,140 px wide) it is as
+  wide as its column, at most 880 px, as Q-Mintership+'s. A content area
+  wider than that (full screen) is a bigger window. In a bigger one (full screen) it draws every account it
+  may: up to 16 avatars a side and 8 at the bottom, never more than there
+  are, its names given more room (beside the avatars to the drawing's edge,
+  240 px for the account's own, 220 px under the bottom ones, where a bottom
+  avatar's amounts then sit on one line), and "N more in the list" counts
+  what is left. Centred on the window's content area, it is as wide as that
+  allows while the whole circle (its headings, the drawing and the names
+  under it) fits in the height the window shows. Where they don't all fit
+  there, it draws them anyway, taller, and the window scrolls: as wide as it
+  can be without being any taller than they need, at most the window's
+  width. It never gets narrower than an ordinary window's drawing.
+- **It follows the window as it changes:** what it is laid out from is
+  measured in CSS px (its column, the content area's width and the height it
+  shows) and followed as it changes: the window resized, full screen on and
+  off, and Hub's zoom (View → Zoom, Ctrl + / Ctrl − / Ctrl 0), which changes
+  how many CSS px the window has. Zoomed in, an ordinary window may fall to
+  the narrow drawing, as a narrow window would; zoomed out, full screen grows
+  further. Never from the screen's size, the device's pixel ratio or a size
+  read once. Its room is read before it is first painted, and nothing is
+  drawn until then (never first at a width it doesn't have). It is drawn at
+  the size it was laid out for, so for the moment a new size waits to be
+  laid out, its places and its names' room stay in step (never squeezed
+  together). The scroll area keeps its scrollbar's room whether the
+  scrollbar shows or not (`scrollbar-gutter: stable`): a scrollbar coming
+  and going with the page's height would otherwise change the width it is
+  laid out from, and flip it between two drawings. The tests check that nothing overlaps or leaves
+  the window in an ordinary window and at full screen, at 50 %, 67 %, 100 %,
+  150 % and 200 %.
+- **It belongs to the history step:** Circle or List, the order, the avatar
+  opened and "Show all", so Back shows the tab as it was left (a new step opens
+  with the circle).
+- **The search shows the list:** typing in the search switches the circle to
+  the list, as Q-Mintership+ does, and clearing it brings the circle back. The
+  circle pressed again while searching draws the accounts whose rows match and
+  says so ("1 account matches “tradeogre”", "Sent to: 1 account matches",
+  "Nothing to draw: none of its links matches …"), never all its links, and
+  never "no other account is linked" over a search.
+
+### The Account report
+
+One button at the bottom of Connections ("Account report", from
+Q-Mintership+'s AccountReport) makes a plain Markdown file of what the
+Explorer has read on chain about the account and its connections, shows it,
+and saves it through Hub (`saveFileToDiskGeneric`, a `.md` file named after
+the account and the day, in UTC) or copies it. It is in the viewer's language;
+addresses, signatures and numbers are data, and every time is UTC.
+
+- **The same headings every time:** a header table (the account, when it was
+  made, how much of its history was read, what made it) and the neutral line;
+  Account (its public key, level, blocks minted with the adjustment and
+  penalty, balance, MINTER, minting now, names, groups, first seen); QORT
+  totals; Activity by type; Connections (the exchanges, each kind as the tab's
+  sentences with block, day and full signature, its payments each way as
+  tables, In common, and what was checked and found nothing); What was read;
+  and the transactions behind the connections (once each, the newest 2,000 at
+  most, and it says so), with the orders behind its Q-Asset trades by
+  signature.
+- **QORT totals and activity by type only from its whole history.** They are
+  the Overview's figures (`useQortFigures`): QORT minted is its balance read
+  between two reads of its newest transaction, "never minted" only without a
+  reward share ever, and an account without a public key bought what other
+  accounts' trade contracts paid it and sold nothing. Until its whole history
+  is read, each says how much was read instead, and why: read only in part
+  ("its newest 1,000 transactions; any older ones weren't read", with "Read the
+  rest first"), still being read, longer than the 20,000 the Explorer reads
+  (never "read the rest": it can't give them), or couldn't be read (the window
+  has Retry). While its newest transactions are read again (a Refresh, or a
+  newer one on the node), that page is still being read: the report names it
+  and never says "its whole history" over it; after a Refresh, the newest pages
+  of Connections' lists read again are named as still being read too.
+- **What it reads is what the page reads:** Connections' lists and reads are
+  passed in, not read again, and the rest are the account page's own reads
+  through the window's cache (its name, names, groups, balance, first seen,
+  the payments with exchanges). While its window is open, the account's All
+  list reads on by itself to the first read (the Activity settings, 1,000 by
+  default), as the Overview does, and "Read the rest" reads all of it, with
+  QORT minted's reads; nothing is read before its window opens, and nothing
+  else at all. The accounts it mentions are named only where the Explorer had
+  read their names; each is also given by its address.
+- **What couldn't be read is named** ("Couldn't be read: its name
+  transactions"), never taken for none; what was still being read when it
+  was made is named too ("Still being read when the report was made: …"), and
+  the window lists it before it is made ("Make the report now").
+- **Facts only:** the Explorer's own sentences and numbers, never a verdict.
+  Text from the chain (names, groups, assets) has Markdown's own characters
+  escaped wherever it is put, a line's start too (`mdText`), so it reads as
+  written and never becomes a heading, a list, a quote, a link (an email- or
+  domain-shaped name included), an entity ("&amp;") or a table of its own, in
+  any language's line shapes; a title's name ending in " #" keeps it.
+- **Saving** hands the file over to be saved ("Sent to be saved as …"), as
+  Hub's other saves do; a save that fails says so.
 
 ## QORT figures and Activity
 
@@ -687,7 +848,7 @@ that block alone, oldest first).
 | `src/components/Explorer/transactions/` | the Transactions tab, its rows and their sentences, one transaction's page                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `src/components/Explorer/names/`        | the Names tab, a name's parts and history, a name's own page (`NameLifeView.tsx`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `src/components/Explorer/chain/`        | Transactions on Qortal: the step, its pickers and pages, what waits, the start page's latest transactions and the link from a transaction's block; its reads and rules are `src/lib/explorer/chainTx.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `src/components/Explorer/connections/`  | the Connections tab, its rows, payments, In common and the exchange notice; `useExplorerAccess.ts` runs the rule in the window; the Overview's Direct links (`overview/DirectLinksPreview.tsx`)                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `src/components/Explorer/connections/`  | the Connections tab, its rows, payments, In common and the exchange notice; the circle (`ConnectionsCircle.tsx`, `CircleNodeDialog.tsx`, `circleParts.ts`; its layout is `src/lib/explorer/circle.ts`) and the Account report (`AccountReport.tsx`, its text `accountReportText.ts`, its building blocks `src/lib/explorer/accountReport.ts`); `useExplorerAccess.ts` runs the rule in the window; the Overview's Direct links (`overview/DirectLinksPreview.tsx`)                                                                                                                                                                                      |
 | `src/components/Explorer/compare/`      | Compare: its step, cards, sections and picks (`compareSteps.tsx`, `useCompareData.ts`); its rules, reads and picks in `src/lib/explorer/` (`compare.ts`, `compareReads.ts`, `comparePicks.ts`)                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `src/components/Explorer/sets/`         | the Sponsees and Funded steps and the checks across a set (`SetChecks.tsx`); their rules in `src/lib/explorer/sets.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `src/components/Explorer/overview/`     | the Overview's sections; the All list it holds (`useAccountHistory.ts`), the QORT figures (`QortFacts.tsx`, `Fact.tsx`) and Activity (`activity/`: the section, the chart, its colours and words, the settings dialog)                                                                                                                                                                                                                                                                                                                                                                                                                                  |

@@ -89,7 +89,7 @@ import { ExplorerSearchField } from './ExplorerSearchField';
 import { ExplorerStart } from './ExplorerStart';
 import { NameLifeView } from './names/NameLifeView';
 import { ActivitySettingsDialog } from './overview/activity/ActivitySettingsDialog';
-import { cap, mutedText } from './parts';
+import { cap, EXPLORER_WINDOW_WIDTH, mutedText } from './parts';
 import { TxView } from './transactions/TxView';
 import { useAccessRule } from './useExplorerAccess';
 
@@ -588,7 +588,7 @@ export function ExplorerWindow({
                   },
                   margin: { xs: 2, md: 3 },
                   maxHeight: 'calc(100vh - 24px)',
-                  width: 'min(1140px, calc(100vw - 48px))',
+                  width: `min(${EXPLORER_WINDOW_WIDTH}px, calc(100vw - 48px))`,
                 }),
             overflow: 'hidden',
           }),
@@ -749,12 +749,19 @@ export function ExplorerWindow({
           </Box>
 
           <Box
+            // What the Connections circle measures: how much of the window it has.
+            data-explorer-scroll=""
             sx={{
               flex: 1,
               minHeight: 0,
               overflowY: 'auto',
               px: { xs: 1.5, sm: 2.5, md: 3.5 },
               py: { xs: 2, md: 3 },
+              // The scrollbar's room kept whether it shows or not: the circle
+              // is laid out from this width, and a scrollbar coming and going
+              // with the page's height (the circle's own among it) would flip
+              // it between two drawings.
+              scrollbarGutter: 'stable',
             }}
           >
             <Box sx={{ margin: '0 auto', maxWidth: 1080, minWidth: 0 }}>

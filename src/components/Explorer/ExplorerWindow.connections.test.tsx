@@ -538,7 +538,12 @@ async function openConnections() {
     T
   );
   fireEvent.click(tab);
-  return within(dialog()).findByRole('tabpanel', { name: /connections/i });
+  const panel = await within(dialog()).findByRole('tabpanel', {
+    name: /connections/i,
+  });
+  // It opens as a circle (ExplorerWindow.circle.test.tsx): these are the list's.
+  fireEvent.click(within(panel).getByRole('button', { name: /^list$/i }));
+  return panel;
 }
 
 /** Reads only the detailed parts make. */

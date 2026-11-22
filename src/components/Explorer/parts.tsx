@@ -30,6 +30,13 @@ import { infoSnackGlobalAtom, openSnackGlobalAtom } from '../../atoms/global';
 export const cap = { postProcess: 'capitalizeFirstChar' } as const;
 
 /**
+ * The widest the Explorer window is when it isn't full screen (CSS px):
+ * a content area wider than this is a bigger window, where the Connections
+ * circle grows.
+ */
+export const EXPLORER_WINDOW_WIDTH = 1140;
+
+/**
  * Text set into a sentence (a name), isolated from it, so a name written
  * right to left can't reorder the words around it.
  */

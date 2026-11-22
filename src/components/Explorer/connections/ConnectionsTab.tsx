@@ -12,6 +12,14 @@
  *   (PaymentsPanel: each way, sorted as picked).
  * - In common: where its first QORT came from, and the sponsor it shares.
  * - "Also checked, nothing found: …", and what was read, with Read older.
+ * - What was recorded between them as a circle, the way it opens
+ *   (ConnectionsCircle, "Connections circle"), or as a list ("Recorded
+ *   between them", one click away: the view toggle, or "See the list"). The
+ *   choice belongs to the history step. Typing a search shows the list, as
+ *   in Q-Mintership+; clearing it brings the circle back. The circle pressed
+ *   again while searching draws what the search found, and says so.
+ * - At the bottom, the Account report (AccountReport): a Markdown file of
+ *   what the Explorer read about it and its connections.
  *
  * A search over the tab narrows every list to the rows that show what was
  * typed: a name (read for the accounts in them while it is typed, up to
@@ -31,26 +39,21 @@ import {
   IconButton,
   InputAdornment,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
+import BubbleChartRoundedIcon from '@mui/icons-material/BubbleChartRounded';
 import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
+import ViewListRoundedIcon from '@mui/icons-material/ViewListRounded';
 import { useTranslation } from 'react-i18next';
 import { isQortAddress } from '../../../lib/explorer/addresses';
-import { ACCOUNT_TX_MAX } from '../../../lib/explorer/accountTx';
-import {
-  FILLED_MAX,
-  FILLS_MAX,
-  leftOutTrades,
-} from '../../../lib/explorer/assetTrades';
 import {
   coreSponsorRead,
   fundingRead,
 } from '../../../lib/explorer/connectionReads';
-import {
-  pairedOnline,
-  type EmptyCheck,
-} from '../../../lib/explorer/connections';
+import type { EmptyCheck } from '../../../lib/explorer/connections';
 import { exchangeName } from '../../../lib/explorer/exchanges';
 import {
   flowSentence,
@@ -87,13 +90,15 @@ import {
   blocksText,
   whenText,
 } from './ConnectionRow';
+import { AccountReport } from './AccountReport';
+import { coverageSentences, nothingFound } from './connectionsSummary';
+import { ConnectionsCircle } from './ConnectionsCircle';
 import { ExchangeNotice } from './ExchangeNotice';
 import { InCommon, inCommonEntries, useInCommon } from './InCommon';
 import { PaymentsPanel } from './PaymentsPanel';
 import { SponseesLink } from '../sets/SetLinks';
 import {
   isShort,
-  stoppedAtCeiling,
   useConnections,
   type ConnectionsData,
 } from './useConnections';
@@ -159,78 +164,8 @@ function Rows({
 /** What was read of its lists, how far, and Read older; a list that couldn't be read is named as such. */
 export function Coverage({ data }: { data: ConnectionsData }) {
   const { t, i18n } = useTranslation(['explorer']);
-  const language = i18n.language;
-  const lists = [
-    ['payments', data.payments],
-    ['minting', data.minting],
-    ['names', data.names],
-  ] as const;
-  // Shown once a list is read; one still being read joins it when it is in.
-  if (!lists.some(([, state]) => state.list)) return null;
-  const parts = lists.flatMap(([kind, state]) => {
-    const list = state.list;
-    if (!list)
-      return state.error
-        ? [String(t(`explorer:connections.coverage.${kind}_failed`))]
-        : [];
-    const rows = list.rows.length;
-    const options = { count: rows, shown: formatCount(rows, language) };
-    if (!list.done)
-      return [
-        String(t(`explorer:connections.coverage.${kind}_newest`, options)),
-      ];
-    if (rows === 1)
-      return [String(t(`explorer:connections.coverage.${kind}_single`))];
-    return [
-      rows
-        ? String(t(`explorer:connections.coverage.${kind}_all`, options))
-        : String(t(`explorer:connections.coverage.${kind}_none`)),
-    ];
-  });
-  const trades = data.trades.data;
-  if (trades) {
-    const orders = trades.orders;
-    const options = { count: orders, shown: formatCount(orders, language) };
-    parts.push(
-      trades.truncated
-        ? String(t('explorer:connections.coverage.trades_newest', options))
-        : orders === 1
-          ? String(t('explorer:connections.coverage.trades_single'))
-          : orders
-            ? String(t('explorer:connections.coverage.trades_all', options))
-            : String(t('explorer:connections.coverage.trades_none'))
-    );
-  } else if (data.trades.status === 'error')
-    parts.push(String(t('explorer:connections.coverage.trades_failed')));
-  const sentences = [
-    t('explorer:connections.coverage.read', {
-      list: formatList(parts, language),
-      ...cap,
-    }),
-    isShort(data.minting) && data.levelMovesComplete
-      ? t('explorer:connections.coverage.level_moves_all', cap)
-      : null,
-    lists.some(([, state]) => stoppedAtCeiling(state))
-      ? t('explorer:connections.coverage.ceiling', {
-          max: formatCount(ACCOUNT_TX_MAX, language),
-          ...cap,
-        })
-      : null,
-    trades?.truncated
-      ? t('explorer:connections.coverage.trades_ceiling', {
-          max: formatCount(FILLED_MAX, language),
-          ...cap,
-        })
-      : null,
-    trades?.fillsCut
-      ? t('explorer:connections.coverage.trades_fills_cut', {
-          count: trades.fillsCut,
-          shown: formatCount(trades.fillsCut, language),
-          max: formatCount(FILLS_MAX, language),
-          ...cap,
-        })
-      : null,
-  ].filter(Boolean);
+  const sentences = coverageSentences(data, t, i18n.language);
+  if (!sentences) return null;
   return (
     <Box
       sx={{
@@ -286,13 +221,42 @@ export function ConnectionsTab({ account }: { account: AccountInfo }) {
   );
   const common = useInCommon(address, sponsor);
 
+  // ---- Circle or list ---------------------------------------------------------------------
+  const [storedView, setView] = useStepState<ConnectionsView>(
+    'connView',
+    'circle'
+  );
+  const view: ConnectionsView = storedView === 'list' ? 'list' : 'circle';
+  // A search typed over the circle shows the list; cleared, the circle again.
+  const [circleForSearch, setCircleForSearch] = useStepState<boolean>(
+    'connCircleForSearch',
+    false
+  );
+
   // ---- The search ----------------------------------------------------------------------
-  const [storedTyped, setTyped] = useStepState<string>('connSearch', '');
+  const [storedTyped, setStoredTyped] = useStepState<string>('connSearch', '');
   const typed = typeof storedTyped === 'string' ? storedTyped : '';
   const words = useMemo(() => queryWords(typed), [typed]);
   const searching = words.length > 0;
+  const setTyped = (next: string) => {
+    if (queryWords(next).length && view === 'circle') {
+      setView('list');
+      setCircleForSearch(true);
+    } else if (!queryWords(next).length && circleForSearch) {
+      setView('circle');
+      setCircleForSearch(false);
+    }
+    setStoredTyped(next);
+  };
+  const pickView = (next: ConnectionsView) => {
+    setView(next);
+    setCircleForSearch(false);
+  };
   // The payments' order, as Payments lists them.
-  const [storedSort] = useStepState<FlowSort>('connPaySort', 'count');
+  const [storedSort, setPaySort] = useStepState<FlowSort>(
+    'connPaySort',
+    'count'
+  );
   const paySort: FlowSort = isFlowSort(storedSort) ? storedSort : 'count';
   /** Every account in its rows, in the order the tab lists them. */
   const accounts = useMemo(() => {
@@ -479,42 +443,11 @@ export function ConnectionsTab({ account }: { account: AccountInfo }) {
     commonFound.length;
 
   // ---- What was checked and found nothing ---------------------------------------------
-  const empty: EmptyCheck[] = [];
-  const emptySoFar: EmptyCheck[] = [];
-  const mintingRead = Boolean(data.minting.list);
-  const mintingShort = isShort(data.minting);
-  if (mintingRead && data.links) {
-    // A move whose recipient is still being read isn't listed yet: not "none".
-    if (!levelMoves.length && !data.privs.loading)
-      (data.levelMovesComplete ? empty : emptySoFar).push('level_moves');
-    if (!of('sponsor').length)
-      (mintingShort ? emptySoFar : empty).push('sponsor');
-    if (!sponsees) (mintingShort ? emptySoFar : empty).push('sponsees');
-    if (data.mintingWith && !data.mintingWith.length && data.online.data) {
-      // Who mints with it now is in the online list itself.
-      if (!mintingShort || !pairedOnline(data.online.data, address))
-        empty.push('minting_with');
-    }
-  }
-  if (data.names.list && !nameDeals.length)
-    (isShort(data.names) ? emptySoFar : empty).push('name_sales');
-  const tradesLeftOut = data.trades.data
-    ? leftOutTrades(data.trades.data.trades, address)
-    : 0;
-  // Some it had are left out (with itself, or an order the node doesn't know): not "none".
-  if (data.trades.data && !traded.length && !tradesLeftOut)
-    (data.trades.data.truncated || data.trades.data.fillsCut
-      ? emptySoFar
-      : empty
-    ).push('asset_trades');
-  if (
-    data.flowsSent &&
-    data.flowsReceived &&
-    !data.flowsSent.length &&
-    !data.flowsReceived.length
-  )
-    (isShort(data.payments) ? emptySoFar : empty).push('payments');
-  if (funding.data === null) empty.push('first_qort');
+  const {
+    empty,
+    soFar: emptySoFar,
+    tradesLeftOut,
+  } = nothingFound(data, funding.data, address);
   const listOf = (checks: EmptyCheck[]) =>
     formatList(
       checks.map((check) => String(t(`explorer:connections.empty.${check}`))),
@@ -564,35 +497,45 @@ export function ConnectionsTab({ account }: { account: AccountInfo }) {
   return (
     <>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-        <TextField
-          size="small"
-          value={typed}
-          onChange={(event) => setTyped(event.target.value)}
-          label={t('explorer:connections.search.label', cap)}
-          placeholder={t('explorer:connections.search.placeholder', cap)}
-          sx={{ maxWidth: 520, width: '100%' }}
-          slotProps={{
-            input: {
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchRoundedIcon fontSize="small" aria-hidden />
-                </InputAdornment>
-              ),
-              endAdornment: typed ? (
-                <InputAdornment position="end">
-                  <IconButton
-                    size="small"
-                    edge="end"
-                    aria-label={t('explorer:connections.search.clear', cap)}
-                    onClick={() => setTyped('')}
-                  >
-                    <ClearRoundedIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ) : null,
-            },
+        <Box
+          sx={{
+            alignItems: 'center',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 1.5,
           }}
-        />
+        >
+          <TextField
+            size="small"
+            value={typed}
+            onChange={(event) => setTyped(event.target.value)}
+            label={t('explorer:connections.search.label', cap)}
+            placeholder={t('explorer:connections.search.placeholder', cap)}
+            sx={{ flex: '1 1 280px', maxWidth: 520 }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchRoundedIcon fontSize="small" aria-hidden />
+                  </InputAdornment>
+                ),
+                endAdornment: typed ? (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      edge="end"
+                      aria-label={t('explorer:connections.search.clear', cap)}
+                      onClick={() => setTyped('')}
+                    >
+                      <ClearRoundedIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ) : null,
+              },
+            }}
+          />
+          <ConnectionsViewToggle view={view} onView={pickView} />
+        </Box>
         {searching ? (
           <Typography
             role="status"
@@ -655,8 +598,16 @@ export function ConnectionsTab({ account }: { account: AccountInfo }) {
       ) : null}
 
       <Section
-        id="explorer-connections-recorded"
-        title={t('explorer:connections.recorded_title', cap)}
+        id={
+          view === 'circle'
+            ? 'explorer-connections-circle'
+            : 'explorer-connections-recorded'
+        }
+        title={
+          view === 'circle'
+            ? t('explorer:circle.title', cap)
+            : t('explorer:connections.recorded_title', cap)
+        }
       >
         <Box
           sx={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}
@@ -700,7 +651,39 @@ export function ConnectionsTab({ account }: { account: AccountInfo }) {
           {linksLoading || namesLoading ? (
             <LoadingLine label={t('explorer:connections.links_loading', cap)} />
           ) : null}
-          {levelFound.length ? (
+          {view === 'circle' && paymentsFailed ? (
+            <ReadError
+              message={t('explorer:connections.failed.payments', cap)}
+              onRetry={data.payments.retry}
+            />
+          ) : null}
+          {view === 'circle' && !data.settled ? (
+            <LoadingLine label={t('explorer:circle.loading', cap)} />
+          ) : null}
+          {view === 'circle' && data.settled ? (
+            <ConnectionsCircle
+              address={address}
+              recorded={searching ? recorded.filter(findFinding) : recorded}
+              tagsOf={findingTags}
+              actionOf={(finding) =>
+                finding.kind === 'sponsees' ? (
+                  <SponseesLink sponsor={address} own />
+                ) : null
+              }
+              searched={searching ? typedText : null}
+              gaps={{
+                failed: data.failed.length > 0,
+                refreshFailed: data.refreshFailed,
+                short: !data.complete && !data.failed.length,
+              }}
+              onShowList={(order) => {
+                // The list's payments in the circle's order.
+                setPaySort(order === 'qort' ? 'total' : 'count');
+                pickView('list');
+              }}
+            />
+          ) : null}
+          {view === 'list' && levelFound.length ? (
             <Part title={t('explorer:connections.part.level', cap)}>
               <Rows
                 label={t('explorer:connections.part.level', cap)}
@@ -709,7 +692,7 @@ export function ConnectionsTab({ account }: { account: AccountInfo }) {
               />
             </Part>
           ) : null}
-          {sharesShown ? (
+          {view === 'list' && sharesShown ? (
             <Part title={t('explorer:connections.part.shares', cap)}>
               {sharesFound.length ? (
                 <Rows
@@ -731,7 +714,7 @@ export function ConnectionsTab({ account }: { account: AccountInfo }) {
               </Typography>
             </Part>
           ) : null}
-          {namesFound.length ? (
+          {view === 'list' && namesFound.length ? (
             <Part title={t('explorer:connections.part.names', cap)}>
               <Rows
                 label={t('explorer:connections.part.names', cap)}
@@ -740,7 +723,8 @@ export function ConnectionsTab({ account }: { account: AccountInfo }) {
               />
             </Part>
           ) : null}
-          {tradesFound.length || (tradesLeftOut && !searching) ? (
+          {view === 'list' &&
+          (tradesFound.length || (tradesLeftOut && !searching)) ? (
             <Part title={t('explorer:connections.part.trades', cap)}>
               {tradesFound.length ? (
                 <Rows
@@ -763,7 +747,7 @@ export function ConnectionsTab({ account }: { account: AccountInfo }) {
               ) : null}
             </Part>
           ) : null}
-          {paymentsShown ? (
+          {view === 'list' && paymentsShown ? (
             <Part title={t('explorer:connections.part.payments', cap)}>
               <PaymentsPanel
                 address={address}
@@ -816,6 +800,47 @@ export function ConnectionsTab({ account }: { account: AccountInfo }) {
         </Typography>
       ) : null}
       {!searching ? <Coverage data={data} /> : null}
+
+      <AccountReport
+        account={account}
+        sources={{ data, funding, sponsor, common, coreSponsor, findingTags }}
+      />
     </>
+  );
+}
+
+type ConnectionsView = 'list' | 'circle';
+
+/** As tall as the search beside it. */
+const VIEW_BUTTON = { gap: 0.75, minHeight: 40, px: 1.5 } as const;
+
+/** Circle or list: what was recorded between them, drawn around the account or as text (Q-Mintership+'s toggle). */
+function ConnectionsViewToggle({
+  view,
+  onView,
+}: {
+  view: ConnectionsView;
+  onView: (view: ConnectionsView) => void;
+}) {
+  const { t } = useTranslation(['explorer']);
+  return (
+    <ToggleButtonGroup
+      exclusive
+      size="small"
+      value={view}
+      onChange={(_event, next: unknown) => {
+        if (next === 'list' || next === 'circle') onView(next);
+      }}
+      aria-label={t('explorer:circle.view_label', cap)}
+    >
+      <ToggleButton value="list" sx={VIEW_BUTTON}>
+        <ViewListRoundedIcon fontSize="small" aria-hidden />
+        {t('explorer:circle.view_list', cap)}
+      </ToggleButton>
+      <ToggleButton value="circle" sx={VIEW_BUTTON}>
+        <BubbleChartRoundedIcon fontSize="small" aria-hidden />
+        {t('explorer:circle.view_circle', cap)}
+      </ToggleButton>
+    </ToggleButtonGroup>
   );
 }

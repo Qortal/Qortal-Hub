@@ -20,7 +20,12 @@ import {
 } from './connections';
 import { flowAmounts, type AssetSum, type Flow } from './money';
 import type { TxRow } from './reads';
-import { describeTx, type TxSentenceSpec, type TxSlot } from './txWords';
+import {
+  describeTx,
+  toAtomic,
+  type TxSentenceSpec,
+  type TxSlot,
+} from './txWords';
 
 /** Where the connection sentences' keys are. */
 export const LINK_SAY = 'explorer:connections.say';
@@ -37,6 +42,16 @@ export type FindingKind =
 
 /** What the transactions behind a finding are, for "4 payments", "2 transactions", "2 orders". */
 export type EvidenceKind = 'payments' | 'transactions' | 'orders';
+
+/** One way of a Q-Asset trade finding: what came in (`got`) or went out (`gave`), added up exactly. */
+export interface TradeWay {
+  /** The trades. */
+  count: number;
+  /** QORT, in atomic units. */
+  qort: bigint;
+  /** Q-Assets, in the order first seen. */
+  assets: AssetSum[];
+}
 
 export interface Finding {
   /** Stable across loads, for React keys and what a row keeps open. */
@@ -64,6 +79,8 @@ export interface Finding {
   assets?: AssetSum[];
   /** The other account's level now, said under its name ("now level 0"): a level it gave away. */
   otherLevel?: number;
+  /** Q-Asset trades: what it got and what it gave (the Connections circle draws both ways). */
+  trade?: { got: TradeWay; gave: TradeWay };
 }
 
 export interface RecordedInput {
@@ -153,6 +170,31 @@ export function tradesSentence(
     },
     count: trades.length,
   };
+}
+
+/** What moved one way over `trades`: QORT apart, each Q-Asset added up exactly, in the order first seen. */
+function tradeWay(
+  trades: readonly AssetTrade[],
+  way: 'got' | 'gave'
+): TradeWay {
+  let qort = 0n;
+  const assets: AssetSum[] = [];
+  for (const trade of trades) {
+    const { asset, amount } = trade[way];
+    const atomic = toAtomic(amount) ?? 0n;
+    if (asset.id === 0) {
+      qort += atomic;
+      continue;
+    }
+    const same = assets.find(
+      (sum) =>
+        sum.asset.id === asset.id &&
+        (asset.id !== null || sum.asset.name === asset.name)
+    );
+    if (same) same.atomic += atomic;
+    else assets.push({ asset, atomic });
+  }
+  return { count: trades.length, qort, assets };
 }
 
 /** What was recorded between `input.address` and other accounts, in the page's order. */
@@ -312,6 +354,7 @@ export function recordedFindings(input: RecordedInput): Finding[] {
       evidence: [],
       evidenceSignatures: orders,
       evidenceKind: 'orders',
+      trade: { got: tradeWay(trades, 'got'), gave: tradeWay(trades, 'gave') },
     });
   }
   const flows = [

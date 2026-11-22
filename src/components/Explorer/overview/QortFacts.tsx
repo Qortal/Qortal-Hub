@@ -80,7 +80,7 @@ export type HistoryState =
   | 'ceiling'
   | 'failed';
 
-type Minted =
+export type Minted =
   | { kind: 'idle' }
   | { kind: 'loading' }
   | { kind: 'never' }
