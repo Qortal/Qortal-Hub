@@ -1092,7 +1092,14 @@
       "name": "اسم",
       "website": "موقع ويب"
     },
-    "suggestions": "اقتراحات"
+    "suggestions": "اقتراحات",
+    "zoom": {
+      "button": "التكبير: {{percent}}",
+      "kept": "محفوظ لـ {{name}} على هذا الكمبيوتر",
+      "same_as_hub": "مثل Hub",
+      "zoom_in": "تكبير",
+      "zoom_out": "تصغير"
+    }
   },
   "new_post_in": "منشور جديد في {{ title }}",
   "node_state": {

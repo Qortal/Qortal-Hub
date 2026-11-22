@@ -1056,7 +1056,14 @@
       "name": "名前",
       "website": "Webサイト"
     },
-    "suggestions": "候補"
+    "suggestions": "候補",
+    "zoom": {
+      "button": "ズーム：{{percent}}",
+      "kept": "このコンピューターに{{name}}用として保存されます",
+      "same_as_hub": "Hubと同じ",
+      "zoom_in": "拡大",
+      "zoom_out": "縮小"
+    }
   },
   "new_post_in": "{{ title }} の新しい投稿",
   "node_state": {

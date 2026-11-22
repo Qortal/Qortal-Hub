@@ -1057,6 +1057,23 @@ try {
       ipcRenderer.invoke('publishProfiles:merge', key, patch),
   });
 
+  // Zoom of the Hub and of each Q-App or website (hub-zoom.ts, app-zoom.ts).
+  contextBridge.exposeInMainWorld('hubZoom', {
+    onScreen: (report: unknown) => ipcRenderer.send('hubZoom:onScreen', report),
+    panelPointer: (tabId: unknown) =>
+      ipcRenderer.send('hubZoom:panelPointer', tabId),
+    get: (tabId: unknown) => ipcRenderer.invoke('hubZoom:get', tabId),
+    change: (target: unknown, action: unknown) =>
+      ipcRenderer.invoke('hubZoom:change', target, action),
+    onChanged: (listener: (change: unknown) => void) => {
+      const handler = (_event: unknown, change: unknown) => listener(change);
+      ipcRenderer.on('hubZoom:changed', handler);
+      return () => {
+        ipcRenderer.removeListener('hubZoom:changed', handler);
+      };
+    },
+  });
+
   // Generic persistent store (persistent-store.json, in-memory cache + debounced writes in main)
   contextBridge.exposeInMainWorld('foreignWalletSigner', {
     importKeys: (keys: Record<string, unknown>) =>

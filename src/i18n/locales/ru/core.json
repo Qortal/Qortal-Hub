@@ -1076,7 +1076,14 @@
       "name": "Имя",
       "website": "Веб-сайт"
     },
-    "suggestions": "Подсказки"
+    "suggestions": "Подсказки",
+    "zoom": {
+      "button": "масштаб: {{percent}}",
+      "kept": "сохранено для {{name}} на этом компьютере",
+      "same_as_hub": "как в Hub",
+      "zoom_in": "увеличить",
+      "zoom_out": "уменьшить"
+    }
   },
   "new_post_in": "новые сообщения в {{ title }}",
   "node_state": {
