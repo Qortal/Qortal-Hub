@@ -1,9 +1,10 @@
 /**
- * An account page's tabs: Overview · Connections · Transactions · Names.
- * They are a list, so a later part adds its tab (Trades, Assets) as one
+ * An account page's tabs: Overview · Connections · Transactions · Trades ·
+ * Assets · Names. They are a list, so a later part adds its tab as one
  * more entry, and a tab only some viewers see says so in `shown`:
- * Connections only for a viewer who sees the detailed parts (the level 5+
- * rule, lib/explorer/access.ts), and nothing says it is left out.
+ * Connections and Trades only for a viewer who sees the detailed parts
+ * (the level 5+ rule, lib/explorer/access.ts), and nothing says they are
+ * left out.
  *
  * The tab belongs to the history step (useStepState): switching tabs
  * changes the step in place, never adds one, and Back and Forward show the
@@ -21,6 +22,8 @@ export type AccountTabId =
   | 'overview'
   | 'connections'
   | 'transactions'
+  | 'trades'
+  | 'assets'
   | 'names';
 
 /** What a page is: a personal account, or an AT (a program on the chain). */
@@ -56,6 +59,13 @@ export const ACCOUNT_TABS: readonly AccountTabDef[] = [
     label: 'explorer:tabs.transactions',
     pages: ['account', 'at'],
   },
+  {
+    id: 'trades',
+    label: 'explorer:tabs.trades',
+    pages: ['account'],
+    shown: ({ full }) => full,
+  },
+  { id: 'assets', label: 'explorer:tabs.assets', pages: ['account'] },
   { id: 'names', label: 'explorer:tabs.names', pages: ['account'] },
 ];
 

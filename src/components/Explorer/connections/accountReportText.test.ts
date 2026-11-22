@@ -112,7 +112,11 @@ function report(over: Partial<ReportData> = {}): ReportData {
         orders: 0n,
       },
       book,
-      trades: { state: 'ready', value: { bought: 0n, sold: 0n, sales: [] } },
+      trades: {
+        state: 'ready',
+        value: { bought: 0n, sold: 0n, trades: [], sales: [] },
+      },
+      keyless: null,
     },
     rows: ROWS,
     findings: recordedFindings({
@@ -283,26 +287,77 @@ describe('the Account report', () => {
   });
 
   it('an account without a public key bought what trade contracts paid it, and sold nothing', () => {
-    const contract = `A${'X'.repeat(33)}`;
-    const bought = tx('AT', 300, {
-      atAddress: contract,
-      recipient: PUBLISHER,
-      amount: '10.00000000',
-    });
-    const book = qortBook([bought], PUBLISHER);
+    // A trade contract paid it 10 QORT, and a lottery (not a trade contract) 1.
+    const book = qortBook(
+      [
+        tx('AT', 300, {
+          atAddress: `A${'X'.repeat(33)}`,
+          recipient: PUBLISHER,
+          amount: '10.00000000',
+        }),
+        tx('AT', 301, {
+          atAddress: `A${'Y'.repeat(33)}`,
+          recipient: PUBLISHER,
+          amount: '1.00000000',
+        }),
+      ],
+      PUBLISHER
+    );
     const text = make({
       account: { ...report().account, publicKey: null },
       qort: {
         minted: { kind: 'never' },
         book,
         trades: null,
+        keyless: {
+          state: 'ready',
+          value: { bought: 10n * UNIT, atLeast: false },
+        },
       },
     });
+    // As the Overview and the Trades tab count it: the lottery's 1 isn't a purchase.
     expect(text).toContain('| QORT purchased / sold | 10 / 0 |');
+    expect(text).toContain(
+      "a contract that isn't a trade contract isn't counted"
+    );
     expect(text).toContain('It has never made a transaction of its own');
     expect(text).toContain(
       '| Public key | none yet: it has never made a transaction of its own |'
     );
+  });
+
+  it('an account without a public key, paid by more contracts than are read: “at least”, and why', () => {
+    const qort = {
+      minted: { kind: 'never' } as const,
+      book: qortBook([], PUBLISHER),
+      trades: null,
+    };
+    const account = { ...report().account, publicKey: null };
+    const cut = make({
+      account,
+      qort: {
+        ...qort,
+        keyless: {
+          state: 'ready',
+          value: { bought: 1_000n * UNIT, atLeast: true },
+        },
+      },
+    });
+    expect(cut).toContain('| QORT purchased / sold | at least 1,000 / 0 |');
+    expect(cut).toContain(
+      'More contracts paid it than the Explorer reads: this is from the newest 100.'
+    );
+    // Its contracts' records still read, or failed: never a figure.
+    for (const [keyless, said] of [
+      [{ state: 'reading' }, 'still being read'],
+      [{ state: 'failed' }, "couldn't be read"],
+    ] as const) {
+      const text = make({ account, qort: { ...qort, keyless } });
+      expect(text).toMatch(
+        new RegExp(`\\| QORT purchased / sold \\| [^|]*${said}[^|]* \\|`, 'i')
+      );
+      expect(text).not.toContain('| QORT purchased / sold | 0 / 0 |');
+    }
   });
 
   it('names what couldn’t be read and what was still being read, never as none', () => {

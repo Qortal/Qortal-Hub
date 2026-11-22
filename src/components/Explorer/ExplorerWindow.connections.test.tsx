@@ -429,6 +429,9 @@ const commonRoutes: Route = (path) => {
   if (path.startsWith('/transactions/unconfirmed?')) return { body: [] };
   if (path.startsWith('/transactions/payments/between?')) return { body: [] };
   if (path.startsWith('/assets/orders/')) return { body: [] };
+  // The Overview's Q-Assets (everyone's): none held.
+  if (path.startsWith('/assets/balances?')) return { body: [] };
+  if (path.startsWith('/assets?')) return { body: [] };
   if (path === '/admin/status') return { body: { height: 2_000_500 } };
   if (path === '/admin/info')
     return { body: { currentTimestamp: 2_000_000_000_000 } };
@@ -553,7 +556,11 @@ const detailedReads = () =>
     return (
       path.startsWith('/transactions/payments/between') ||
       path.startsWith('/addresses/sponsorship') ||
-      path.startsWith('/assets/') ||
+      // Connections' Q-Asset trades (the Overview's Q-Assets are everyone's).
+      path.startsWith('/assets/orders/') ||
+      path.startsWith('/assets/order/') ||
+      // The Trades tab's.
+      path.startsWith('/crosschain/') ||
       path.endsWith('/raw') ||
       (types !== null &&
         ['REWARD_SHARE', 'TRANSFER_PRIVS', 'BUY_NAME', 'TRANSFER_ASSET'].some(
@@ -613,6 +620,8 @@ describe('who sees the detailed parts', () => {
           'Overview',
           'Connections',
           'Transactions',
+          'Trades',
+          'Assets',
           'Names',
         ]),
       T
@@ -632,7 +641,12 @@ describe('who sees the detailed parts', () => {
       ).toBe(true)
     );
     await settle();
-    expect(await tabNames()).toEqual(['Overview', 'Transactions', 'Names']);
+    expect(await tabNames()).toEqual([
+      'Overview',
+      'Transactions',
+      'Assets',
+      'Names',
+    ]);
     expect(
       within(dialog()).queryByRole('region', { name: /direct links/i })
     ).toBeNull();
@@ -717,7 +731,12 @@ describe('who sees the detailed parts', () => {
       name: 'Publisher',
     });
     await settle();
-    expect(await tabNames()).toEqual(['Overview', 'Transactions', 'Names']);
+    expect(await tabNames()).toEqual([
+      'Overview',
+      'Transactions',
+      'Assets',
+      'Names',
+    ]);
     expect(detailedReads()).toEqual([]);
     await act(async () => held.release());
     await waitFor(
@@ -1869,7 +1888,9 @@ describe('the Overview’s Direct links', () => {
       () => expect(all).toHaveTextContent(/all connections \(\d+\+\)/i),
       T
     );
-    expect(calls.some(({ path }) => path.startsWith('/assets/'))).toBe(false);
+    expect(calls.some(({ path }) => /^\/assets\/orders?\//.test(path))).toBe(
+      false
+    );
     fireEvent.click(all);
     await waitFor(() =>
       expect(

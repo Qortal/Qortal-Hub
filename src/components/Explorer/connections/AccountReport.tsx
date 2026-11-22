@@ -73,6 +73,7 @@ import {
 } from '../ExplorerContext';
 import { useQortFigures, type QortFigures } from '../overview/QortFacts';
 import { useAccountHistory } from '../overview/useAccountHistory';
+import type { KeylessPurchases } from '../trades/useKeylessPurchases';
 import { cap, mutedText, panelSx, ReadError, Section } from '../parts';
 import {
   accountReportMarkdown,
@@ -163,7 +164,25 @@ function qortOf(figures: QortFigures): ReportData['qort'] {
     minted: figures.minted,
     book: figures.book,
     trades: figures.noKey ? null : known(figures.trades),
+    keyless: figures.noKey ? keylessKnown(figures.keyless) : null,
   };
+}
+
+/** What an account without a public key bought, as the Overview counts it (useKeylessPurchases). */
+function keylessKnown(
+  keyless: KeylessPurchases
+): Known<{ bought: bigint; atLeast: boolean }> {
+  if (keyless.status === 'ready')
+    return {
+      state: 'ready',
+      value: {
+        bought: keyless.trades.reduce((sum, trade) => sum + trade.qort, 0n),
+        atLeast: keyless.contractsCut,
+      },
+    };
+  return keyless.status === 'failed'
+    ? { state: 'failed' }
+    : { state: 'reading' };
 }
 
 function ReportDialog({
@@ -281,7 +300,10 @@ function ReportDialog({
               : 'newest'
       );
     else if (minted.kind === 'loading') pending.push('minted');
-    if (!figures.noKey) add(known(figures.trades), 'portal');
+    add(
+      figures.noKey ? keylessKnown(figures.keyless) : known(figures.trades),
+      'portal'
+    );
   }
   const failedOnce = [...new Set(failed)];
   const pendingOnce = [...new Set(pending)].filter(

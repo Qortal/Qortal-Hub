@@ -69,6 +69,7 @@ import {
   mintingNowOf,
   visibleName,
 } from '../../../lib/explorer/rules';
+import { CONTRACTS_MAX } from '../../../lib/explorer/tradeReads';
 import { familyOf } from '../../../lib/explorer/txFamilies';
 import { fromAtomic, type TxSentenceSpec } from '../../../lib/explorer/txWords';
 import { ACCOUNT_HISTORY_MAX } from '../../../lib/explorer/accountTx';
@@ -132,13 +133,16 @@ export interface ReportData {
   /**
    * Its QORT totals, as PR 5 works them out (null while it can't); said
    * only once its whole history is read (`history`). `trades` is null for
-   * an account without a public key: what it bought is in `book` (what
-   * other accounts' trade contracts paid it).
+   * an account without a public key: what it bought is `keyless`, what
+   * other accounts' trade contracts paid it, each by its own record, as the
+   * Overview and the Trades tab count it (null with a public key).
    */
   qort: {
     minted: Minted;
     book: QortBook;
     trades: Known<PortalTrades> | null;
+    /** `atLeast`: more contracts paid it than are read (CONTRACTS_MAX). */
+    keyless: Known<{ bought: bigint; atLeast: boolean }> | null;
   } | null;
   /** Its transactions read so far: counted by type only once they are its whole history. */
   rows: readonly TxRow[] | null;
@@ -582,8 +586,15 @@ function qortLines(data: ReportData, t: TFunction, language: string): string[] {
     }
   })();
   const noKey = q.trades === null;
+  // Without a key: what trade contracts paid it, as the Overview counts it
+  // (never all that contracts paid it: a lottery's payout isn't a purchase).
   const tradesCell = noKey
-    ? `${exact(book.purchased, language)} / ${exact(0n, language)}`
+    ? readingOr(
+        q.keyless ?? { state: 'reading' },
+        t,
+        ({ bought, atLeast }) =>
+          `${atLeast ? `${t('explorer:facts.at_least')} ` : ''}${exact(bought, language)} / ${exact(0n, language)}`
+      )
     : readingOr(
         q.trades as Known<PortalTrades>,
         t,
@@ -661,15 +672,27 @@ function qortLines(data: ReportData, t: TFunction, language: string): string[] {
       })
     )
   );
-  if (noKey)
-    notes.push(
-      String(
-        t('explorer:facts.trades_no_key_info', {
-          bought: exact(book.purchased, language),
-        })
-      )
-    );
-  else if (q.trades?.state === 'ready')
+  if (noKey) {
+    if (q.keyless?.state === 'ready')
+      notes.push(
+        [
+          String(
+            t('explorer:facts.trades_no_key_info', {
+              bought: exact(q.keyless.value.bought, language),
+            })
+          ),
+          q.keyless.value.atLeast
+            ? String(
+                t('explorer:facts.trades_no_key_cut', {
+                  max: formatCount(CONTRACTS_MAX, language),
+                })
+              )
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' ')
+      );
+  } else if (q.trades?.state === 'ready')
     notes.push(
       String(
         t('explorer:facts.trades_info', {

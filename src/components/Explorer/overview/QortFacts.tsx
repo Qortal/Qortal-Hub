@@ -24,7 +24,9 @@
  * - Purchased / sold are its completed trades on the Trade Portal. An
  *   account without a public key never made a transaction, so it never
  *   sold (a sale starts with a trade contract of its own); what it bought is
- *   what other accounts' trade contracts paid it, from its whole history.
+ *   what other accounts' trade contracts paid it, from its whole history,
+ *   each contract by its own record (useKeylessPurchases, as the Trades
+ *   tab counts them: a contract that isn't a trade contract isn't one).
  * - Each loads, fails (with Retry) and works out on its own; while a
  *   Refresh reads again, what was shown stays. In green what came in, in
  *   red what went out.
@@ -61,6 +63,11 @@ import {
   type PortalTrades,
 } from '../../../lib/explorer/qortReads';
 import type { AccountInfo } from '../../../lib/explorer/reads';
+import { CONTRACTS_MAX, payoutsOf } from '../../../lib/explorer/tradeReads';
+import {
+  useKeylessPurchases,
+  type KeylessPurchases,
+} from '../trades/useKeylessPurchases';
 import { fromAtomic } from '../../../lib/explorer/txWords';
 import {
   useExplorer,
@@ -117,6 +124,8 @@ export interface QortFigures {
   trades: ReadState<PortalTrades>;
   /** It has no public key: it never made a transaction of its own, so it never sold. */
   noKey: boolean;
+  /** Without a public key, once its whole history is read: what it bought, contract by contract. */
+  keyless: KeylessPurchases;
 }
 
 function historyStateOf(history: AccountHistory): HistoryState {
@@ -236,6 +245,12 @@ export function useQortFigures(
   const trades = useExplorerRead(
     enabled && publicKey ? portalTradesRead(address, publicKey) : null
   );
+  // Without a key: the contracts that paid it, read as the Trades tab reads them.
+  const payouts = useMemo(
+    () => (enabled && !publicKey && rows ? payoutsOf(rows, address) : null),
+    [enabled, publicKey, rows, address]
+  );
+  const keyless = useKeylessPurchases(address, payouts);
 
   let minted: Minted;
   if (!enabled) minted = { kind: 'idle' };
@@ -301,6 +316,7 @@ export function useQortFigures(
     minted,
     trades,
     noKey: !publicKey,
+    keyless,
   };
 }
 
@@ -571,15 +587,47 @@ export function QortTradesFact({ figures }: { figures: QortFigures }) {
   const label = t('explorer:facts.purchased_sold', cap);
   if (figures.enabled && figures.noKey) {
     if (!figures.book) return <HistoryValue label={label} figures={figures} />;
-    const bought = figures.book.purchased;
+    const { keyless } = figures;
+    if (keyless.status === 'failed')
+      return (
+        <FactError
+          label={label}
+          message={t('explorer:facts.trades_no_key_failed', cap)}
+          onRetry={keyless.retry}
+        />
+      );
+    if (keyless.status !== 'ready')
+      return (
+        <Fact
+          label={label}
+          value={<LoadingLine label={t('core:loading.generic', cap)} />}
+        />
+      );
+    // Only trade contracts, each by its own record: as the Trades tab counts them.
+    const bought = keyless.trades.reduce((sum, trade) => sum + trade.qort, 0n);
     return (
       <Fact
         label={label}
-        value={<InOut into={bought} out={0n} language={language} />}
-        info={t('explorer:facts.trades_no_key_info', {
-          bought: exactText(bought, language),
-          ...cap,
-        })}
+        value={
+          <>
+            {keyless.contractsCut ? `${t('explorer:facts.at_least')} ` : null}
+            <InOut into={bought} out={0n} language={language} />
+          </>
+        }
+        info={[
+          t('explorer:facts.trades_no_key_info', {
+            bought: exactText(bought, language),
+            ...cap,
+          }),
+          keyless.contractsCut
+            ? t('explorer:facts.trades_no_key_cut', {
+                max: formatCount(CONTRACTS_MAX, language),
+                ...cap,
+              })
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
       />
     );
   }

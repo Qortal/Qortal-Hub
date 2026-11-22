@@ -86,6 +86,9 @@ const commonRoutes: Route = (path) => {
   if (path.startsWith('/names/search?')) return { body: [] };
   if (path.startsWith('/transactions/creator/')) return { body: [] };
   if (path.startsWith('/transactions/payments/between?')) return { body: [] };
+  // The Overview's Q-Assets: none held.
+  if (path.startsWith('/assets/balances?')) return { body: [] };
+  if (path.startsWith('/assets?')) return { body: [] };
   if (path === '/admin/status') return { body: { height: 2_000_500 } };
   if (path === '/admin/info')
     return { body: { currentTimestamp: 2_000_000_000_000 } };

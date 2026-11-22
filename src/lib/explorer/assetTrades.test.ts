@@ -9,11 +9,16 @@ import { sentenceText } from '../../components/Explorer/transactions/sentenceTex
 import {
   assetTradesRead,
   FILLED_MAX,
+  FILLS_MAX,
+  orderFillsRead,
   leftOutTrades,
+  qortPerUnit,
+  summariseAssetTrades,
   tradeSums,
   tradesByAccount,
   type AssetTrade,
 } from './assetTrades';
+import { CoreHttpError } from './core';
 import { recordedFindings, tradesSentence } from './findings';
 
 // Q-Asset trades, read from the account's filled orders and who filled
@@ -169,6 +174,110 @@ describe('assetTradesRead', () => {
     expect(read.trades).toHaveLength(2_000);
   });
 
+  it('what each side was comes from its own order, not from Core’s labels, which are swapped for a seller’s initiating order', async () => {
+    // As Core answers on 2026-11-22: a trade whose initiating order sells an
+    // asset for QORT carries its labels the wrong way round (TradeData
+    // labels by the initiating order's lower-numbered asset).
+    const swapped = (initiating: number, target: number) => ({
+      initiatingOrderId: id(initiating),
+      targetOrderId: id(target),
+      // The seller's order gave 23 GBQ and got 529 QORT…
+      initiatorAmount: '23.00000000',
+      targetAmount: '529.00000000',
+      // …and Core says the other way round.
+      initiatorAmountAssetId: 0,
+      initiatorAmountAssetName: 'QORT',
+      targetAmountAssetId: 28,
+      targetAmountAssetName: 'GBQ',
+      timestamp: 1_700_000_000_000,
+    });
+    const sell = {
+      ...order(2, '23.00000000'),
+      haveAssetId: 28,
+      haveAssetName: 'GBQ',
+      wantAssetId: 0,
+      wantAssetName: 'QORT',
+    };
+    const buy = {
+      ...order(3, '23.00000000'),
+      haveAssetId: 0,
+      haveAssetName: 'QORT',
+      wantAssetId: 28,
+      wantAssetName: 'GBQ',
+    };
+    route = (path) => {
+      if (path.startsWith(`/assets/orders/${ME}?`))
+        return {
+          body:
+            params(path).get('includeClosed') === 'true' &&
+            params(path).get('includeFulfilled') === 'true'
+              ? [sell, buy]
+              : [],
+        };
+      // Its sell order came in and matched a waiting buy order of A's.
+      if (path.startsWith(`/assets/order/${id(2)}/trades?`))
+        return { body: [swapped(2, 90)] };
+      // Its buy order waited, and a sell order of A's came in.
+      if (path.startsWith(`/assets/order/${id(3)}/trades?`))
+        return { body: [swapped(91, 3)] };
+      if (
+        path === `/assets/order/${id(90)}` ||
+        path === `/assets/order/${id(91)}`
+      )
+        return { body: { creator: A } };
+      return undefined;
+    };
+    const read = await assetTradesRead(ME).load();
+    const of = (n: number) =>
+      read.trades.find((each) => each.orderId === id(n));
+    expect(of(2)).toMatchObject({
+      initiated: true,
+      gave: { asset: { id: 28, name: 'GBQ' }, amount: '23.00000000' },
+      got: { asset: { id: 0, name: 'QORT' }, amount: '529.00000000' },
+    });
+    expect(of(3)).toMatchObject({
+      initiated: false,
+      gave: { asset: { id: 0, name: 'QORT' }, amount: '529.00000000' },
+      got: { asset: { id: 28, name: 'GBQ' }, amount: '23.00000000' },
+    });
+    expect(say(tradesSentence(A, [of(2) as AssetTrade]))).toBe(
+      'Sold 23 GBQ to Publisher for 529 QORT'
+    );
+    expect(say(tradesSentence(A, [of(3) as AssetTrade]))).toBe(
+      'Bought 23 GBQ from Publisher for 529 QORT'
+    );
+  });
+
+  it('exactly five full reads of orders in a state, with nothing past them, is all of them', async () => {
+    let past: unknown[] = [];
+    route = (path) => {
+      if (path.startsWith(`/assets/orders/${ME}?`)) {
+        const query = params(path);
+        if (query.get('includeFulfilled') !== 'true') return { body: [] };
+        if (query.get('limit') === '1') return { body: past };
+        const offset = Number(query.get('offset'));
+        // 500 orders, none filled: nothing to read past them.
+        return {
+          body: Array.from({ length: 100 }, (_, i) =>
+            order(5_000 + offset + i, '0')
+          ),
+        };
+      }
+      return undefined;
+    };
+    const all = await assetTradesRead(ME).load();
+    expect(all.truncated).toBe(false);
+    expect(
+      paths.some(
+        (path) =>
+          params(path).get('limit') === '1' &&
+          params(path).get('offset') === '500'
+      )
+    ).toBe(true);
+    past = [order(9_999, '0')];
+    expect((await assetTradesRead(ME).load()).truncated).toBe(true);
+  });
+
   it('a trade with an order the node doesn’t know has no other account; any other failure throws', async () => {
     const base = (path: string): Answer | undefined => {
       if (path.startsWith(`/assets/orders/${ME}?`))
@@ -198,6 +307,33 @@ describe('assetTradesRead', () => {
         : undefined);
     await expect(assetTradesRead(ME).load()).rejects.toBeTruthy();
   });
+
+  it('an answer that isn’t a list is a failure, never “no trades”', async () => {
+    // Its orders.
+    route = (path) =>
+      path.startsWith(`/assets/orders/${ME}?`)
+        ? { body: { orders: [] } }
+        : undefined;
+    await expect(assetTradesRead(ME).load()).rejects.toBeInstanceOf(
+      CoreHttpError
+    );
+    // A filled order's trades.
+    route = (path) => {
+      if (path.startsWith(`/assets/orders/${ME}?`))
+        return {
+          body:
+            params(path).get('includeFulfilled') === 'true'
+              ? [order(2, '1')]
+              : [],
+        };
+      if (path.startsWith(`/assets/order/${id(2)}/trades?`))
+        return { body: { trades: [] } };
+      return undefined;
+    };
+    await expect(assetTradesRead(ME).load()).rejects.toBeInstanceOf(
+      CoreHttpError
+    );
+  });
 });
 
 const trade = (
@@ -220,6 +356,122 @@ const say = (sentence: Parameters<typeof sentenceText>[0]) =>
     nameOf: (address) =>
       address === A ? 'Publisher' : address === B ? 'Second' : null,
   });
+
+describe('orderFillsRead', () => {
+  // A sell order of its own, as Core answers /assets/order/<id>.
+  const sell = {
+    orderId: id(2),
+    creator: ME,
+    haveAssetId: 28,
+    haveAssetName: 'GBQ',
+    wantAssetId: 0,
+    wantAssetName: 'QORT',
+    fulfilled: '23.00000000',
+    isClosed: false,
+    isFulfilled: false,
+  };
+  // Core's labels, the wrong way round for a seller's initiating order.
+  const swapped = {
+    initiatingOrderId: id(2),
+    targetOrderId: id(90),
+    initiatorAmount: '23.00000000',
+    targetAmount: '529.00000000',
+    initiatorAmountAssetId: 0,
+    initiatorAmountAssetName: 'QORT',
+    targetAmountAssetId: 28,
+    targetAmountAssetName: 'GBQ',
+    timestamp: 1_700_000_000_000,
+  };
+
+  it('reads the order, then its trades, each side from its own two assets, kept under the address', async () => {
+    let order: Record<string, unknown> = sell;
+    route = (path) => {
+      if (path === `/assets/order/${id(2)}`) return { body: order };
+      if (path.startsWith(`/assets/order/${id(2)}/trades?`))
+        return { body: [swapped] };
+      if (path === `/assets/order/${id(90)}`) return { body: { creator: A } };
+      return undefined;
+    };
+    const spec = orderFillsRead(id(2), ME);
+    expect(spec.key).toBe(`orderfills:${id(2)}:${ME}`);
+    const fills = await spec.load();
+    expect(fills).toMatchObject({ cut: false, open: true });
+    expect(fills.trades).toHaveLength(1);
+    expect(fills.trades[0]).toMatchObject({
+      other: A,
+      initiated: true,
+      gave: { asset: { id: 28, name: 'GBQ' }, amount: '23.00000000' },
+      got: { asset: { id: 0, name: 'QORT' }, amount: '529.00000000' },
+    });
+    expect(paths[0]).toBe(`/assets/order/${id(2)}`);
+    // Filled, or cancelled: no longer open.
+    order = { ...sell, isClosed: true, isFulfilled: true };
+    expect((await orderFillsRead(id(2), ME).load()).open).toBe(false);
+  });
+
+  it('exactly the most it reads is all of them; a row past them cuts it', async () => {
+    let past: unknown[] = [];
+    route = (path) => {
+      if (path === `/assets/order/${id(2)}`) return { body: sell };
+      if (path.startsWith(`/assets/order/${id(2)}/trades?`)) {
+        const query = params(path);
+        if (query.get('limit') === '1') return { body: past };
+        return {
+          body: Array.from({ length: 100 }, (_, i) => ({
+            ...swapped,
+            targetOrderId: id(100 + Number(query.get('offset')) + i),
+          })),
+        };
+      }
+      if (path.startsWith('/assets/order/')) return { body: { creator: A } };
+      return undefined;
+    };
+    const all = await orderFillsRead(id(2), ME).load();
+    expect(all.trades).toHaveLength(FILLS_MAX);
+    expect(all.cut).toBe(false);
+    past = [swapped];
+    expect((await orderFillsRead(id(2), ME).load()).cut).toBe(true);
+  });
+
+  it('a failed read throws, never “not filled”; an answer that isn’t its order is a failure', async () => {
+    route = () => ({
+      status: 500,
+      body: { error: 5, message: 'repository issue' },
+    });
+    await expect(orderFillsRead(id(2), ME).load()).rejects.toBeInstanceOf(
+      CoreHttpError
+    );
+    route = () => ({ body: [] });
+    await expect(orderFillsRead(id(2), ME).load()).rejects.toBeInstanceOf(
+      CoreHttpError
+    );
+  });
+});
+
+describe('its filled orders still open', () => {
+  it('are known from the state they were read in', async () => {
+    route = (path) => {
+      if (path.startsWith(`/assets/orders/${ME}?`)) {
+        const q = params(path);
+        const closed = q.get('includeClosed') === 'true';
+        const fulfilled = q.get('includeFulfilled') === 'true';
+        return {
+          body:
+            closed && fulfilled
+              ? [order(2, '1')]
+              : !closed
+                ? [order(3, '1')]
+                : [],
+        };
+      }
+      if (path.startsWith('/assets/order/') && path.includes('/trades?'))
+        return { body: [] };
+      return undefined;
+    };
+    const read = await assetTradesRead(ME).load();
+    expect(read.openOrders).toEqual([id(3)]);
+  });
+});
 
 describe('Q-Asset trades in words', () => {
   it('one trade whole, from the account’s side', () => {
@@ -282,5 +534,46 @@ describe('Q-Asset trades in words', () => {
       id(102),
     ]);
     expect(found[0].evidenceKind).toBe('orders');
+  });
+});
+
+describe('its Q-Asset trades added up (the Trades tab)', () => {
+  it('by asset: units each way, the QORT for them, most trades first', () => {
+    const summary = summariseAssetTrades([
+      trade(A, 1, [0, 'QORT', '529.00000000'], [11, 'Gadget', '23.00000000']),
+      trade(A, 2, [0, 'QORT', '100.00000000'], [11, 'Gadget', '4.00000000']),
+      trade(B, 3, [11, 'Gadget', '2.00000000'], [0, 'QORT', '50.00000000']),
+      // Two assets: one bought, one sold, no QORT.
+      trade(A, 4, [6, 'Tokens', '5.00000000'], [11, 'Gadget', '1.00000000']),
+    ]);
+    expect(summary.count).toBe(4);
+    expect(summary.partners).toBe(2);
+    expect(summary.qortPaid).toBe(62_900_000_000n);
+    expect(summary.qortGot).toBe(5_000_000_000n);
+    expect(
+      summary.assets.map((asset) => [asset.asset.name, asset.count])
+    ).toEqual([
+      ['Gadget', 4],
+      ['Tokens', 1],
+    ]);
+    expect(summary.assets[0]).toMatchObject({
+      bought: 2_800_000_000n,
+      sold: 200_000_000n,
+      qortPaid: 62_900_000_000n,
+      qortGot: 5_000_000_000n,
+      // The unit bought with another asset has no price in QORT.
+      boughtForQort: 2_700_000_000n,
+      soldForQort: 200_000_000n,
+    });
+    expect(summary.assets[1]).toMatchObject({
+      sold: 500_000_000n,
+      qortGot: 0n,
+      soldForQort: 0n,
+    });
+  });
+
+  it('the QORT per unit, on the units traded for QORT only', () => {
+    expect(qortPerUnit(62_900_000_000n, 2_700_000_000n)).toBeCloseTo(23.296, 3);
+    expect(qortPerUnit(0n, 100n)).toBeNull();
   });
 });

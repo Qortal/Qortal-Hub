@@ -8,13 +8,14 @@
  * is a step of its own: ExplorerWindow opens it in TxView.)
  *
  * An account's page is its header, the trail, then its tabs (AccountTabs):
- * Overview, Connections, Transactions and Names. Each tab reads what it
- * shows when it opens. Connections, the Overview's Direct links, its QORT
- * figures over the whole history and its Activity are detailed parts: only
- * for a viewer the level 5+ rule lets see them (lib/explorer/access.ts),
- * and nothing of them is read for anyone else. An AT's page is its
- * transactions only: it never mints, and what its QORT does is the trades
- * it settles, which its traders' pages add up.
+ * Overview, Connections, Transactions, Trades, Assets and Names. Each tab
+ * reads what it shows when it opens. Connections, Trades, the Overview's
+ * Direct links, its QORT figures over the whole history and its Activity
+ * are detailed parts: only for a viewer the level 5+ rule lets see them
+ * (lib/explorer/access.ts), and nothing of them is read for anyone else.
+ * The Assets tab and the Overview's Q-Assets are everyone's. An AT's page
+ * is its transactions only: it never mints, and what its QORT does is the
+ * trades it settles, which its traders' pages add up.
  * Read-only: nothing here writes (Send QORT and Block hand over to Hub's
  * own windows and lists).
  */
@@ -82,6 +83,9 @@ import { DirectLinksPreview } from './overview/DirectLinksPreview';
 import { ActivitySection } from './overview/activity/ActivitySection';
 import { useQortFigures } from './overview/QortFacts';
 import { useAccountHistory } from './overview/useAccountHistory';
+import { AssetsSection } from './overview/AssetsSection';
+import { AssetsTab } from './assets/AssetsTab';
+import { TradesTab } from './trades/TradesTab';
 import { useExplorerAccess } from './useExplorerAccess';
 import {
   cap,
@@ -238,6 +242,7 @@ function OverviewTab({
   onShowTransactions,
   onShowNames,
   onShowConnections,
+  onShowAssets,
 }: {
   account: AccountInfo;
   primary: string | null | undefined;
@@ -248,6 +253,7 @@ function OverviewTab({
   onShowNames: () => void;
   /** Open the Connections tab: null for a viewer who doesn't see it. */
   onShowConnections: (() => void) | null;
+  onShowAssets: () => void;
 }) {
   const { address, publicKey } = account;
   const { access, activity } = useExplorer();
@@ -305,6 +311,7 @@ function OverviewTab({
           figures={figures}
         />
       </Box>
+      <AssetsSection address={address} onShowAssets={onShowAssets} />
       {full ? (
         <ActivitySection
           account={account}
@@ -377,9 +384,13 @@ function AccountView({
       <TabsView
         tabs={tabsFor({ page: 'account', full })}
         render={(tab, open) =>
-          // The tab list leaves Connections out unless `full`; checked here too.
+          // The tab list leaves Connections and Trades out unless `full`; checked here too.
           tab === 'connections' && full ? (
             <ConnectionsTab account={account} />
+          ) : tab === 'trades' && full ? (
+            <TradesTab account={account} />
+          ) : tab === 'assets' ? (
+            <AssetsTab address={address} />
           ) : tab === 'transactions' ? (
             <TransactionsTab address={address} publicKey={publicKey} />
           ) : tab === 'names' ? (
@@ -397,6 +408,7 @@ function AccountView({
               }}
               onShowNames={() => open('names')}
               onShowConnections={full ? () => open('connections') : null}
+              onShowAssets={() => open('assets')}
             />
           )
         }

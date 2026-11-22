@@ -197,6 +197,29 @@ function tradeWay(
   return { count: trades.length, qort, assets };
 }
 
+/**
+ * One Q-Asset trade from the account's side: bought, sold or traded for
+ * another asset, with the other account (none when the node doesn't know
+ * its order). The Trades tab's list and an asset order's row say it.
+ */
+export function tradeSentence(trade: AssetTrade): TxSentenceSpec {
+  const key =
+    trade.gave.asset.id === 0
+      ? 'trade.bought'
+      : trade.got.asset.id === 0
+        ? 'trade.sold'
+        : 'trade.swapped';
+  return {
+    base: LINK_SAY,
+    key,
+    slots: {
+      other: { kind: 'account', address: trade.other },
+      gave: { kind: 'amount', amounts: [trade.gave] },
+      got: { kind: 'amount', amounts: [trade.got] },
+    },
+  };
+}
+
 /** What was recorded between `input.address` and other accounts, in the page's order. */
 export function recordedFindings(input: RecordedInput): Finding[] {
   const out: Finding[] = [];

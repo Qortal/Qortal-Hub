@@ -158,6 +158,11 @@ interface Node {
   /** Its first reward share (none by default for an account without blocks). */
   firstShare?: Row | null;
   trades?: { buyer: Row[]; seller: Row[] } | 'failing';
+  /**
+   * Trade contracts' records by their AT address (`/crosschain/trade/<at>`);
+   * for any other contract Core answers that it isn't a trade contract.
+   */
+  contracts?: Record<string, Row>;
 }
 
 /** Publisher on a made-up node. */
@@ -204,6 +209,18 @@ function publisherNode(node: Node): Route {
         return { body: node.rows.slice(0, 1) };
       // The Transactions tab's other kinds, and anything else: none.
       return { body: [] };
+    }
+    if (path.startsWith('/crosschain/trade/')) {
+      const record =
+        node.contracts?.[
+          decodeURIComponent(path.slice('/crosschain/trade/'.length))
+        ];
+      return record
+        ? { body: record }
+        : {
+            status: 400,
+            body: { error: 125, message: 'invalid search criteria' },
+          };
     }
     if (path.startsWith('/crosschain/trades?')) {
       if (node.trades === 'failing')
@@ -869,7 +886,18 @@ describe('QORT purchased / sold', () => {
   it('a buyer without a public key: what trade contracts paid it, from its whole history; it never sold', async () => {
     // Its QORT came from two trade contracts (a first purchase): the trade
     // bot answers them from a key of its own, so the account itself has
-    // made no transaction and has no public key.
+    // made no transaction and has no public key. A third contract, a
+    // lottery, paid it 1 QORT: not a trade contract, so not a purchase.
+    const contract = (n: number) => `A${String(n).repeat(33)}`.slice(0, 34);
+    const record = (n: number, qortAmount: string): Row => ({
+      qortalAtAddress: contract(n),
+      qortalCreator: SECOND,
+      qortAmount,
+      expectedForeignAmount: '0.50000000',
+      mode: 'REDEEMED',
+      qortalPartnerReceivingAddress: PUBLISHER,
+      foreignBlockchain: 'LITECOIN',
+    });
     const paid = (n: number, height: number, amount: string): Row => ({
       type: 'AT',
       timestamp: BLOCK_TIME(height),
@@ -879,19 +907,24 @@ describe('QORT purchased / sold', () => {
       blockHeight: height,
       approvalStatus: 'NOT_REQUIRED',
       creatorAddress: SECOND,
-      atAddress: `A${String(n).repeat(33)}`.slice(0, 34),
+      atAddress: contract(n),
       recipient: PUBLISHER,
       amount,
       assetId: 0,
     });
     await openPublisher(LEVEL_FIVE, {
       rows: [
+        paid(9, 1_510_000, '1.00000000'),
         paid(7, 1_500_000, '199.00000000'),
         paid(8, 1_490_000, '100.00000000'),
       ],
-      balance: '299.00000000',
+      balance: '300.00000000',
       extra: { publicKey: null, level: 0, blocksMinted: 0 },
       firstShare: null,
+      contracts: {
+        [contract(7)]: record(7, '199.00000000'),
+        [contract(8)]: record(8, '100.00000000'),
+      },
     });
     await waitFor(
       () =>
@@ -901,12 +934,19 @@ describe('QORT purchased / sold', () => {
       T
     );
     expect(infoOf(/QORT purchased \/ sold/i)).toMatch(
-      /hasn't sold on the Trade Portal .*What it bought, 299 QORT, is what other accounts' trade contracts paid it/
+      /hasn't sold on the Trade Portal .*What it bought, 299 QORT, is what other accounts' trade contracts paid it.*a contract that isn't a trade contract isn't counted/
     );
     // Its trades can't be looked up by a key it doesn't have: none are read.
-    expect(calls.some(({ path }) => path.startsWith('/crosschain/'))).toBe(
-      false
-    );
+    expect(
+      calls.some(({ path }) => path.startsWith('/crosschain/trades?'))
+    ).toBe(false);
+    // Each contract that paid it is read once, by its own address.
+    expect(
+      calls
+        .filter(({ path }) => path.startsWith('/crosschain/'))
+        .map(({ path }) => path)
+        .sort()
+    ).toEqual([7, 8, 9].map((n) => `/crosschain/trade/${contract(n)}`).sort());
   });
 
   it('reads each side once, without a limit; a failure says so with Retry', async () => {

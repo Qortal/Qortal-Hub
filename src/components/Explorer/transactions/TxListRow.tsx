@@ -11,6 +11,9 @@
  * Names in the sentence are read once the row nears the screen, so a long
  * list doesn't read every account's name at once; until then accounts show
  * by their short address.
+ *
+ * An asset order's row says how it was filled (useOrderFills): under its
+ * sentence once that is known, and every trade in its details.
  */
 import { memo, useId, useState } from 'react';
 import { Box, Button, Typography } from '@mui/material';
@@ -24,15 +27,18 @@ import {
   formatCount,
   formatDayTime,
 } from '../../../lib/explorer/format';
+import { FILLS_MAX } from '../../../lib/explorer/assetTrades';
+import { tradeSentence } from '../../../lib/explorer/findings';
 import type { TxRow } from '../../../lib/explorer/reads';
 import { makerOf, type TxOutcome } from '../../../lib/explorer/txWords';
 import { useExplorer, useNearScreen } from '../ExplorerContext';
-import { cap, mutedText, ReadError } from '../parts';
+import { cap, LoadingLine, mutedText, ReadError } from '../parts';
 import { RawAnswer } from './RawJson';
 import { typeTitle } from './sentenceText';
 import { TxFields, TxPeople } from './TxDetails';
 import { TxSentence } from './TxSentence';
 import { flowColor, TxIcon, useTxWords } from './txLook';
+import { useOrderFills, type OrderFillsState } from './useOrderFills';
 
 // A list shows up to a thousand rows: each row's parts are styled once.
 const Head = styled('div')(({ theme }) => ({
@@ -88,6 +94,14 @@ const WhenLine = styled('span')(({ theme }) => ({
   marginTop: 2,
 }));
 
+const FillLine = styled('span')(({ theme }) => ({
+  color: mutedText(theme),
+  display: 'block',
+  fontSize: '0.85rem',
+  marginTop: 2,
+  overflowWrap: 'anywhere',
+}));
+
 /** When it happened and in which block, or that it waits for one. */
 export function txWhen(tx: TxRow, t: TFunction, language: string): string {
   if (typeof tx.blockHeight !== 'number')
@@ -117,13 +131,87 @@ export function OutcomeNote({ outcome }: { outcome: TxOutcome | null }) {
   return <Note>{t(`explorer:tx.outcome.${outcome}`)}</Note>;
 }
 
+/** How an asset order was filled, in its details: every trade, or why it isn't known. */
+function OrderFills({ fills }: { fills: OrderFillsState }) {
+  const { t, i18n } = useTranslation(['explorer']);
+  const language = i18n.language;
+  if (fills.status === 'waiting' || fills.status === 'loading')
+    return <LoadingLine label={t('explorer:tx.fills.loading', cap)} />;
+  if (fills.status === 'failed')
+    return (
+      <ReadError
+        message={t('explorer:tx.fills.failed', cap)}
+        onRetry={fills.retry}
+      />
+    );
+  const { trades } = fills;
+  return (
+    <Box sx={{ minWidth: 0 }}>
+      {fills.failedAgain ? (
+        <ReadError
+          message={t('explorer:tx.fills.failed_again', cap)}
+          onRetry={fills.failedAgain}
+        />
+      ) : null}
+      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+        {trades.length
+          ? // Still open: filled so far, not filled.
+            t(
+              fills.open
+                ? 'explorer:tx.fills.partly'
+                : 'explorer:tx.fills.title',
+              {
+                count: trades.length,
+                shown: formatCount(trades.length, language),
+                ...cap,
+              }
+            )
+          : fills.open
+            ? t('explorer:tx.fills.none_yet', cap)
+            : t('explorer:tx.fills.none', cap)}
+      </Typography>
+      {trades.length ? (
+        <Box
+          component="ul"
+          aria-label={t('explorer:tx.fills.label', cap)}
+          sx={{ m: 0, minWidth: 0, pl: 2.5 }}
+        >
+          {trades.map((trade) => (
+            <Typography
+              component="li"
+              variant="body2"
+              key={`${trade.otherOrderId}:${trade.timestamp}:${trade.gave.amount}`}
+              sx={{ overflowWrap: 'anywhere' }}
+            >
+              <TxSentence sentence={tradeSentence(trade)} />
+            </Typography>
+          ))}
+        </Box>
+      ) : null}
+      {fills.cut ? (
+        <Typography
+          variant="body2"
+          sx={(theme) => ({ color: mutedText(theme), mt: 0.5 })}
+        >
+          {t('explorer:tx.fills.cut', {
+            shown: formatCount(FILLS_MAX, language),
+            ...cap,
+          })}
+        </Typography>
+      ) : null}
+    </Box>
+  );
+}
+
 function RowDetails({
   tx,
   words,
+  fills,
   panelId,
 }: {
   tx: TxRow;
   words: ReturnType<typeof useTxWords>;
+  fills: OrderFillsState | null;
   panelId: string;
 }) {
   const { t } = useTranslation(['explorer']);
@@ -162,6 +250,7 @@ function RowDetails({
           onRetry={words.privsFailed}
         />
       ) : null}
+      {fills ? <OrderFills fills={fills} /> : null}
       <TxPeople addresses={words.participants} maker={makerOf(tx)} />
       <RawAnswer
         tx={tx}
@@ -203,6 +292,8 @@ export const TxListRow = memo(function TxListRow({
   const [node, setNode] = useState<HTMLElement | null>(null);
   const near = useNearScreen(node);
   const words = useTxWords(tx, viewpoint, near);
+  const fills = useOrderFills(tx, open);
+  const filled = fills?.status === 'ready' ? fills.trades : [];
   const id = useId();
   const flow =
     words.direction === 'in' || words.direction === 'out'
@@ -231,13 +322,34 @@ export const TxListRow = memo(function TxListRow({
             <OutcomeNote outcome={words.outcome} />
           </SentenceLine>
           <WhenLine>{txWhen(tx, t, i18n.language)}</WhenLine>
+          {filled.length ? (
+            <FillLine>
+              {t('explorer:tx.fills.first', cap)}{' '}
+              <TxSentence
+                sentence={tradeSentence(filled[0])}
+                mode="quiet"
+                near={near}
+              />
+              {filled.length > 1
+                ? ` ${t('explorer:tx.fills.more', {
+                    count: filled.length - 1,
+                    shown: formatCount(filled.length - 1, i18n.language),
+                  })}`
+                : null}
+            </FillLine>
+          ) : null}
         </Lines>
         <Chevron aria-hidden>
           <ExpandMoreRoundedIcon data-chevron="" fontSize="small" />
         </Chevron>
       </Head>
       {open ? (
-        <RowDetails tx={tx} words={words} panelId={`${id}-panel`} />
+        <RowDetails
+          tx={tx}
+          words={words}
+          fills={fills}
+          panelId={`${id}-panel`}
+        />
       ) : null}
     </Row>
   );

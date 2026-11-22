@@ -14,6 +14,7 @@ import {
   firstShareRead,
   ORDER_TRADES_MAX,
   orderQortRead,
+  portalChainsRead,
   portalTradesRead,
 } from './qortReads';
 
@@ -226,39 +227,102 @@ describe('one of its asset orders', () => {
     await expect(orderQortRead('o1', ADDRESS).load()).rejects.toBeInstanceOf(
       CoreHttpError
     );
+    // Its trades answered with something that isn't a list: a failure too.
+    answer = (path) =>
+      path.includes('/trades?') ? { body: { trades: [] } } : { body: ORDER };
+    await expect(orderQortRead('o1', ADDRESS).load()).rejects.toBeInstanceOf(
+      CoreHttpError
+    );
   });
 });
 
 describe('its trades on the Trade Portal', () => {
-  it('reads each side once, without a limit, and counts each trade once', async () => {
+  const at = (n: number) => `A${String(n).repeat(33)}`;
+  const SELLER = `Q${'S'.repeat(33)}`;
+  const BUYER = `Q${'B'.repeat(33)}`;
+
+  it('reads each side once, every chain at once, without a limit, and counts each trade once a side', async () => {
     answer = (path) =>
       query(path).get('buyerPublicKey')
         ? {
             body: [
-              { atAddress: `A${'1'.repeat(33)}`, qortAmount: '10.00000000' },
-              { atAddress: `A${'1'.repeat(33)}`, qortAmount: '10.00000000' },
-              { atAddress: `A${'2'.repeat(33)}`, qortAmount: '0.50000000' },
+              {
+                atAddress: at(1),
+                qortAmount: '10.00000000',
+                foreignAmount: '0.03000000',
+                sellerAddress: SELLER,
+                tradeTimestamp: 2_000,
+              },
+              // The same trade twice: counted once.
+              {
+                atAddress: at(1),
+                qortAmount: '10.00000000',
+                tradeTimestamp: 2_000,
+              },
+              {
+                atAddress: at(2),
+                qortAmount: '0.50000000',
+                btcAmount: '1.00000000',
+                // Core couldn't find its block: no time, never 1970.
+                tradeTimestamp: 0,
+              },
             ],
           }
-        : { body: [{ atAddress: `A${'3'.repeat(33)}`, qortAmount: '7' }] };
+        : {
+            body: [
+              {
+                atAddress: at(3),
+                qortAmount: '7',
+                buyerReceivingAddress: BUYER,
+                tradeTimestamp: 3_000,
+              },
+            ],
+          };
     const spec = portalTradesRead(ADDRESS, KEY);
     expect(spec.key).toBe(`portaltrades:${ADDRESS}`);
-    expect(await spec.load()).toEqual({
-      bought: 1_050_000_000n,
-      sold: 700_000_000n,
-      // Its one sale doesn't name its seller and buyer: counted, never listed.
-      sales: [],
-    });
+    const read = await spec.load();
+    expect(read.bought).toBe(1_050_000_000n);
+    expect(read.sold).toBe(700_000_000n);
+    // Newest first (one with no time last), each with its side, the other account and its AT; no coin named.
+    expect(read.trades).toEqual([
+      {
+        side: 'sold',
+        qort: 700_000_000n,
+        coin: 0n,
+        at: at(3),
+        other: BUYER,
+        timestamp: 3_000,
+      },
+      {
+        side: 'bought',
+        qort: 1_000_000_000n,
+        coin: 3_000_000n,
+        at: at(1),
+        other: SELLER,
+        timestamp: 2_000,
+      },
+      {
+        side: 'bought',
+        qort: 50_000_000n,
+        coin: 100_000_000n,
+        at: at(2),
+        other: '',
+        timestamp: null,
+      },
+    ]);
+    // Two reads: one a side, on every chain, none with a limit or an offset.
     expect(paths).toHaveLength(2);
     for (const path of paths) {
       expect(path.startsWith('/crosschain/trades?')).toBe(true);
+      expect(query(path).has('foreignBlockchain')).toBe(false);
       expect(query(path).has('limit')).toBe(false);
       expect(query(path).has('offset')).toBe(false);
     }
-    expect(paths.map((path) => [...query(path).keys()][0]).sort()).toEqual([
-      'buyerPublicKey',
-      'sellerPublicKey',
-    ]);
+    expect(
+      paths
+        .map((path) => (query(path).has('buyerPublicKey') ? 'buyer' : 'seller'))
+        .sort()
+    ).toEqual(['buyer', 'seller']);
   });
 
   it('keeps its sales for Compare, newest first, the buyer by where it received the QORT, each once', async () => {
@@ -316,6 +380,77 @@ describe('its trades on the Trade Portal', () => {
         ? { status: 500, body: { error: 5 } }
         : { body: [] };
     await expect(portalTradesRead(ADDRESS, KEY).load()).rejects.toBeInstanceOf(
+      CoreHttpError
+    );
+    // An answer that isn't a list is a failure too.
+    answer = () => ({ body: { trades: [] } });
+    await expect(portalTradesRead(ADDRESS, KEY).load()).rejects.toBeInstanceOf(
+      CoreHttpError
+    );
+  });
+});
+
+describe('which coin each of its Trade Portal trades was for', () => {
+  const at = (n: number) => `A${String(n).repeat(33)}`;
+  const CHAINS = [
+    'LITECOIN',
+    'BITCOIN',
+    'DIGIBYTE',
+    'DOGECOIN',
+    'RAVENCOIN',
+    'PIRATECHAIN',
+  ];
+
+  it('reads each chain on each side once, without a limit; each contract by its chain', async () => {
+    answer = (path) => {
+      const q = query(path);
+      const chain = q.get('foreignBlockchain');
+      if (q.get('buyerPublicKey'))
+        return { body: chain === 'DOGECOIN' ? [{ atAddress: at(2) }] : [] };
+      return {
+        body:
+          chain === 'LITECOIN'
+            ? [{ atAddress: at(1) }]
+            : // A made-up node that lists one contract under two chains: the first's.
+              chain === 'RAVENCOIN' || chain === 'BITCOIN'
+              ? [{ atAddress: at(3) }]
+              : [],
+      };
+    };
+    const spec = portalChainsRead(ADDRESS, KEY);
+    expect(spec.key).toBe(`portalchains:${ADDRESS}`);
+    expect(await spec.load()).toEqual({
+      [at(1)]: 'LITECOIN',
+      [at(2)]: 'DOGECOIN',
+      [at(3)]: 'BITCOIN',
+    });
+    expect(paths).toHaveLength(12);
+    const reads = paths.map((path) => {
+      const q = query(path);
+      expect(q.has('limit')).toBe(false);
+      return `${q.get('foreignBlockchain')}:${q.has('buyerPublicKey') ? 'buyer' : 'seller'}`;
+    });
+    expect(new Set(reads).size).toBe(12);
+    for (const chain of CHAINS)
+      expect(reads.filter((read) => read.startsWith(`${chain}:`))).toHaveLength(
+        2
+      );
+  });
+
+  it('a read that fails fails it whole, and no read starts after it', async () => {
+    answer = (path) =>
+      query(path).get('foreignBlockchain') === 'LITECOIN' &&
+      query(path).get('sellerPublicKey')
+        ? { status: 500, body: { error: 5 } }
+        : { body: [] };
+    await expect(portalChainsRead(ADDRESS, KEY).load()).rejects.toBeInstanceOf(
+      CoreHttpError
+    );
+    // The first read failed: only the two read beside it, none after.
+    expect(paths.length).toBeLessThanOrEqual(3);
+    // An answer that isn't a list is a failure too.
+    answer = () => ({ body: { trades: [] } });
+    await expect(portalChainsRead(ADDRESS, KEY).load()).rejects.toBeInstanceOf(
       CoreHttpError
     );
   });

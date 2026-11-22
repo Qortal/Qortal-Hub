@@ -396,7 +396,7 @@ describe('the Names tab', () => {
       within(tabs)
         .getAllByRole('tab')
         .map((tab) => tab.textContent)
-    ).toEqual(['Overview', 'Transactions', 'Names']);
+    ).toEqual(['Overview', 'Transactions', 'Assets', 'Names']);
     const panel = await openNamesTab();
     const names = await namesRegion(panel, /^names \(4\)$/i);
     const list = within(names).getByRole('list', { name: /^its names$/i });
