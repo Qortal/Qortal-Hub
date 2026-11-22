@@ -37,6 +37,8 @@ step of the trail. A Q-App's `OPEN_USER_LOOKUP` request sends the same event.
   connections (n)", which opens that tab; At a glance has QORT minted, QORT
   purchased / sold and QORT received / sent over the whole history, and
   Activity comes right after it (see below).
+  Each of its groups has its avatar, and Join when the signed-in account isn't
+  in it (see "Groups").
 - **Its Transactions:** everything it did, newest first, each as a sentence
   told from its side ("Sent 15 QORT to Publisher", "Received 2 QORT from
   Second"), with when and in which block. Filters by kind (Payments, Names,
@@ -109,9 +111,13 @@ out of everyone's way.
   cache, so the viewer's own account page and every page's Dev Admin mark share
   them.
 - **When:** read when the window opens, and kept about a minute for that Hub
-  account (`ACCESS_TTL_MS`): reopening within it reads nothing again. Another
-  Hub account starts again; an answer for the last one that arrives late is
-  dropped. Nothing polls.
+  account (`ACCESS_TTL_MS`): reopening within it reads nothing again. The
+  newest groups of the account the window read (the rule's read, or a later
+  one: its own page's Refresh, a Retry) are kept with it, for the Overview's
+  Join (see "Groups"): the next window's cache gets them for the time they
+  have left, never over an answer it already has or a read on its way.
+  Another Hub account starts again; an answer for the last one that arrives
+  late is dropped. Nothing polls.
 - **Fail closed:** while it is being read, and when a read fails, the detailed
   parts stay out, and a failed read is never kept, so reopening the window
   reads it again. Nothing flashes in and out.
@@ -129,6 +135,67 @@ out of everyone's way.
   account on its Overview whatever else it sends.
 - **Nothing of a detailed part is read** for a viewer who doesn't see it: the
   parts that read are mounted only for viewers the rule lets in.
+
+## Groups
+
+The Overview's groups are cards: the group's avatar and name, whether it is
+open or closed, its members, the account's part in it (owner, admin) and the
+group's own description. Avatars and Join are for everyone, not only viewers
+the level 5+ rule lets in. MINTER's card has an (i) saying what MINTER is:
+Qortal's minting group, whose members can mint (since October 2024), and whose
+new members come in through nominations in Q-Mintership and the Minter Admins'
+decisions. The keyboard reaches it, and screen readers read it.
+
+- **More than 25 groups:** the first 25 in the chosen order show, then "Show
+  all N" (N the account's groups, as in the title); "Show fewer" folds them
+  again and keeps the focus on the button, in view. The step keeps it open or
+  folded, for Back and Forward. Cards past the 25th aren't drawn until then,
+  so nothing is read or loaded for them.
+- **Avatars:** the THUMBNAIL the group's owner published as
+  `qortal_group_avatar_<groupId>`, under the owner's primary name as the node
+  sends it with the group (`ownerPrimaryName`, which Core leaves out for an
+  owner without one, such as Core's null account, the owner of MINTER and the
+  dev group), at
+  `/arbitrary/THUMBNAIL/<name>/qortal_group_avatar_<groupId>?async=true`, each
+  part encoded, as Hub shows it elsewhere. Nothing else is read for it, and the
+  picture is loaded only once the card nears the screen. Until the picture has
+  loaded, and for good when there is no name or the picture fails, the card
+  shows the group's initial (a groups icon for a name with none): never a
+  broken image. A failed picture isn't tried again while its card stays on
+  screen; the card tries again when it is shown anew (another tab, Back, the
+  window opened again), and one under a new name (Refresh brought the owner's
+  new name) at once.
+- **Join:** a group the signed-in account isn't in has Join, or Ask to join
+  for a closed group (Core's own `isOpen`; Join when it doesn't say). It opens
+  Hub's own join window over the Explorer, as a group's join link does
+  (`executeEvent('globalActionJoinGroup', { groupId })`); that window reads
+  the group, says whether it is open or closed, asks for the fee and sends the
+  join. **The Explorer itself signs and sends nothing,** and stays on its
+  step: the join window closes back onto it (Close, or Escape), and its Join
+  gets the focus back. Qortal's own groups, MINTER and the dev group (group 1),
+  have no Join: MINTER's members come in through Q-Mintership's nominations
+  (the MINTER section links there).
+- **Which groups the account is in:** from the read the level 5+ rule already
+  makes (`/groups/member/<viewer>`, through the window's cache; nothing more is
+  read), and from Hub's own list of its groups. No Join while that read is
+  under way, after it failed (the section says so, with Retry), when no one is
+  signed in, or on a group the node or Hub has the account in. A group the
+  account joined or left in this session is as Hub's own list has it now (the
+  node's answer may be older): one it left, or was removed from, has Join
+  again.
+- **After a join:** Hub's task list says what it did, and its record takes
+  Join's place on that card: "Joining…" from the moment the fee is accepted in
+  Hub's join window, until Hub has the account in the group; then nothing.
+  "Request sent" for a closed group, whose admins decide (and Join again if the
+  account leaves it later). The joins Hub makes itself show this way: its join
+  window (from here, or from a group's join link), Find groups, promoted
+  groups, invites and an event's card. A Q-App's own JOIN_GROUP request adds
+  nothing to Hub's task list: that group shows as joined once Hub's list or
+  the node's answer has the account in it. Hub's join window sends one join of
+  a group at a time: while one is being sent, or Hub's record of it isn't done
+  yet, it says Pending in place of Join. The card's control stays the same
+  button (focus on it isn't lost), and it does nothing more. Nothing is read
+  again and nothing polls: Hub's task list follows the join.
 
 ## Connections
 
@@ -974,11 +1041,11 @@ nothing says so and nothing of it is read. From Q-Mintership+'s Trades tab.
 
 ## Rules
 
-- **Read-only.** Public GETs to the node Hub uses, no API key. Send QORT and
-  Block hand over to Hub's own payment window and block lists. Send QORT hands
-  over the address only (a name could change hands before the payment is
-  sent), and Block waits until the account's name is known, so the address and
-  the name are blocked together.
+- **Read-only.** Public GETs to the node Hub uses, no API key. Send QORT,
+  Block and Join hand over to Hub's own payment window, block lists and join
+  window. Send QORT hands over the address only (a name could change hands
+  before the payment is sent), and Block waits until the account's name is
+  known, so the address and the name are blocked together.
 - **A failed read is never "nothing there".** Each read loads, fails and
   retries on its own; "the node has nothing" is an answer of its own (Core's
   "transaction unknown" for a signature, "group unknown" for a group).
@@ -1013,7 +1080,7 @@ nothing says so and nothing of it is read. From Q-Mintership+'s Trades tab.
 | `src/components/Explorer/connections/`  | the Connections tab, its rows, payments, In common and the exchange notice; the circle (`ConnectionsCircle.tsx`, `CircleNodeDialog.tsx`, `circleParts.ts`; its layout is `src/lib/explorer/circle.ts`) and the Account report (`AccountReport.tsx`, its text `accountReportText.ts`, its building blocks `src/lib/explorer/accountReport.ts`); `useExplorerAccess.ts` runs the rule in the window; the Overview's Direct links (`overview/DirectLinksPreview.tsx`)                                                                                                                                                                                                                                                                                                           |
 | `src/components/Explorer/compare/`      | Compare: its step, cards, sections and picks (`compareSteps.tsx`, `useCompareData.ts`); its rules, reads and picks in `src/lib/explorer/` (`compare.ts`, `compareReads.ts`, `comparePicks.ts`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `src/components/Explorer/sets/`         | the Sponsees and Funded steps and the checks across a set (`SetChecks.tsx`); their rules in `src/lib/explorer/sets.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `src/components/Explorer/overview/`     | the Overview's sections; the All list it holds (`useAccountHistory.ts`), the QORT figures (`QortFacts.tsx`, `Fact.tsx`) and Activity (`activity/`: the section, the chart, its colours and words, the settings dialog)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `src/components/Explorer/overview/`     | the Overview's sections; the All list it holds (`useAccountHistory.ts`), the QORT figures (`QortFacts.tsx`, `Fact.tsx`), Activity (`activity/`: the section, the chart, its colours and words, the settings dialog) and the group cards' avatars and Join (`GroupsSection.tsx`; what a card offers is `src/lib/explorer/groupJoin.ts`)                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `src/components/Explorer/assets/`       | the Assets tab, its summary, cards and rows, an asset's window, How it adds up, avatars; the Overview's Q-Assets (`overview/AssetsSection.tsx`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `src/components/Explorer/trades/`       | the Trades tab: what it reads (`useTrades.ts`), its summary, breakdown, highlights, chart and lists                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `src/i18n/locales/<lang>/explorer.json` | its text, in all 12 languages                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |

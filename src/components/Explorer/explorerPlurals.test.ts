@@ -3,7 +3,8 @@ import i18n from '../../i18n/i18n';
 
 // The Explorer's counted sentences say their number in every form of every
 // language: a language's "one" form can cover 21 or 101 too (Russian), so
-// the case of exactly one has a sentence of its own.
+// the case of exactly one has a sentence of its own. And each language has
+// its own form for each number: without it, i18next shows the English one.
 
 const LANGUAGES = [
   'ar',
@@ -108,6 +109,7 @@ const COUNTED: Array<[string, string]> = [
   ['explorer:funded.result_all', 'shown'],
   ['explorer:funded.result_some', 'shown'],
   ['explorer:groups.members', 'members'],
+  ['explorer:groups.show_all', 'shown'],
   ['explorer:minting.show_all', 'count'],
   ['explorer:name_page.changes_found', 'shown'],
   ['explorer:name_page.changes_since', 'shown'],
@@ -233,11 +235,18 @@ afterAll(() => i18n.changeLanguage(original));
 
 describe('explorer plurals', () => {
   it.each(LANGUAGES)(
-    '%s: every counted sentence shows its number',
+    "%s: every counted sentence shows its number, in the language's own form",
     async (language) => {
       await i18n.changeLanguage(language);
+      const forms = new Intl.PluralRules(language);
       for (const [key, shown] of COUNTED) {
+        const [ns, path] = key.split(':');
         for (const count of COUNTS) {
+          const own = `${path}_${forms.select(count)}`;
+          expect(
+            i18n.getResource(language, ns, own),
+            `${language} ${ns}:${own}`
+          ).toEqual(expect.any(String));
           // `count` picks the form; a separate option, when there is one, is what shows.
           const marker = shown === 'count' ? String(count) : `#${count}#`;
           const text = i18n.t(key, {

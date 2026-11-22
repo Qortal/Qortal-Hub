@@ -9,6 +9,7 @@ import {
   accountRead,
   devAdminsRead,
   firstSeenRead,
+  groupsOfRead,
   lastSignedRead,
   nameDataRead,
   namesOfRead,
@@ -251,6 +252,28 @@ describe('names that are also routes of the node', () => {
 });
 
 describe('the rest', () => {
+  it("keeps a group's owner's primary name when the node sends it, and none when it doesn't", async () => {
+    answer = () => ({
+      body: [
+        {
+          groupId: 7,
+          groupName: 'alpha',
+          owner: ADDRESS,
+          ownerPrimaryName: 'Second Room',
+          isOpen: true,
+        },
+        { groupId: 694, groupName: 'MINTER', owner: NULL_ACCOUNT },
+        { groupId: 9, groupName: 'beta', owner: ADDRESS, ownerPrimaryName: '' },
+      ],
+    });
+    const groups = await groupsOfRead(ADDRESS).load();
+    expect(groups.map((group) => group.ownerName)).toEqual([
+      'Second Room',
+      undefined,
+      undefined,
+    ]);
+  });
+
   it("leaves Core's null account out of the Dev Admins", async () => {
     answer = () => ({
       body: {

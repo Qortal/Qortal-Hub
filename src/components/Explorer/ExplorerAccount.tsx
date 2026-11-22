@@ -16,8 +16,8 @@
  * The Assets tab and the Overview's Q-Assets are everyone's. An AT's page
  * is its transactions only: it never mints, and what its QORT does is the
  * trades it settles, which its traders' pages add up.
- * Read-only: nothing here writes (Send QORT and Block hand over to Hub's
- * own windows and lists).
+ * Read-only: nothing here writes (Send QORT, Block and a group's Join hand
+ * over to Hub's own windows and lists).
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Box, ButtonBase, CircularProgress, Typography } from '@mui/material';

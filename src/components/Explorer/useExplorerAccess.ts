@@ -7,7 +7,12 @@
  * - Read when the window opens, through its cache (so the account page of
  *   one's own account, and every page's Dev Admin mark, share the reads).
  * - An answer is kept about a minute for its Hub account: reopening the
- *   window within it reads nothing again. A failed read is never kept.
+ *   window within it reads nothing again. The newest groups of the account
+ *   the window read (the rule's read, or a later one: its own page's
+ *   Refresh, a Retry) are kept with it and go into the next window's cache,
+ *   so the Overview's Join (which needs them) reads nothing again either;
+ *   never over an answer the cache has or a read on its way. A failed read
+ *   is never kept.
  * - Another Hub account starts again: nothing kept for the last one counts
  *   for it, and an answer for the last one that arrives late is dropped.
  * - Until it is known, and after a failed read, the detailed parts stay
@@ -17,6 +22,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ACCESS_TTL_MS, readFullExplorer } from '../../lib/explorer/access';
 import type { ExplorerCache } from '../../lib/explorer/cache';
 import { exchangeName } from '../../lib/explorer/exchanges';
+import { groupsOfRead, type GroupOf } from '../../lib/explorer/reads';
 import { useExplorer } from './ExplorerContext';
 
 /**
@@ -31,6 +37,8 @@ interface Kept {
   viewer: string;
   full: boolean;
   at: number;
+  /** Its newest groups the window read (none if no read of them succeeded). */
+  groups?: GroupOf[];
 }
 
 /**
@@ -51,6 +59,19 @@ export function useAccessRule(
     state: AccessState;
   }>({ viewer: null, state: 'basic' });
 
+  // A newer answer for the account's groups (its own page's Refresh, a
+  // Retry) is what the next window starts from.
+  useEffect(() => {
+    if (!viewer) return undefined;
+    const key = groupsOfRead(viewer).key;
+    return cache.subscribe(key, () => {
+      const groups = cache.peek<GroupOf[]>(key);
+      const known = kept.current;
+      if (groups && known?.viewer === viewer)
+        kept.current = { ...known, groups };
+    });
+  }, [cache, viewer]);
+
   useEffect(() => {
     const who = viewerRef.current;
     // Another Hub account: what was kept for the last one goes.
@@ -62,6 +83,19 @@ export function useAccessRule(
     }
     const known = kept.current;
     if (known && Date.now() - known.at < ACCESS_TTL_MS) {
+      // Its groups go into this window's cache, through a read of it: an
+      // answer it has, or a read on its way (opened again before it had
+      // faded out), stays as it is. Kept no longer than groups read with the
+      // answer would be (newer ones, a little less).
+      const carried = known.groups;
+      if (carried) {
+        const groups = groupsOfRead(who);
+        cache
+          .read(groups.key, () => Promise.resolve(carried), {
+            ttlMs: groups.ttlMs - (Date.now() - known.at),
+          })
+          .catch(() => undefined);
+      }
       setShown({ viewer: who, state: known.full ? 'full' : 'basic' });
       return undefined;
     }
@@ -70,7 +104,12 @@ export function useAccessRule(
     readFullExplorer(who, cache).then(
       (full) => {
         if (!live || viewerRef.current !== who) return;
-        kept.current = { viewer: who, full, at: Date.now() };
+        kept.current = {
+          viewer: who,
+          full,
+          at: Date.now(),
+          groups: cache.peek<GroupOf[]>(groupsOfRead(who).key),
+        };
         setShown({ viewer: who, state: full ? 'full' : 'basic' });
       },
       () => {

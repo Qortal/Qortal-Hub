@@ -228,6 +228,11 @@ export interface GroupOf {
   groupId: number;
   groupName: string;
   owner: string | null;
+  /**
+   * The owner's primary name, when the node sends it with the group (Core
+   * leaves it out for an owner without one): the group's avatar is under it.
+   */
+  ownerName?: string;
   isOpen: boolean | null;
   memberCount: number | null;
   isAdmin: boolean;
@@ -249,6 +254,9 @@ export const groupsOfRead = (address: string): ReadSpec<GroupOf[]> => ({
         groupId: num(row.groupId, NaN),
         groupName: typeof row.groupName === 'string' ? row.groupName : '',
         owner: str(row.owner),
+        ...(str(row.ownerPrimaryName)
+          ? { ownerName: row.ownerPrimaryName as string }
+          : {}),
         isOpen: typeof row.isOpen === 'boolean' ? row.isOpen : null,
         memberCount:
           typeof row.memberCount === 'number' ? row.memberCount : null,
