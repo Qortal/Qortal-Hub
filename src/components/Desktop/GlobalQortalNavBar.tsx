@@ -1969,13 +1969,11 @@ export function GlobalQortalNavBar({
               sx={{
                 alignItems: 'center',
                 display: 'flex',
-                flex: '0 0 122px',
+                // Only the buttons shown, side by side.
+                flexShrink: 0,
                 gap: 0.75,
                 height: 26,
                 justifyContent: 'flex-end',
-                maxWidth: 122,
-                minWidth: 122,
-                width: 122,
               }}
             >
               <Tooltip
@@ -1987,8 +1985,7 @@ export function GlobalQortalNavBar({
                 <Box
                   component="span"
                   sx={{
-                    display: 'inline-flex',
-                    visibility: canCopyCurrentLink ? 'visible' : 'hidden',
+                    display: canCopyCurrentLink ? 'inline-flex' : 'none',
                   }}
                 >
                   <ButtonBase
@@ -2052,8 +2049,7 @@ export function GlobalQortalNavBar({
                 <Box
                   component="span"
                   sx={{
-                    display: 'inline-flex',
-                    visibility: canPinCurrentApp ? 'visible' : 'hidden',
+                    display: canPinCurrentApp ? 'inline-flex' : 'none',
                   }}
                 >
                   <ButtonBase

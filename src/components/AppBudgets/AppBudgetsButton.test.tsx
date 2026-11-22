@@ -107,11 +107,21 @@ afterEach(() => {
 describe('the budget button in the search bar', () => {
   it('sits between Pin and Go, and Go has a name', () => {
     renderBar('home');
-    const go = screen.getByRole('button', { name: 'Go' });
+    const go = screen.getByLabelText('Go');
     expect(
       budgetButton().compareDocumentPosition(go) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
+  });
+
+  it("leaves no room for Copy and Pin while there's nothing to copy or pin, so the buttons sit side by side", () => {
+    renderBar('home');
+    for (const name of [/^copy link$/i, /^pin/i]) {
+      const button = screen.getByRole('button', { hidden: true, name });
+      expect(getComputedStyle(button.parentElement).display).toBe('none');
+    }
+    expect(budgetButton()).toBeTruthy();
+    expect(screen.getByLabelText('Go')).toBeTruthy();
   });
 
   it('is there on Home and lists every budget, without a section for one app', () => {
