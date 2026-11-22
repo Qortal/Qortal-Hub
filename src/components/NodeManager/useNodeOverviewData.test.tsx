@@ -231,4 +231,30 @@ describe('useNodeOverviewData', () => {
     expect(read).toContain('/blocks/summaries?start=1991&end=2001');
     expect(read).toContain('/blocks/byheight/560');
   });
+
+  it('reads nothing while another section is shown, and keeps what it read', async () => {
+    const fetchMock = stubNode();
+    const { rerender, result } = renderHook(
+      ({ active }: { active: boolean }) =>
+        useNodeOverviewData(NODE, false, active),
+      { initialProps: { active: false } }
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    rerender({ active: true });
+    await waitFor(() => expect(result.current.info.status).toBe('ok'));
+    await waitFor(() => expect(result.current.dayOldBlock.status).toBe('ok'));
+
+    // Another section shown: no more reads, and the answers stay.
+    fetchMock.mockClear();
+    rerender({ active: false });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.current.info.status).toBe('ok');
+  });
 });

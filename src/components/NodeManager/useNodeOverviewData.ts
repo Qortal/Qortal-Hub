@@ -214,41 +214,50 @@ export const BLOCKS_A_DAY = 1440;
 /** How many of the newest blocks the Overview lists. */
 export const RECENT_BLOCKS = 10;
 
-/** Everything the Overview shows, read from the node in use. */
-export const useNodeOverviewData = (nodeBase: string, isPublic: boolean) => {
+/**
+ * Everything the Overview shows, read from the node in use. While `active`
+ * is false (another section is shown) nothing is read, and each read starts
+ * again when it's true.
+ */
+export const useNodeOverviewData = (
+  nodeBase: string,
+  isPublic: boolean,
+  active = true
+) => {
+  const when = <T>(load: T | null): T | null => (active ? load : null);
   const info = useNodeRead<AdminInfo>(
     nodeBase,
-    (base, signal) => getNodeJson(base, '/admin/info', signal),
+    when((base, signal) => getNodeJson(base, '/admin/info', signal)),
     OVERVIEW_INTERVALS.info
   );
   const lastBlock = useNodeRead<LastBlock>(
     nodeBase,
-    (base, signal) => getNodeJson(base, '/blocks/last', signal),
+    when((base, signal) => getNodeJson(base, '/blocks/last', signal)),
     OVERVIEW_INTERVALS.lastBlock
   );
   const peers = useNodeRead<ConnectedPeer[]>(
     nodeBase,
-    async (base, signal) => {
+    when(async (base, signal) => {
       const list = await getNodeJson<unknown>(base, '/peers', signal);
       if (!Array.isArray(list)) throw new Error('Not a list');
       return list as ConnectedPeer[];
-    },
+    }),
     OVERVIEW_INTERVALS.peers
   );
   const dataPeers = useNodeRead<ConnectedPeer[]>(
     nodeBase,
-    async (base, signal) => {
+    when(async (base, signal) => {
       const list = await getNodeJson<unknown>(base, '/peers/data', signal);
       if (!Array.isArray(list)) throw new Error('Not a list');
       return list as ConnectedPeer[];
-    },
+    }),
     OVERVIEW_INTERVALS.dataPeers
   );
   // Core 6.1.9 leaves the online accounts count in block answers at 0: the
   // minters online now come from their own list.
   const onlineMinters = useNodeRead<number>(
     nodeBase,
-    async (base, signal) => {
+    when(async (base, signal) => {
       const levels = await getNodeJson<unknown>(
         base,
         '/addresses/online/levels',
@@ -263,12 +272,12 @@ export const useNodeOverviewData = (nodeBase: string, isPublic: boolean) => {
             : 0),
         0
       );
-    },
+    }),
     OVERVIEW_INTERVALS.onlineMinters
   );
   const activity = useNodeRead<ActivitySummary>(
     nodeBase,
-    (base, signal) => getNodeJson(base, '/admin/summary', signal),
+    when((base, signal) => getNodeJson(base, '/admin/summary', signal)),
     OVERVIEW_INTERVALS.activity
   );
   // The public node's memory, keys and settings aren't the user's.
@@ -276,14 +285,14 @@ export const useNodeOverviewData = (nodeBase: string, isPublic: boolean) => {
     nodeBase,
     isPublic
       ? null
-      : (base, signal) => getNodeJson(base, '/admin/systeminfo', signal),
+      : when((base, signal) => getNodeJson(base, '/admin/systeminfo', signal)),
     OVERVIEW_INTERVALS.system
   );
   const mintingKeys = useNodeRead<number>(
     nodeBase,
     isPublic
       ? null
-      : async (base, signal) => {
+      : when(async (base, signal) => {
           const list = await getNodeJson<unknown>(
             base,
             '/admin/mintingaccounts',
@@ -291,12 +300,12 @@ export const useNodeOverviewData = (nodeBase: string, isPublic: boolean) => {
           );
           if (!Array.isArray(list)) throw new Error('Not a list');
           return list.length;
-        },
+        }),
     OVERVIEW_INTERVALS.mintingKeys
   );
   const settings = useNodeRead<NodeSettingsSubset>(
     nodeBase,
-    isPublic ? null : readSettings,
+    isPublic ? null : when(readSettings),
     0
   );
 
@@ -306,7 +315,7 @@ export const useNodeOverviewData = (nodeBase: string, isPublic: boolean) => {
   const recentBlocks = useNodeRead<BlockSummary[]>(
     nodeBase,
     hasHeight
-      ? async (base, signal) => {
+      ? when(async (base, signal) => {
           const start = Math.max(1, height - RECENT_BLOCKS + 1);
           const list = await getNodeJson<unknown>(
             base,
@@ -317,7 +326,7 @@ export const useNodeOverviewData = (nodeBase: string, isPublic: boolean) => {
           return [...(list as BlockSummary[])].sort(
             (a, b) => (b.height ?? 0) - (a.height ?? 0)
           );
-        }
+        })
       : null,
     0,
     height
@@ -329,8 +338,9 @@ export const useNodeOverviewData = (nodeBase: string, isPublic: boolean) => {
   const dayOldBlock = useNodeRead<BlockSummary>(
     nodeBase,
     dayBack !== null
-      ? (base, signal) =>
+      ? when((base, signal) =>
           getNodeJson(base, `/blocks/byheight/${dayBack}`, signal)
+        )
       : null,
     0,
     dayBackStep

@@ -120,6 +120,35 @@ export const primaryButtonSx = (theme: Theme) =>
     },
   }) as const;
 
+/** An action that takes the node down or changes its chain. */
+export const dangerButtonSx = (theme: Theme) =>
+  ({
+    background:
+      'linear-gradient(180deg, rgba(248,150,160,0.96) 0%, rgba(226,101,118,0.98) 100%)',
+    border: '1px solid rgba(255,214,219,0.4)',
+    borderRadius: '10px',
+    boxShadow:
+      'inset 0 1px 0 rgba(255,255,255,0.3), 0 10px 24px rgba(126,29,44,0.22)',
+    color: '#2A0C12',
+    fontWeight: 800,
+    letterSpacing: '0.01em',
+    px: 1.8,
+    py: 0.9,
+    textTransform: 'none',
+    '&:hover': {
+      background:
+        'linear-gradient(180deg, rgba(250,158,168,1) 0%, rgba(230,110,127,1) 100%)',
+      boxShadow:
+        'inset 0 1px 0 rgba(255,255,255,0.34), 0 12px 26px rgba(126,29,44,0.26)',
+    },
+    '&.Mui-disabled': {
+      background: alpha(theme.palette.action.disabledBackground, 0.9),
+      borderColor: alpha(theme.palette.divider, 0.36),
+      boxShadow: 'none',
+      color: theme.palette.text.disabled,
+    },
+  }) as const;
+
 /**
  * A secondary action in a card's corner: outlined in the text colour (the
  * dark theme's divider is too dark to outline with).

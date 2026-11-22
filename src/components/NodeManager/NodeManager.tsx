@@ -11,6 +11,8 @@ import {
 import { alpha } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
 import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded';
+import HubRoundedIcon from '@mui/icons-material/HubRounded';
+import TuneRoundedIcon from '@mui/icons-material/TuneRounded';
 import BoltRoundedIcon from '@mui/icons-material/BoltRounded';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import { useAtomValue, useSetAtom } from 'jotai';
@@ -35,6 +37,7 @@ import qortalLogoMinting from '../../assets/sidebar/qortal-logo-official-minting
 import { NodeStateLogo } from '../Desktop/NodeStateLogo';
 import { useNodeState } from '../Desktop/nodeState';
 import mintingWatermark from '../../assets/minting/blue-grey-menu-button2-1.png';
+import { NodeControlSection } from './NodeControlSection';
 import {
   quietSurfaceSx,
   sectionLabelSx,
@@ -43,6 +46,7 @@ import {
   windowPaperSx,
 } from './nodeManagerLook';
 import { NodeOverview } from './NodeOverview';
+import { PeersSection } from './PeersSection';
 import {
   isNodeManagerSection,
   nodeManagerOpenAtom,
@@ -156,10 +160,21 @@ export const NodeManager = ({
       id: 'overview',
       label: t('node:manager.section.overview', capitalize),
     },
-    // The minting window refuses the public node: no way in from here.
+    {
+      icon: HubRoundedIcon,
+      id: 'peers',
+      label: t('node:manager.section.peers', capitalize),
+    },
+    // The public node takes no admin actions, and the minting window
+    // refuses it: no way in from here.
     ...(isPublic
       ? []
       : [
+          {
+            icon: TuneRoundedIcon,
+            id: 'control' as const,
+            label: t('node:manager.section.control', capitalize),
+          },
           {
             icon: BoltRoundedIcon,
             id: 'minting' as const,
@@ -167,6 +182,9 @@ export const NodeManager = ({
           },
         ]),
   ];
+  // Node control isn't there for the public node.
+  const shown: NodeManagerSection =
+    isPublic && section === 'control' ? 'overview' : section;
 
   return (
     <Dialog
@@ -380,7 +398,7 @@ export const NodeManager = ({
             {t('node:manager.sections')}
           </Typography>
           {navItems.map(({ icon: Icon, id, label }) => {
-            const selected = id === section;
+            const selected = id === shown;
             const opensWindow = id === 'minting';
             return (
               <ButtonBase
@@ -453,18 +471,74 @@ export const NodeManager = ({
             py: { md: 2.75, xs: 2.25 },
           }}
         >
-          {section === 'overview' ? (
-            <NodeOverview
-              // A new node starts over.
-              isPublic={isPublic}
-              key={nodeBase}
-              nodeBase={nodeBase}
-              onOpenMinting={openMinting}
-              onSetUpNode={setUpNode}
-            />
-          ) : null}
+          <Sections
+            isPublic={isPublic}
+            // A new node starts over.
+            key={nodeBase}
+            nodeBase={nodeBase}
+            onOpenMinting={openMinting}
+            onSetUpNode={setUpNode}
+            shown={shown}
+          />
         </Box>
       </Box>
     </Dialog>
+  );
+};
+
+/**
+ * The sections, each mounted when first shown and kept until the window
+ * closes or another node is chosen. What one has under way (a force sync, a
+ * restart) carries on while another is shown, and says how it ended when
+ * it's shown again. Only the shown section reads from the node.
+ */
+const Sections = ({
+  isPublic,
+  nodeBase,
+  onOpenMinting,
+  onSetUpNode,
+  shown,
+}: {
+  isPublic: boolean;
+  nodeBase: string;
+  onOpenMinting: () => void;
+  onSetUpNode: () => void;
+  shown: NodeManagerSection;
+}) => {
+  const [visited, setVisited] = useState<NodeManagerSection[]>([shown]);
+  if (!visited.includes(shown)) setVisited([...visited, shown]);
+  const kept = (id: NodeManagerSection) => visited.includes(id) || id === shown;
+
+  return (
+    <>
+      {kept('overview') ? (
+        <Box hidden={shown !== 'overview'}>
+          <NodeOverview
+            active={shown === 'overview'}
+            isPublic={isPublic}
+            nodeBase={nodeBase}
+            onOpenMinting={onOpenMinting}
+            onSetUpNode={onSetUpNode}
+          />
+        </Box>
+      ) : null}
+      {kept('peers') ? (
+        <Box hidden={shown !== 'peers'}>
+          <PeersSection
+            active={shown === 'peers'}
+            isPublic={isPublic}
+            nodeBase={nodeBase}
+          />
+        </Box>
+      ) : null}
+      {kept('control') && !isPublic ? (
+        <Box hidden={shown !== 'control'}>
+          <NodeControlSection
+            active={shown === 'control'}
+            nodeBase={nodeBase}
+          />
+        </Box>
+      ) : null}
+    </>
   );
 };

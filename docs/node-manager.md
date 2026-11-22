@@ -8,16 +8,24 @@ The Node Manager is Hub's own window for the node it uses. It opens from:
 
 Hovering over the title or the logo still shows the short node card, as before.
 
-Code: `src/components/NodeManager/`. `NodeManagerHost` is mounted in `App.tsx` once signed in, in the main window. It opens on the `openNodeManager` event (`openNodeManager()` in `nodeManagerEvents.ts`).
+Code: `src/components/NodeManager/`. `NodeManagerHost` is mounted in `App.tsx` once signed in, in the main window. It opens on the `openNodeManager` event (`openNodeManager(section)` in `nodeManagerEvents.ts`; `overview`, `peers` or `control`).
+
+Its sections are Overview, Peers and, on your own node, Node control. Minting opens the minting window.
 
 It takes the minting window's look, so the two read as one family. The shared pieces are in `nodeManagerLook.ts`, with the minting window's own values: the frame and backdrop, the uppercase section labels, the card surfaces, label/value rows, the tinted status cards (green, blue, rose) and the gradient buttons.
 
 ## Rules
 
 - **Locking:** it never opens while Hub is locked, and it closes when Hub locks.
-- **Reads only:** nothing in this window changes the node.
-- **No API key:** all of its reads are public endpoints.
+- **Reads:** all of them are public endpoints, without the API key.
+- **Actions** (Peers and Node control), and the node log, go through `nodeAdminRequest` (`nodeAdmin.ts`):
+  - with Hub's API key as the `apiKey` parameter, the way Hub's other admin calls send it;
+  - only to the node the key was stored for (same origin), never to the public node, and never through a redirect;
+  - each asks first, in its own dialog, unless it only adds something (a peer);
+  - one of each at a time; when the window closes, Hub locks or the node changes, the requests still under way are called off and their answers dropped;
+  - Core's refusals are told apart: no key, a key for another node, the key refused, an address the node can't use, the node's clock not synced yet.
 - **Paths:** they are built with `joinNodeEndpoint`.
+- **Sections:** each is mounted when first shown and kept until the window closes or another node is chosen. What one has under way (a force sync, a restart) carries on while another is shown, and says how it ended when it's shown again. Only the shown section reads from the node.
 - **Reads stop:** they stop when the window closes, and a reopen starts over.
 - **Changing node:** a different node in use starts over too, and answers from the node used before are dropped.
 - **Failed reads:** a failed read is never taken as "nothing there".
@@ -25,6 +33,7 @@ It takes the minting window's look, so the two read as one family. The shared pi
   - With no answer yet, it says so.
 - **Public node:** on the public node it shows that node's numbers, and offers "Set up my own node" (Core setup).
   - It doesn't read that node's minting keys, settings or memory.
+  - Its peers show without any way to change them, and there's no Node control.
 
 ## Overview
 
@@ -41,11 +50,44 @@ It takes the minting window's look, so the two read as one family. The shared pi
 
 The pure parts are in `nodeOverview.ts`: peer summaries, version comparison, sync speed, the checks, and formatting.
 
+## Peers
+
+| Part           | Shows and does                                                                                                                                | Node endpoints                                                         |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Peers          | Address, in or out, height (or still connecting), Core version, ping, connected for, highest first. Add peer; Remove; Force sync (asks first) | `/peers` (every 15 s); `POST`/`DELETE /peers`; `POST /admin/forcesync` |
+| QDN data peers | Address, in or out, Core version, connected for. Add data peer; Remove                                                                        | `/peers/data` (every 30 s); `POST`/`DELETE /peers/data`                |
+| Known peers    | How many peers the node knows of. Forget all known peers (asks first)                                                                         | `/peers/known`; `DELETE /peers/known`                                  |
+
+- An address is checked as it's typed (`parsePeerAddress`): a host name, IPv4, or IPv6 in brackets, with an optional port.
+- While the node works on an add, the dialog stays as it is (the address can't change and the dialog can't close), so the answer is always about the address shown.
+- Remove disconnects the peer. Core answers "false" when the address wasn't on its known list (an inbound peer's port, say), but disconnects it all the same.
+- Forget all known peers also drops the node's connections: the list is read again.
+- Adding a data peer answers "false" when Core knew it already and couldn't connect to it just now; the note says so.
+- Force sync is for a stuck node: Core takes the peer's blocks even over a stronger chain of its own, until it's level. It says how it ended (Core's `SynchronizationResult`), and waits up to 10 minutes.
+- Force sync needs a peer whose handshake is done; one still connecting can't be picked.
+
+## Node control
+
+Only for your own node.
+
+| Card               | Does                                                                                                                     | Node endpoints                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
+| Restart            | Restarts the node (asks first)                                                                                           | `/admin/restart`                   |
+| Stop               | Stops the node (asks first). Once the node on this PC stops answering: "Start Core" (Core setup's own start)             | `/admin/stop`, `/admin/uptime`     |
+| Bootstrap          | Replaces the node's chain with a fresh copy (asks first)                                                                 | `/admin/bootstrap`                 |
+| API key            | Whether Hub's key works for this node, checked when the section opens                                                    | `/admin/apikey/test`               |
+| Status for support | Copies a short summary for a help chat: versions, height, sync, peers, minting, memory. No addresses, names, IPs or keys | `/admin/info`, `/admin/systeminfo` |
+| Node log           | The newest 200 lines, on request; Refresh and Copy. The log can hold IP addresses and names, and the card says so        | `/admin/logs?limit=200&tail=true`  |
+
+- "Start Core" shows only once the node stopped answering, and only when Core's process on this PC is gone and Core is where Hub installs it (`isCoreRunningOnSystem`, `isCoreInstalledOnSystem`, every 10 seconds while it's down): a start while Core still runs does nothing. While its process still runs, the card says so instead.
+- It isn't offered during a restart or bootstrap asked for here: Core comes back by itself.
+- Hub's start gives no answer of its own: the card says Hub asked Core to start until the node answers, or that it still isn't answering after 2 minutes.
+- Once the node answers again (or its uptime starts over), what the cards said about stopping, restarting or starting is cleared and the API key is checked again.
+- The status copy waits as long as the window's other reads (15 seconds), and nothing is copied once the window closes.
+
 ## Later
 
 Each comes in its own PR:
 
 - **Minting:** the minting window moves in as a section.
-- **Peers:** add, remove, force sync.
 - **QDN:** storage and hosted data.
-- **Maintenance:** restart, stop, bootstrap and logs.

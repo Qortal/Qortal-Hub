@@ -25,6 +25,11 @@ import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { NodeManagerHost } from './NodeManager';
 import { nodeManagerOpenAtom, openNodeManager } from './nodeManagerEvents';
 
+// Hub holds no API key for the node here.
+vi.mock('../../background/background', () => ({
+  getApiKeyFromStorage: vi.fn(async () => null),
+}));
+
 // Base58.ts has no types of its own.
 const Base58 = Base58Untyped as unknown as {
   encode: (bytes: Uint8Array) => string;
@@ -92,10 +97,12 @@ const renderHost = (url = NODE) => {
   );
 };
 
-const open = async () => {
-  act(() => openNodeManager());
+const open = async (section?: Parameters<typeof openNodeManager>[0]) => {
+  act(() => openNodeManager(section));
   return screen.findByRole('dialog', { name: 'Node Manager' });
 };
+
+const nav = (name: string) => screen.getByRole('button', { name });
 
 const card = (id: string) => {
   const element = document.querySelector(`[data-overview-card="${id}"]`);
@@ -360,5 +367,63 @@ describe('NodeManager', () => {
     expect(
       card('peers').queryByText("Couldn't read this from the node.")
     ).toBeNull();
+  });
+
+  it('moves between its sections, Node control among them on your own node', async () => {
+    renderHost();
+    await open();
+    expect(nav('Overview')).toHaveAttribute('aria-current', 'page');
+
+    fireEvent.click(nav('Peers'));
+    expect(nav('Peers')).toHaveAttribute('aria-current', 'page');
+    expect(
+      await screen.findByRole('button', { name: 'Add peer' })
+    ).toBeInTheDocument();
+    // The Overview stays as it was, out of sight.
+    expect(
+      document
+        .querySelector('[data-overview-card="peers"]')
+        ?.closest('[hidden]')
+    ).not.toBeNull();
+
+    fireEvent.click(nav('Node control'));
+    expect(
+      await card('control_key').findByText('Hub has no API key for this node.')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Restart node' })
+    ).toBeInTheDocument();
+
+    fireEvent.click(nav('Overview'));
+    expect(await card('peers').findByText('2 out · 1 in')).toBeInTheDocument();
+  });
+
+  it('opens at the section it was asked for', async () => {
+    renderHost();
+    await open('peers');
+    expect(nav('Peers')).toHaveAttribute('aria-current', 'page');
+    expect(
+      await screen.findByRole('button', { name: 'Add peer' })
+    ).toBeInTheDocument();
+  });
+
+  it('has no Node control on a public node, even when asked for it', async () => {
+    renderHost('https://ext-node.qortal.link');
+    await open('control');
+
+    expect(screen.queryByRole('button', { name: 'Node control' })).toBeNull();
+    expect(nav('Overview')).toHaveAttribute('aria-current', 'page');
+    expect(
+      card('public').getByText("You're on a public node")
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Restart node' })).toBeNull();
+
+    fireEvent.click(nav('Peers'));
+    expect(
+      await screen.findByText(
+        "These are the public node's peers. Adding or removing peers needs your own node."
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add peer' })).toBeNull();
   });
 });

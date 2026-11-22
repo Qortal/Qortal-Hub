@@ -11,9 +11,13 @@ export const nodeManagerOpenAtom = atom(false);
 export const OPEN_NODE_MANAGER_EVENT = 'openNodeManager';
 
 /** The Node Manager's sections that live in its own window. */
-export type NodeManagerSection = 'overview';
+export type NodeManagerSection = 'overview' | 'peers' | 'control';
 
-export const NODE_MANAGER_SECTIONS: NodeManagerSection[] = ['overview'];
+export const NODE_MANAGER_SECTIONS: NodeManagerSection[] = [
+  'overview',
+  'peers',
+  'control',
+];
 
 export const isNodeManagerSection = (
   value: unknown

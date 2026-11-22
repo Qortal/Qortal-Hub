@@ -115,11 +115,14 @@ const onOff = (value: boolean | null | undefined, on: string, off: string) =>
   value === true ? on : value === false ? off : DASH;
 
 export const NodeOverview = ({
+  active = true,
   isPublic,
   nodeBase,
   onOpenMinting,
   onSetUpNode,
 }: {
+  /** False while another section is shown: nothing is read meanwhile. */
+  active?: boolean;
   isPublic: boolean;
   nodeBase: string;
   onOpenMinting: () => void;
@@ -129,7 +132,7 @@ export const NodeOverview = ({
   const { i18n, t } = useTranslation(['node', 'core']);
   const language = i18n.language;
   const status = useAtomValue(nodeInfosAtom) as NodeStatus;
-  const data = useNodeOverviewData(nodeBase, isPublic);
+  const data = useNodeOverviewData(nodeBase, isPublic, active);
   const reticulum = useReticulumOverview();
   const now = useNow(5_000);
   const capitalize = { postProcess: 'capitalizeFirstChar' } as const;
