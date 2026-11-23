@@ -7,8 +7,10 @@ import {
   askQortino,
   clearPendingQortinoQuestion,
   getPendingQortinoQuestion,
+  pendingQortinoQuestionSends,
   subscribePendingQortinoQuestion,
   takePendingQortinoQuestion,
+  writeQortinoQuestion,
 } from '../pendingQuestion';
 
 describe('A question from Home on its way to the chat', () => {
@@ -30,6 +32,17 @@ describe('A question from Home on its way to the chat', () => {
     expect(takePendingQortinoQuestion()).toBeNull();
     expect(getPendingQortinoQuestion()).toBeNull();
     unsubscribe();
+  });
+
+  it('says which questions are only written in the box, not sent', () => {
+    writeQortinoQuestion('  What does "minting" mean?  ');
+    askQortino('what is QDN?');
+    expect(nav.openQortinoAgentSheet).toHaveBeenCalledTimes(2);
+    expect(getPendingQortinoQuestion()).toBe('What does "minting" mean?');
+    expect(pendingQortinoQuestionSends()).toBe(false);
+    expect(takePendingQortinoQuestion()).toBe('What does "minting" mean?');
+    expect(pendingQortinoQuestionSends()).toBe(true);
+    expect(takePendingQortinoQuestion()).toBe('what is QDN?');
   });
 
   it('ignores an empty question', () => {

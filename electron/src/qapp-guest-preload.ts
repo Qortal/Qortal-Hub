@@ -1,5 +1,6 @@
 import { ipcRenderer } from 'electron';
 import { prepareQAppRequest, type QAppRequest } from './qapp-request-transport';
+import { installQAppMenuGuest } from './qapp-menu-guest';
 
 // This preload runs only in an isolated Q-App guest. No Electron API is exposed
 // to the page. Core's q-apps.js posts UI requests to window.parent; in a guest
@@ -239,3 +240,7 @@ ipcRenderer.on('qapp:event', (_event, data) => {
   injectedEvents.add(event);
   window.dispatchEvent(event);
 });
+
+// Hub's right-click menu: the element right-clicked, for the items that act
+// on it, and Shift+right-click in apps with a menu of their own.
+installQAppMenuGuest();

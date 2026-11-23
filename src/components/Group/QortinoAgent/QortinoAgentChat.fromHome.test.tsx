@@ -28,6 +28,7 @@ import { resetQortinoModelSessionForTests } from '../../../qortinoAgent/modelSes
 import {
   askQortino,
   clearPendingQortinoQuestion,
+  writeQortinoQuestion,
 } from '../../../qortinoAgent/pendingQuestion';
 import { resetQortinoSettingsForTests } from '../../../qortinoAgent/settings';
 
@@ -266,6 +267,70 @@ describe('Questions asked next to Qortino on Home', () => {
       'second question',
     ]);
     expect(composer().value).toBe('');
+  });
+
+  it("leaves a question written from an app's menu in the box, for the user to send", async () => {
+    renderChat();
+    await settle(100);
+    const draft = 'a long question I am still writing';
+    fireEvent.change(composer(), { target: { value: draft } });
+    act(() => writeQortinoQuestion('What does “minting” mean?'));
+    await waitFor(() =>
+      expect(composer().value).toBe('What does “minting” mean?')
+    );
+    // The model is ready, and still nothing is asked until the user sends.
+    await settle(200);
+    expect(model.bridge.complete).not.toHaveBeenCalled();
+    fireEvent.change(composer(), {
+      target: { value: 'What does “minting” mean on Qortal?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(model.bridge.complete).toHaveBeenCalledTimes(1));
+    expect(askedQuestions()).toEqual(['What does “minting” mean on Qortal?']);
+    // What the user was typing before comes back.
+    expect(composer().value).toBe(draft);
+  });
+
+  it('shows the newest question asked from the menu while Qortino stays open', async () => {
+    renderChat();
+    await settle(100);
+    const draft = 'a long question I am still writing';
+    fireEvent.change(composer(), { target: { value: draft } });
+    act(() => writeQortinoQuestion('What does “minting” mean?'));
+    await waitFor(() =>
+      expect(composer().value).toBe('What does “minting” mean?')
+    );
+    // Not sent: the user selects another word in the app and asks again.
+    act(() => writeQortinoQuestion('What does “QDN” mean?'));
+    await waitFor(() => expect(composer().value).toBe('What does “QDN” mean?'));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(model.bridge.complete).toHaveBeenCalledTimes(1));
+    expect(askedQuestions()).toEqual(['What does “QDN” mean?']);
+    // What the user was typing before the first question comes back.
+    expect(composer().value).toBe(draft);
+  });
+
+  it('keeps a question from the menu the user changed when the menu asks another', async () => {
+    renderChat();
+    await settle(100);
+    act(() => writeQortinoQuestion('What does “sponsee” mean?'));
+    await waitFor(() =>
+      expect(composer().value).toBe('What does “sponsee” mean?')
+    );
+    fireEvent.change(composer(), {
+      target: { value: 'What does “sponsee” mean exactly?' },
+    });
+    act(() => writeQortinoQuestion('What does “QDN” mean?'));
+    await settle(200);
+    expect(composer().value).toBe('What does “sponsee” mean exactly?');
+    // Once the changed one is sent and answered, the next one comes in.
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(model.bridge.complete).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      model.replies[0].resolve('an answer');
+    });
+    await waitFor(() => expect(composer().value).toBe('What does “QDN” mean?'));
+    expect(askedQuestions()).toEqual(['What does “sponsee” mean exactly?']);
   });
 
   it('brings back what the user was typing after an edited question from Home is sent', async () => {

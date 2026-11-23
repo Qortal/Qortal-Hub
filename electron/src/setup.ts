@@ -36,6 +36,8 @@ import type { MenuItemConstructorOptions, WebContents } from 'electron';
 import {
   app,
   BrowserWindow,
+  clipboard,
+  ClipboardItem,
   desktopCapturer,
   Menu,
   MenuItem,
@@ -54,8 +56,10 @@ import { randomUUID } from 'crypto';
 import { pipeline } from 'stream/promises';
 import { pathToFileURL } from 'url';
 import { materializeReticulumResourceForOpen } from './reticulum-resource-open';
-import { openLocalPath } from './desktop-shell';
+import { openExternalHttp, openLocalPath } from './desktop-shell';
 import { installDisplayMediaPicker } from './display-media-picker';
+import { QAppContextMenus, registerQAppMenuIpc } from './qapp-context-menu';
+import { addQortalSpellingTerms } from './qapp-spelling-terms';
 import { installTabShortcuts } from './tab-shortcuts';
 import { followHubZoom, installZoomKeys, menuPopupPoint } from './hub-zoom';
 import {
@@ -1171,6 +1175,7 @@ export class ElectronCapacitorApp {
       installTabShortcuts(guest, hubPage, process.platform);
       installZoomKeys(guest, hubPage, process.platform);
       followHubZoom(guest, hubPage);
+      qappContextMenus.attach(guest);
       const allowedGuestUrl = (nextUrl: string) => {
         const bound = attachedQAppGuests.get(guest.id)?.prepared;
         const candidates = bound ? [bound] : [...preparedQAppGuests.values()];
@@ -3095,6 +3100,73 @@ const qappFileWorkers = new QAppFileWorkers();
 const configuredQAppSessions = new Set<string>();
 const qappGuestPreloadPath = join(__dirname, 'qapp-guest-preload.bundle.js');
 
+// The right-click menu inside Q-Apps and websites: only for webviews Hub
+// registered, while their page is still in their app.
+const qappContextMenus = new QAppContextMenus({
+  guestInfo: (guest) => {
+    const attached = attachedQAppGuests.get(guest.id);
+    const prepared = attached?.prepared;
+    if (!prepared || attached.contents !== guest || guest.isDestroyed()) {
+      return null;
+    }
+    if (
+      guest.session !== session.fromPartition(prepared.partition) ||
+      !qappGuestUrlAllowed(
+        prepared.url,
+        guest.getURL(),
+        prepared.owner,
+        prepared.isDevMode
+      )
+    ) {
+      return null;
+    }
+    return {
+      tabId: prepared.owner.tabId,
+      appName: prepared.owner.name,
+      nodeOrigin: new URL(prepared.url).origin,
+      service: prepared.owner.service,
+      devApp: prepared.isDevMode,
+      identifier: new URL(prepared.url).searchParams.get('identifier') ?? '',
+    };
+  },
+  hubPage: () => {
+    const mainWindow = myCapacitorApp?.getMainWindow?.();
+    return mainWindow && !mainWindow.isDestroyed()
+      ? mainWindow.webContents
+      : null;
+  },
+  showSaveDialog: (options) => {
+    const mainWindow = myCapacitorApp?.getMainWindow?.();
+    return mainWindow && !mainWindow.isDestroyed()
+      ? dialog.showSaveDialog(mainWindow, options)
+      : dialog.showSaveDialog(options);
+  },
+  downloadsDir: () => app.getPath('downloads'),
+  writeClipboardText: (text) => clipboard.writeText(text),
+  writeClipboardImage: (image) =>
+    clipboard.write([
+      new ClipboardItem({
+        'image/png': new Blob([new Uint8Array(image.toPNG())], {
+          type: 'image/png',
+        }),
+      }),
+    ]),
+  imageFromDataUrl: (dataUrl) => nativeImage.createFromDataURL(dataUrl),
+  writeFile: (filePath, data) => fs.promises.writeFile(filePath, data),
+  openInBrowser: (url) =>
+    openExternalHttp(url, shell, (error) =>
+      loggerError('Opening a link from a Q-App menu failed', error)
+    ),
+  showItemInFolder: (filePath) => shell.showItemInFolder(filePath),
+  fileExists: (filePath) => fs.existsSync(filePath),
+  guestById: (id) => attachedQAppGuests.get(id)?.contents ?? null,
+});
+registerQAppMenuIpc({
+  ipcMain,
+  checkSender: requireMainShellEvent,
+  menus: qappContextMenus,
+});
+
 function qappGuestOwnerKey(owner: QAppGuestOwner): string {
   return `${owner.tabId}\u0000${owner.service}\u0000${owner.name}`;
 }
@@ -3115,6 +3187,8 @@ function configureQAppGuestSession(partition: string): void {
     guestSession,
     (contents) => Boolean(attachedQAppGuests.get(contents.id)?.prepared)
   );
+  // Qortal's own words aren't underlined by the spellcheck in Q-Apps.
+  void addQortalSpellingTerms(guestSession);
   configuredQAppSessions.add(partition);
 }
 

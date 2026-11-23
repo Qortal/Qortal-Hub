@@ -50,6 +50,8 @@ import {
   useAppRatings,
 } from '../../hooks/useAppRatings';
 import { PendingVotesWatcher } from './AppPage/PendingVotesWatcher';
+import { QAppContextMenu } from './QAppContextMenu/QAppContextMenu';
+import { QAppSavesNotice } from './QAppContextMenu/QAppSavesNotice';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import {
@@ -2299,6 +2301,8 @@ export const AppsDesktop = ({
         info={infoSnack}
         setInfo={setInfoSnack}
       />
+      <QAppContextMenu />
+      <QAppSavesNotice />
     </AppsParent>
   );
 };
