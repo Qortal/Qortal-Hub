@@ -1840,6 +1840,7 @@
       "image_metadata_unremovable": "无法发布图片{{index}}：无法从此格式中删除位置和相机信息。请将其另存为JPEG或PNG后重试。",
       "images_too_large": "这些图片太大，无法一起发布。请删除一张图片后重试。",
       "name_required": "需要Qortal名称才能发布",
+      "not_posted_left_home": "未发布：在发送前离开了首页。准备好后请重新发布。",
       "post_too_large": "此帖子超过5 MB，{{app}}不会显示它。请缩短内容或删除一张图片。",
       "publish_failed": "发布失败",
       "too_many_images": "每条帖子最多{{count}}张图片"

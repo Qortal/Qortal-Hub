@@ -9,7 +9,7 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
-import { useState } from 'react';
+import { Activity, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Initialises the shared i18n instance so useTranslation resolves real strings.
 import i18n from '../../../i18n/i18n';
@@ -21,12 +21,17 @@ import { TorqComposer, type PublishedTorqPost } from './TorqComposer';
 
 type CompressorOptions = { success: (result: Blob) => void };
 
-// Compressor.js needs a canvas: it hands back its input, or never finishes.
-const compressor = vi.hoisted(() => ({ hang: false }));
+// Compressor.js needs a canvas: it hands back its input, or holds it until
+// the test lets it go.
+const compressor = vi.hoisted(() => ({
+  hang: false,
+  held: [] as (() => void)[],
+}));
 vi.mock('compressorjs', () => ({
   default: class {
     constructor(file: Blob, opts: CompressorOptions) {
-      if (!compressor.hang) opts.success(file);
+      if (compressor.hang) compressor.held.push(() => opts.success(file));
+      else opts.success(file);
     }
   },
 }));
@@ -93,6 +98,33 @@ const renderComposer = (name = 'Alice') => {
   return { onPublished };
 };
 
+/**
+ * The composer as Home has it: inside <Activity>, which hides Home (and does
+ * not unmount it) while an app tab is on screen.
+ */
+const renderOnHome = () => {
+  const onPublished = vi.fn();
+  const store = createStore();
+  store.set(userInfoAtom, { address: 'QAlice', name: 'Alice' });
+  const ui = (homeShown: boolean) => (
+    <Provider store={store}>
+      <ThemeProvider theme={lightTheme}>
+        <Activity mode={homeShown ? 'visible' : 'hidden'}>
+          <Harness onPublished={onPublished} />
+        </Activity>
+      </ThemeProvider>
+    </Provider>
+  );
+  const view = render(ui(true));
+  return {
+    onPublished,
+    leaveHome: () => act(() => view.rerender(ui(false))),
+    backToHome: () => act(() => view.rerender(ui(true))),
+    // Signed out, or the feed window taken off Home.
+    unmount: () => view.unmount(),
+  };
+};
+
 const openComposer = () =>
   fireEvent.click(screen.getByRole('button', { name: 'Post to Torq' }));
 
@@ -132,6 +164,7 @@ let previews = 0;
 
 beforeEach(() => {
   compressor.hang = false;
+  compressor.held = [];
   previews = 0;
   sendMessage.mockReset();
   sendMessage.mockResolvedValue([{ signature: 'sig' }]);
@@ -406,5 +439,142 @@ describe('TorqComposer', () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Post to Torq' })).toBeNull();
     expect(screen.queryByRole('textbox', { name: 'Post text' })).toBeNull();
+  });
+});
+
+describe('TorqComposer while Home is hidden', () => {
+  const releasePhotos = () =>
+    act(async () => {
+      compressor.held.splice(0).forEach((release) => release());
+    });
+
+  // Time for a publish to get to the approval dialog, were it to.
+  const letPublishRunOn = () =>
+    act(() => new Promise<void>((settle) => setTimeout(settle, 200)));
+
+  it('shows the post as published when it went through while Home was hidden', async () => {
+    let answer: (value: unknown) => void = () => undefined;
+    sendMessage.mockImplementation(
+      () => new Promise((resolve) => (answer = resolve))
+    );
+    const home = renderOnHome();
+    openComposer();
+    type('hello from Home');
+    fireEvent.click(postButton());
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+
+    home.leaveHome();
+    await act(async () => answer([{ signature: 'sig' }]));
+    home.backToHome();
+
+    expect(home.onPublished).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Publishing…' })).toBeNull();
+    expect(screen.getByText('Published to Torq')).toBeInTheDocument();
+  });
+
+  it('shows why a publish failed while Home was hidden, keeping the draft', async () => {
+    let fail: (reason: unknown) => void = () => undefined;
+    sendMessage.mockImplementation(
+      () => new Promise((_resolve, reject) => (fail = reject))
+    );
+    const home = renderOnHome();
+    openComposer();
+    type('keep me');
+    fireEvent.click(postButton());
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+
+    home.leaveHome();
+    await act(async () => fail({ error: 'timeout', message: 'late' }));
+    home.backToHome();
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Failed to publish');
+    expect(postButton()).toBeEnabled();
+    expect(editor()).toHaveValue('keep me');
+    expect(home.onPublished).not.toHaveBeenCalled();
+  });
+
+  it('stops a post still being prepared when Home is left, says so, and keeps it', async () => {
+    compressor.hang = true;
+    const home = renderOnHome();
+    openComposer();
+    type('two photos');
+    addImages([jpeg('a.jpg'), jpeg('b.jpg')]);
+    fireEvent.click(postButton());
+    expect(
+      await screen.findByText('Compressing images… (1/2)')
+    ).toBeInTheDocument();
+
+    home.leaveHome();
+    await releasePhotos();
+    await letPublishRunOn();
+    home.backToHome();
+
+    // Its approval dialog never opens over the app tab.
+    expect(compressor.held).toHaveLength(0);
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      "Not posted: you left Home before it was sent. Publish again when you're ready."
+    );
+    expect(editor()).toHaveValue('two photos');
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    expect(document.querySelector('img[src="blob:preview-2"]')).not.toBeNull();
+
+    compressor.hang = false;
+    fireEvent.click(postButton());
+    await waitFor(() => expect(home.onPublished).toHaveBeenCalledTimes(1));
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Published to Torq')).toBeInTheDocument();
+  });
+
+  it('keeps the photo previews while Home is hidden', () => {
+    const home = renderOnHome();
+    openComposer();
+    addImages([jpeg()]);
+
+    home.leaveHome();
+    home.backToHome();
+
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    expect(document.querySelector('img[src="blob:preview-1"]')).not.toBeNull();
+  });
+
+  it('stops a post still compressing its photos when the composer goes', async () => {
+    compressor.hang = true;
+    const home = renderOnHome();
+    openComposer();
+    type('two photos');
+    addImages([jpeg('a.jpg'), jpeg('b.jpg')]);
+    fireEvent.click(postButton());
+    await screen.findByText('Compressing images… (1/2)');
+
+    home.unmount();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:preview-1');
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:preview-2');
+    await releasePhotos();
+    await letPublishRunOn();
+
+    // The second photo is never started on.
+    expect(compressor.held).toHaveLength(0);
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(home.onPublished).not.toHaveBeenCalled();
+  });
+
+  it('keeps a post that went through after the composer went to itself', async () => {
+    let answer: (value: unknown) => void = () => undefined;
+    sendMessage.mockImplementation(
+      () => new Promise((resolve) => (answer = resolve))
+    );
+    const home = renderOnHome();
+    openComposer();
+    type('hello');
+    fireEvent.click(postButton());
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+
+    home.leaveHome();
+    home.unmount();
+    await act(async () => answer([{ signature: 'sig' }]));
+
+    expect(home.onPublished).not.toHaveBeenCalled();
   });
 });
