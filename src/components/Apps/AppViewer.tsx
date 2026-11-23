@@ -17,6 +17,7 @@ import {
   hasControlCharacter,
   hasDotSegment,
 } from '../../utils/nodeEndpointPath';
+import { noteTabPageGone } from './tabActivity';
 
 // True for a tab path with "." or ".." segments (also encoded, or split by
 // characters the URL parser drops), which could take it out of the app's
@@ -165,9 +166,14 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         if (event.isMainFrame && event.errorCode !== -3)
           setNativeGuestFailed(true);
       };
+      // A new page starts with no file being saved (tabActivity.ts).
+      const newPage = (event) => {
+        if (event.target === view) noteTabPageGone(guestOwner.tabId);
+      };
       view.addEventListener('ipc-message', preloadHello);
       view.addEventListener('render-process-gone', guestGone);
       view.addEventListener('did-fail-load', loadFailed);
+      view.addEventListener('did-navigate', newPage);
       const attachTimer = setTimeout(() => {
         if (!guestHelloRef.current) setNativeGuestFailed(true);
       }, 10_000);
@@ -179,8 +185,18 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         view.removeEventListener('ipc-message', preloadHello);
         view.removeEventListener('render-process-gone', guestGone);
         view.removeEventListener('did-fail-load', loadFailed);
+        view.removeEventListener('did-navigate', newPage);
       };
     }, [nativeConfig, guestOwner, defaultUrl, nativeGuestFailed]);
+
+    // The app's saves go with its webview: when it fails, sleeps or closes.
+    useEffect(() => {
+      if (nativeGuestFailed) noteTabPageGone(guestOwner.tabId);
+    }, [guestOwner.tabId, nativeGuestFailed]);
+    useEffect(
+      () => () => noteTabPageGone(guestOwner.tabId),
+      [guestOwner.tabId]
+    );
 
     useEffect(() => {
       if (nativeGuestActive && guestPreloadDocument)

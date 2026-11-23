@@ -239,3 +239,33 @@ describe('TabComponent', () => {
     );
   });
 });
+
+describe('TabComponent asleep', () => {
+  const ASLEEP_NOTE = 'Asleep to save memory. Select it to load it again.';
+
+  it('says a sleeping tab loads when selected, in its tooltip', async () => {
+    const user = userEvent.setup();
+    renderTab({ isAsleep: true, widthPx: 180 });
+
+    expect(theTab()).toHaveAttribute('data-asleep', 'true');
+    await user.hover(theTab());
+    expect(
+      await screen.findByRole('tooltip', {}, { timeout: 2000 })
+    ).toHaveTextContent(ASLEEP_NOTE);
+  });
+
+  it('names a narrow sleeping tab in its tooltip too', async () => {
+    const user = userEvent.setup();
+    renderTab({ isAsleep: true, widthPx: 80 });
+
+    await user.hover(theTab());
+    const tooltip = await screen.findByRole('tooltip', {}, { timeout: 2000 });
+    expect(tooltip).toHaveTextContent('Q-Tube');
+    expect(tooltip).toHaveTextContent(ASLEEP_NOTE);
+  });
+
+  it('shows an awake tab as it was', () => {
+    renderTab({ widthPx: 180 });
+    expect(theTab()).not.toHaveAttribute('data-asleep');
+  });
+});

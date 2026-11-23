@@ -128,12 +128,26 @@ describe('reportedAppPath', () => {
 
   it('gives the page the app reported, its start page included', () => {
     expect(reportedAppPath(tab, link('/'))).toBe('/');
-    expect(reportedAppPath(tab, link('/video/abc', 'v1'))).toBe(
-      '/video/abc?identifier=v1'
-    );
+    expect(reportedAppPath(tab, link('/video/abc', 'v1'))).toBe('/video/abc');
     expect(
       relativeAppPath(reportedAppPath(tab, link('/video/abc', 'v1')))
     ).toBe('video/abc');
+  });
+
+  it('leaves out the identifier the link carries after the page', () => {
+    expect(reportedAppPath(tab, link('/guide#install', 'v1'))).toBe(
+      '/guide#install'
+    );
+    expect(reportedAppPath(tab, link('/#/search?q=a', 'v1'))).toBe(
+      '/#/search?q=a'
+    );
+    expect(reportedAppPath(tab, link('/list?page=2', 'v1'))).toBe(
+      '/list?page=2'
+    );
+    // Only the tab's own identifier, at the end.
+    expect(reportedAppPath(tab, link('/a?identifier=v1&x=1'))).toBe(
+      '/a?identifier=v1&x=1'
+    );
   });
 
   it("ignores another app's link", () => {

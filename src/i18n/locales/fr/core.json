@@ -415,6 +415,7 @@
   "app_private": "privé",
   "app_service_type": "type de service d'application",
   "app_tab": {
+    "asleep": "en veille pour économiser la mémoire. Sélectionnez-le pour le recharger.",
     "close": "fermer l'onglet",
     "close_all": "fermer tous les onglets",
     "close_others": "fermer les autres onglets",

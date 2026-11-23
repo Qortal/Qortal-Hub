@@ -148,12 +148,18 @@ import {
   showCategory,
 } from './launcherTabs';
 import { LauncherTabView } from './LauncherTabView';
+import { forgetTabActivity, isTabBusy } from './tabActivity';
+import {
+  holdsAnApp,
+  MAX_OPEN_APP_TABS,
+  tabAtItsPage,
+  tabsToPutToSleep,
+} from './tabSleep';
 
 import { useTabShortcuts } from './useTabShortcuts';
 
 
 const uid = new ShortUniqueId({ length: 8 });
-const MAX_OPEN_APP_TABS = 10;
 /** A launcher tab's page until it has one of its own. */
 const INITIAL_LAUNCHER_TAB_STATE = newLauncherTabState();
 const MIN_LIBRARY_APPS_BEFORE_SLOW_POLL = 10;
@@ -322,9 +328,12 @@ export const AppsDesktop = ({
   const [sessionAddress, setSessionAddress] = useState<string | null>(null);
   const storedSessionRef = useRef<TabSession | null>(null);
   const sessionWriterRef = useRef<TabSessionWriter | null>(null);
-  // Tabs whose app has been shown. A restored tab loads the first time it is
-  // selected, then stays loaded like the others.
+  // The tabs whose app is loaded (awake). A restored tab loads the first time
+  // it is selected. Past MAX_AWAKE_APP_TABS apps, the one viewed least
+  // recently goes to sleep (tabSleep.ts), and loads again when selected.
   const [shownTabIds, setShownTabIds] = useState<Set<string>>(() => new Set());
+  const shownTabIdsRef = useRef(shownTabIds);
+  shownTabIdsRef.current = shownTabIds;
   const { openApp: openPrivateApp } = useHandlePrivateApps();
   // The hook hands out a new `openApp` on every render: keep the latest.
   const openPrivateAppRef = useRef(openPrivateApp);
@@ -340,6 +349,8 @@ export const AppsDesktop = ({
   tabsRef.current = tabs;
   const myAddressRef = useRef(myAddress);
   myAddressRef.current = myAddress;
+  const navigationControllerRef = useRef(navigationController);
+  navigationControllerRef.current = navigationController;
   const isMountedRef = useRef(true);
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -409,13 +420,65 @@ export const AppsDesktop = ({
     tabs,
   ]);
 
+  // An app keeps its tab awake while it waits for Hub or saves a file
+  // (tabActivity.ts), and while its webview says sound is playing.
+  const isTabKeptAwake = useCallback((tab) => {
+    if (isTabBusy(tab?.tabId)) return true;
+    try {
+      return !!iframeRefs.current[tab?.tabId]?.current?.isCurrentlyAudible?.();
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // The tab selected loads. If that makes more apps loaded than
+  // MAX_AWAKE_APP_TABS, the ones viewed least recently that can sleep go to
+  // sleep, each keeping the page its app was on to load at when selected.
+  // An app that takes the place of the launcher tab on screen keeps its tab
+  // id, so this runs again when the tab on screen starts holding an app.
+  const selectedHoldsAnApp = holdsAnApp(selectedTab);
   useEffect(() => {
     const tabId = selectedTab?.tabId;
     if (!tabId) return;
-    setShownTabIds((prev) =>
-      prev.has(tabId) ? prev : new Set(prev).add(tabId)
+    // Closed tabs leave the set.
+    const open = new Set(tabsRef.current.map((tab) => tab?.tabId));
+    const awake = new Set(
+      [...shownTabIdsRef.current].filter((id) => open.has(id))
+    ).add(tabId);
+    // A private app still waiting to be reopened has nothing loaded yet.
+    const waiting = new Set(
+      tabsRef.current.filter(isPrivateTabToReopen).map((tab) => tab.tabId)
     );
-  }, [selectedTab?.tabId]);
+    const sleepers = tabsToPutToSleep({
+      awakeTabIds: new Set([...awake].filter((id) => !waiting.has(id))),
+      isBusy: isTabKeptAwake,
+      recentTabIds: [...recentTabIdsRef.current, tabId],
+      shownTabId: tabId,
+      tabs: tabsRef.current,
+    });
+    if (sleepers.length > 0) {
+      const asleep = new Set(sleepers);
+      const links = navigationControllerRef.current;
+      sleepers.forEach((id) => awake.delete(id));
+      setTabs((prev) => {
+        let changed = false;
+        const next = prev.map((tab) => {
+          if (!asleep.has(tab?.tabId)) return tab;
+          const atItsPage = tabAtItsPage(tab, links?.[tab.tabId]?.currentLink);
+          if (atItsPage !== tab) changed = true;
+          return atItsPage;
+        });
+        return changed ? next : prev;
+      });
+    }
+    const current = shownTabIdsRef.current;
+    if (
+      awake.size !== current.size ||
+      [...awake].some((id) => !current.has(id))
+    ) {
+      setShownTabIds(awake);
+    }
+  }, [isTabKeptAwake, selectedHoldsAnApp, selectedTab?.tabId]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -1488,7 +1551,10 @@ export const AppsDesktop = ({
     );
     if (closingIds.size === 0) return;
 
-    closingIds.forEach((tabId) => clearSessionPermissionsByTabId(tabId));
+    closingIds.forEach((tabId) => {
+      clearSessionPermissionsByTabId(tabId);
+      forgetTabActivity(tabId);
+    });
     recentTabIdsRef.current = recentTabIdsRef.current.filter(
       (id) => !closingIds.has(id)
     );
@@ -1903,10 +1969,21 @@ export const AppsDesktop = ({
       ? () => closeTabs(tabIds, { showTabId: menuTabId })
       : undefined;
 
+  // A restored tab loads the first time it is selected; a private app's
+  // waits until it is reopened. A tab put to sleep loads again when selected.
+  const isTabLoaded = (tab) =>
+    !isPrivateTabToReopen(tab) &&
+    (shownTabIds.has(tab?.tabId) || tab?.tabId === selectedTab?.tabId);
+
   const renderTab = (tab) => (
     <TabComponent
       key={tab?.tabId}
       app={tab}
+      isAsleep={
+        holdsAnApp(tab) &&
+        tab?.tabId !== selectedTab?.tabId &&
+        !isTabLoaded(tab)
+      }
       isDevApp={isLocalDevTab(tab)}
       isPinned={isPinnedTab(tab)}
       isSelected={tab?.tabId === selectedTab?.tabId}
@@ -2121,13 +2198,7 @@ export const AppsDesktop = ({
             )}
 
           {viewerTabs.map((tab) => {
-            // A restored tab loads the first time it is selected; a private
-            // app's waits until it is reopened.
-            const isLoaded =
-              !isPrivateTabToReopen(tab) &&
-              (shownTabIds.has(tab?.tabId) ||
-                tab?.tabId === selectedTab?.tabId);
-            if (!isLoaded) return null;
+            if (!isTabLoaded(tab)) return null;
             if (isLauncherTab(tab)) {
               return (
                 <LauncherTabView

@@ -415,6 +415,7 @@
   "app_private": "私人的",
   "app_service_type": "应用服务类型",
   "app_tab": {
+    "asleep": "已休眠以节省内存。选择该标签页即可重新加载。",
     "close": "关闭标签页",
     "close_all": "关闭所有标签页",
     "close_others": "关闭其他标签页",

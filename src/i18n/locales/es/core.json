@@ -415,6 +415,7 @@
   "app_private": "privado",
   "app_service_type": "Tipo de servicio de aplicaciones",
   "app_tab": {
+    "asleep": "en reposo para ahorrar memoria. Selecciónala para volver a cargarla.",
     "close": "cerrar pestaña",
     "close_all": "cerrar todas las pestañas",
     "close_others": "cerrar otras pestañas",

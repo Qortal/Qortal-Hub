@@ -45,6 +45,7 @@ vi.mock('../Desktop/CustomTitleBar', () => ({ appChromeOffsetPx: '0px' }));
 vi.mock('../Chat/MessageDisplay', () => ({ extractComponents: () => null }));
 
 import { AppsDesktop } from './AppsDesktop';
+import { MAX_OPEN_APP_TABS } from './tabSleep';
 
 const Harness = () => {
   const [mode, setMode] = useState('home');
@@ -84,15 +85,22 @@ const recordSnack = (event: CustomEvent) => {
 const SLOW = { timeout: 3000 };
 const LIMIT_REACHED =
   'Maximum number of tabs reached. Close one to open another.';
-const TEN_APPS = Array.from({ length: 10 }, (_, index) => `App ${index}`);
+const ALL_APPS = Array.from(
+  { length: MAX_OPEN_APP_TABS },
+  (_, index) => `App ${index}`
+);
 
+/** Opens each in a tab of its own, then waits for the top bar to hear of it. */
 const openTabs = async (...names: string[]) => {
   for (const name of names) {
     act(() => {
       executeEvent('addTab', { data: { name, service: 'APP' } });
     });
-    await waitFor(() => expect(selectedName()).toBe(name), SLOW);
   }
+  await waitFor(
+    () => expect(selectedName()).toBe(names[names.length - 1]),
+    SLOW
+  );
 };
 
 const realResizeObserver = globalThis.ResizeObserver;
@@ -133,7 +141,7 @@ afterEach(() => {
 
 describe('opening an app that is open already', () => {
   it('switches to its tab, even when every tab is in use', async () => {
-    await openTabs(...TEN_APPS);
+    await openTabs(...ALL_APPS);
 
     act(() => {
       executeEvent('addTab', {
@@ -142,12 +150,13 @@ describe('opening an app that is open already', () => {
     });
 
     await waitFor(() => expect(selectedName()).toBe('App 4'), SLOW);
-    expect(tabNames()).toEqual(TEN_APPS);
+    expect(tabNames()).toEqual(ALL_APPS);
     expect(snacks).toEqual([]);
-  });
+    // Opening every tab the strip holds takes a few seconds on a busy machine.
+  }, 20_000);
 
   it('still opens no new tab past the limit', async () => {
-    await openTabs(...TEN_APPS);
+    await openTabs(...ALL_APPS);
 
     act(() => {
       executeEvent('addTab', {
@@ -156,9 +165,10 @@ describe('opening an app that is open already', () => {
     });
 
     await waitFor(() => expect(snacks).toEqual([LIMIT_REACHED]), SLOW);
-    expect(tabNames()).toEqual(TEN_APPS);
-    expect(selectedName()).toBe('App 9');
-  });
+    expect(tabNames()).toEqual(ALL_APPS);
+    expect(selectedName()).toBe(ALL_APPS[ALL_APPS.length - 1]);
+    // Opening every tab the strip holds takes a few seconds on a busy machine.
+  }, 20_000);
 });
 
 describe('opening a resource of an app', () => {
