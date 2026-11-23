@@ -7,6 +7,15 @@
   "always_retrieve_wallet": "ウォレットを常に自動で取得する",
   "always_retrieve_wallet_transactions": "ウォレット取引を常に自動で取得する",
   "amount_qty": "金額：{{ quantity }}",
+  "arrr_initialization": {
+    "changed": "アカウントまたはノードが変更されました。ARRRウォレットを開き直してください。",
+    "declined": "ARRRウォレットの設定が拒否されました。",
+    "explanation": "このノードにはARRRウォレットがありません。既定ではブロック{{height}}から履歴を復元します。履歴を飛ばすと、既存の残高が表示されない場合があります。",
+    "new_wallet": "このARRRウォレットは一度も入金を受けていません。現在のブロックから開始します。",
+    "title": "ARRRウォレットのスキャン開始位置を選択",
+    "unavailable": "ARRRウォレットを設定できません。ノードの準備ができてから再試行してください。",
+    "upgrade": "ARRRウォレットのスキャン開始位置を選ぶには、Qortal Coreを更新してください。"
+  },
   "arrr_preparation": {
     "amount": "自分のアドレスへ{{amount}} ARRR：{{address}}",
     "changed": "アカウントまたはCoreノードが変更されました。リクエストをやり直してください。",

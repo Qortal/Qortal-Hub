@@ -7,6 +7,15 @@
   "always_retrieve_wallet": "immer Wallet automatisch abrufen",
   "always_retrieve_wallet_transactions": "immer Wallet-Transaktionen automatisch abrufen",
   "amount_qty": "Betrag: {{ quantity }}",
+  "arrr_initialization": {
+    "changed": "Konto oder Knoten wurde geändert. Öffne das ARRR-Wallet erneut.",
+    "declined": "Die Einrichtung des ARRR-Wallets wurde abgelehnt.",
+    "explanation": "Auf diesem Knoten existiert kein ARRR-Wallet. Standardmäßig wird der Verlauf ab Block {{height}} wiederhergestellt. Übersprungener Verlauf kann vorhandenes Guthaben verbergen.",
+    "new_wallet": "Dieses ARRR-Wallet hat noch nie Guthaben erhalten. Beim aktuellen Block beginnen.",
+    "title": "Startpunkt für den ARRR-Wallet-Scan wählen",
+    "unavailable": "Die ARRR-Wallet-Einrichtung ist nicht verfügbar. Versuche es erneut, wenn der Knoten bereit ist.",
+    "upgrade": "Aktualisiere Qortal Core, um den Startblock des ARRR-Wallet-Scans zu wählen."
+  },
   "arrr_preparation": {
     "amount": "{{amount}} ARRR an Ihre eigene Adresse: {{address}}",
     "changed": "Konto oder Core-Node wurde geändert. Anfrage erneut starten.",

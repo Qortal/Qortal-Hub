@@ -7,6 +7,15 @@
   "always_retrieve_wallet": "always allow wallet to be retrieved automatically",
   "always_retrieve_wallet_transactions": "always allow wallet transactions to be retrieved automatically",
   "amount_qty": "amount: {{ quantity }}",
+  "arrr_initialization": {
+    "changed": "Account or node changed. Open the ARRR wallet again.",
+    "declined": "ARRR wallet setup was declined.",
+    "explanation": "No ARRR wallet exists on this node. Recover history from block {{height}} by default. Skipping history can hide existing funds.",
+    "new_wallet": "This ARRR wallet has never received funds. Start at the current block.",
+    "title": "Choose ARRR wallet scan start",
+    "unavailable": "ARRR wallet setup is unavailable. Try again when the node is ready.",
+    "upgrade": "Update Qortal Core to choose the ARRR wallet scan start."
+  },
   "arrr_preparation": {
     "amount": "{{amount}} ARRR to your own address: {{address}}",
     "changed": "Account or Core node changed. Start the request again.",

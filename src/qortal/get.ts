@@ -13,6 +13,7 @@ import { fundLocalTrades, localTradeCoins } from './local-trade-funding';
 import { sendLocalForeignCoin } from './foreign-coin-send';
 import { pirateWalletResult } from './pirate-wallet-response';
 import { preparePirateTrade } from './pirate-trade-preparation';
+import { ensurePirateWalletInitialization } from './pirate-wallet-initialization';
 import {
   getMoneroPublicWallet,
   rejectUnimplementedMoneroOperation,
@@ -2011,7 +2012,8 @@ export const publishQDNResource = async (
   }
 };
 
-export const checkArrrSyncStatus = async (seed) => {
+export const checkArrrSyncStatus = async (seed, isFromExtension = false) => {
+  await ensurePirateWalletInitialization(seed, (payload) => getUserPermission(payload, isFromExtension));
   const _url = await createEndpoint(`/crosschain/arrr/syncstatus`);
   let tries = 0; // Track the number of attempts
 
@@ -3691,6 +3693,8 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
     const parsedData = resKeyPair;
     const arrrSeed58 = parsedData.arrrSeed58;
     if (coin === 'ARRR') {
+      await ensurePirateWalletInitialization(arrrSeed58,
+        (payload) => getUserPermission(payload, isFromExtension));
       const bodyToString = arrrSeed58;
       const url = await createEndpoint(`/crosschain/arrr/walletaddress`);
       const response = await fetch(url, {
@@ -3737,7 +3741,7 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
         userWallet['publickey'] = parsedData.rvnPublicKey;
         break;
       case 'ARRR':
-        await checkArrrSyncStatus(parsedData.arrrSeed58);
+        await checkArrrSyncStatus(parsedData.arrrSeed58, isFromExtension);
         userWallet['address'] = arrrAddress;
         break;
       default:
@@ -3894,7 +3898,7 @@ export const getWalletBalance = async (
           _body = parsedData.rvnPublicKey;
           break;
         case 'ARRR':
-          await checkArrrSyncStatus(parsedData.arrrSeed58);
+          await checkArrrSyncStatus(parsedData.arrrSeed58, isFromExtension);
           _url = await createEndpoint(
             `/crosschain/arrr/walletbalance${data.verified === true ? '?verified=true' : ''}`
           );
@@ -3947,7 +3951,7 @@ export const getWalletBalance = async (
   }
 };
 
-const getPirateWallet = async (arrrSeed58) => {
+const getPirateWallet = async (arrrSeed58, isFromExtension = false) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
@@ -3958,7 +3962,7 @@ const getPirateWallet = async (arrrSeed58) => {
     );
   }
   const bodyToString = arrrSeed58;
-  await checkArrrSyncStatus(bodyToString);
+  await checkArrrSyncStatus(bodyToString, isFromExtension);
   const url = await createEndpoint(`/crosschain/arrr/walletaddress`);
   const response = await fetch(url, {
     method: 'POST',
@@ -5190,6 +5194,8 @@ export const getArrrSyncStatus = async () => {
   const url = `/crosschain/arrr/syncstatus`; // Simplified endpoint URL
 
   try {
+    await ensurePirateWalletInitialization(arrrSeed,
+      (payload) => getUserPermission(payload, false));
     const endpoint = await createEndpoint(url); // Assuming createEndpoint is available for constructing the full URL
     const response = await fetch(endpoint, {
       method: 'POST',

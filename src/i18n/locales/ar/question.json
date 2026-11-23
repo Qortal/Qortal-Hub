@@ -7,6 +7,15 @@
   "always_retrieve_wallet": "جيب المحفظة اوتوماتيك كل مرة",
   "always_retrieve_wallet_transactions": "جيب حركات المحفظة اوتوماتيك كل مرة",
   "amount_qty": "المبلغ: {{ quantity }}",
+  "arrr_initialization": {
+    "changed": "تغيّر الحساب أو العقدة. افتح محفظة ARRR مجددًا.",
+    "declined": "تم رفض إعداد محفظة ARRR.",
+    "explanation": "لا توجد محفظة ARRR على هذه العقدة. ستتم استعادة السجل افتراضيًا من الكتلة {{height}}. قد يؤدي تخطي السجل إلى إخفاء أموال موجودة.",
+    "new_wallet": "لم تتلق محفظة ARRR هذه أي أموال من قبل. ابدأ من الكتلة الحالية.",
+    "title": "اختر بداية فحص محفظة ARRR",
+    "unavailable": "إعداد محفظة ARRR غير متاح. حاول مجددًا عندما تصبح العقدة جاهزة.",
+    "upgrade": "حدّث Qortal Core لاختيار بداية فحص محفظة ARRR."
+  },
   "arrr_preparation": {
     "amount": "إرسال {{amount}} ARRR إلى عنوانك الخاص: {{address}}",
     "changed": "تغيّر الحساب أو عقدة Core. ابدأ الطلب من جديد.",

@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock('./pirate-wallet-initialization', () => ({
+  ensurePirateWalletInitialization: vi.fn(async () => {}),
+}));
 vi.mock('../background/background', () => ({
   createEndpoint: vi.fn(async (path) => `http://local${path}`),
   getForeignKey: vi.fn(async () => 'private-entropy'),
@@ -49,6 +52,50 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe('ARRR trade preparation', () => {
+  it('retries only reads when Core is busy before quoting and after the one approved payment', async () => {
+    const busy = () =>
+      new Response(
+        JSON.stringify({ message: 'Wallet busy. Please try again later.' }),
+        { status: 400 }
+      );
+    states(
+      busy(),
+      quote,
+      { ...quote, status: 'pending', txid: 'b'.repeat(64) },
+      busy(),
+      new Response(
+        JSON.stringify({
+          message: 'Sync in progress (100 / 101). Please try again later.',
+        }),
+        { status: 400 }
+      ),
+      { status: 'ready' }
+    );
+    const promise = preparePirateTrade(
+      offer,
+      async () => ({ accepted: true }),
+      1
+    );
+    await vi.runAllTimersAsync();
+    await promise;
+    expect(requests).toHaveLength(6);
+    expect(requests.filter((r) => r.approvedQuote)).toHaveLength(1);
+  });
+
+  it('does not retry an approved call whose outcome is unknown', async () => {
+    states(
+      quote,
+      new Response(
+        JSON.stringify({ message: 'Wallet busy. Please try again later.' }),
+        { status: 400 }
+      )
+    );
+    await expect(
+      preparePirateTrade(offer, async () => ({ accepted: true }), 1)
+    ).rejects.toThrow('unavailable');
+    expect(requests).toHaveLength(2);
+    expect(requests.filter((r) => r.approvedQuote)).toHaveLength(1);
+  });
   it('uses atomic principal plus both fees and queries without consent to spend', async () => {
     states({ status: 'ready' });
     const approve = vi.fn();

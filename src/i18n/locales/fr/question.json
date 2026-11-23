@@ -7,6 +7,15 @@
   "always_retrieve_wallet": "toujours autoriser la récupération automatique du portefeuille",
   "always_retrieve_wallet_transactions": "toujours autoriser la récupération automatique des transactions du portefeuille",
   "amount_qty": "montant : {{ quantity }}",
+  "arrr_initialization": {
+    "changed": "Le compte ou le nœud a changé. Ouvrez à nouveau le portefeuille ARRR.",
+    "declined": "La configuration du portefeuille ARRR a été refusée.",
+    "explanation": "Aucun portefeuille ARRR ne se trouve sur ce nœud. Par défaut, l’historique sera récupéré à partir du bloc {{height}}. Ignorer l’historique peut masquer des fonds existants.",
+    "new_wallet": "Ce portefeuille ARRR n’a jamais reçu de fonds. Commencer au bloc actuel.",
+    "title": "Choisir le début du scan du portefeuille ARRR",
+    "unavailable": "La configuration du portefeuille ARRR est indisponible. Réessayez lorsque le nœud sera prêt.",
+    "upgrade": "Mettez Qortal Core à jour pour choisir le début du scan du portefeuille ARRR."
+  },
   "arrr_preparation": {
     "amount": "{{amount}} ARRR vers votre propre adresse : {{address}}",
     "changed": "Le compte ou le nœud Core a changé. Relancez la demande.",

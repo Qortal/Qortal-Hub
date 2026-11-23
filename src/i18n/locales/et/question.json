@@ -7,6 +7,15 @@
   "always_retrieve_wallet": "luba alati rahakoti automaatne kättesaamine",
   "always_retrieve_wallet_transactions": "luba alati rahakoti tehingute automaatne kättesaamine",
   "amount_qty": "kogus: {{ quantity }}",
+  "arrr_initialization": {
+    "changed": "Konto või sõlm muutus. Ava ARRR rahakott uuesti.",
+    "declined": "ARRR rahakoti seadistamisest keelduti.",
+    "explanation": "Selles sõlmes pole ARRR rahakotti. Vaikimisi taastatakse ajalugu alates plokist {{height}}. Ajaloo vahelejätmine võib olemasolevad vahendid peita.",
+    "new_wallet": "See ARRR rahakott pole kunagi raha saanud. Alusta praegusest plokist.",
+    "title": "Vali ARRR rahakoti skannimise algus",
+    "unavailable": "ARRR rahakoti seadistamine pole saadaval. Proovi uuesti, kui sõlm on valmis.",
+    "upgrade": "Uuenda Qortal Core, et valida ARRR rahakoti skannimise algus."
+  },
   "arrr_preparation": {
     "amount": "{{amount}} ARRR sinu enda aadressile: {{address}}",
     "changed": "Konto või Core’i sõlm muutus. Alusta päringut uuesti.",

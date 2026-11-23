@@ -30,3 +30,31 @@ Build the regular Linux AppImage using `./build-appimage.sh` and verify its
 sync do not replace the existing AppImage. Keep the previous AppImage for
 rollback, preserving Core's current wallet database, preparation sidecars and
 trade recovery records. No database migration is introduced by this flow.
+# November 23 first-use and timeout follow-up
+
+The matching `qdn-performance` Core adds authenticated
+`/crosschain/arrr/walletinitialization`. Hub checks it before an ARRR wallet is
+first opened on each node. The default recovers historical transactions from
+Core's configured birthday. Check the new-wallet checkbox only when this ARRR
+wallet has never received funds; that explicitly selects the current block.
+Denial creates no native wallet. Existing local wallets are left in place.
+The prompt uses the configured recovery birthday; an advanced custom birthday
+can be selected through Core's authenticated API before initialization.
+
+ARRR buy requests now retain their bridge callback for 30 minutes, covering the
+separate preparation approval, proofs and confirmation scan. Recognized busy/sync
+errors are retried only for quote/status reads within the bounded preparation
+wait. The approved payment call is never automatically repeated. Account/node
+changes invalidate the approval. Other trade coins retain their existing budgets.
+
+Pair both updated binaries; an earlier Core lacks the initialization endpoint.
+The pinned JNI 0.3.11 publication remains sufficient. The ordinary Qortal backup
+format and deterministic ARRR address do not change. An existing native wallet
+already created with an incorrectly late birthday needs a reviewed earlier rescan;
+the first-use prompt does not rewrite its database or delete pending journals.
+
+Validate denial, both first-use choices, concurrent wallet requests and account/node
+changes using unfunded accounts. A separately authorized funded preparation should
+remain attached past 30 seconds and reach the trade bot only after spend readiness.
+Preserve current wallet/repository/journal data when returning to earlier binaries;
+never restore old wallet data after broadcast.

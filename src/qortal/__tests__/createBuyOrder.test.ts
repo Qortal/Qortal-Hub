@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock('../pirate-wallet-initialization', () => ({ ensurePirateWalletInitialization: vi.fn(async () => {}) }));
 
 // ── Module mocks (hoisted before any import) ────────────────────────────────
 // Factories live in ./common.ts; async dynamic import is used because vi.mock()

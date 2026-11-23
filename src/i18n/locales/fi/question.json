@@ -7,6 +7,15 @@
   "always_retrieve_wallet": "salli aina lompakon nouto automaattisesti",
   "always_retrieve_wallet_transactions": "salli aina lompakon transaktioiden nouto automaattisesti",
   "amount_qty": "määrä: {{ quantity }}",
+  "arrr_initialization": {
+    "changed": "Tili tai solmu vaihtui. Avaa ARRR-lompakko uudelleen.",
+    "declined": "ARRR-lompakon käyttöönotto hylättiin.",
+    "explanation": "Tässä solmussa ei ole ARRR-lompakkoa. Historia palautetaan oletuksena lohkosta {{height}} alkaen. Historian ohittaminen voi piilottaa olemassa olevia varoja.",
+    "new_wallet": "Tämä ARRR-lompakko ei ole koskaan vastaanottanut varoja. Aloita nykyisestä lohkosta.",
+    "title": "Valitse ARRR-lompakon skannauksen alku",
+    "unavailable": "ARRR-lompakon käyttöönotto ei ole saatavilla. Yritä uudelleen, kun solmu on valmis.",
+    "upgrade": "Päivitä Qortal Core valitaksesi ARRR-lompakon skannauksen alun."
+  },
   "arrr_preparation": {
     "amount": "{{amount}} ARRR omaan osoitteeseesi: {{address}}",
     "changed": "Tili tai Core-solmu vaihtui. Aloita pyyntö uudelleen.",

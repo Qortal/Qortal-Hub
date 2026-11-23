@@ -83,6 +83,39 @@ describe('Q-App send request lifetime', () => {
       qappRequestTimeout({ action: 'PUBLISH_MULTIPLE_QDN_RESOURCES' })
     ).toBe(30_000);
   });
+
+  it('keeps an ARRR buy reply attached throughout preparation and confirmation', async () => {
+    const post = vi.spyOn(window, 'postMessage').mockImplementation(() => {});
+    const action = 'CREATE_TRADE_BUY_ORDER';
+    const payload = { foreignBlockchain: 'PIRATECHAIN' };
+    const budget = qappRequestTimeout({ action, payload });
+    expect(budget).toBe(1_800_000);
+    const pending = sendMessageBackground(action, payload, budget, false, {});
+    let settled = false;
+    void pending.then(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(9 * 60_000);
+    expect(settled).toBe(false);
+    const request = post.mock.calls[0][0];
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: window.location.origin,
+        source: window,
+        data: {
+          type: 'backgroundMessageResponse',
+          requestId: request.requestId,
+          payload: { success: true },
+        },
+      })
+    );
+    await expect(pending).resolves.toEqual({ success: true });
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(
+      qappRequestTimeout({ action, payload: { foreignBlockchain: 'LITECOIN' } })
+    ).toBe(30_000);
+  });
 });
 
 it('allows time for XMR read and initialization approvals without extending other wallet reads', () => {

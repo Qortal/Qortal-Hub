@@ -7,6 +7,7 @@ import {
 import { getSigningContextRevision } from '../utils/chromeStorage';
 import { atomicAmount, decimalAmount } from '../lib/foreign-wallet/send';
 import { readBoundedWalletResponse } from './wallet-response';
+import { ensurePirateWalletInitialization } from './pirate-wallet-initialization';
 
 class PiratePreparationError extends Error {}
 const fail = (key: string, params = {}) =>
@@ -30,6 +31,7 @@ async function prepare(
     throw fail('changed');
   const wallet = await getSaveWallet();
   const entropy58 = await getForeignKey('PIRATECHAIN');
+  await ensurePirateWalletInitialization(entropy58, approve, revision);
   const endpoint = await createEndpoint('/crosschain/arrr/tradepreparation');
   const feeEndpoint = await createEndpoint('/crosschain/arrr/tradefees');
   const assertSession = async () => {
@@ -57,6 +59,14 @@ async function prepare(
     atomic(fees.refundFee);
   if (required <= 0n || required > BigInt(Number.MAX_SAFE_INTEGER))
     throw fail('invalid');
+  let deadline = Date.now() + 8 * 60_000;
+  let pendingTxId = '';
+  const retryable = (message: string) =>
+    message === 'Wallet busy. Please try again later.' ||
+    message.startsWith('Sync in progress (') ||
+    message === 'Wallet switch in progress' ||
+    message === "Pirate wallet isn't initialized yet" ||
+    message === 'Wallet init cooling down. Please try again shortly.';
   const query = async (approval?: {
     approvedQuote: string;
     maxFee: number;
@@ -81,6 +91,16 @@ async function prepare(
         message.includes(
           'Unsupported Qortal wallet command: tradepreparation'
         ) || message.includes('requires an updated native wallet library');
+      // A status/quote read cannot spend. Retry transient lane contention while
+      // a preparation confirms, but never automatically repeat an approved call.
+      if (!approval && !unsupported && retryable(message)) {
+        if (Date.now() >= deadline)
+          throw fail(pendingTxId ? 'pending' : 'unavailable', {
+            txid: pendingTxId,
+          });
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        return query();
+      }
       throw fail(unsupported ? 'upgrade' : 'unavailable');
     }
     await assertSession();
@@ -90,6 +110,8 @@ async function prepare(
       )
     )
       throw fail('invalid');
+    if (state.status === 'pending' && typeof state.txid === 'string')
+      pendingTxId = state.txid;
     return state;
   };
   let state = await query();
@@ -122,7 +144,7 @@ async function prepare(
   state = await query({ approvedQuote: quote, maxFee: state.fee });
   // Wait at most eight minutes. Timeout/error never starts a trade; the next
   // attempt resumes the same native journal rather than paying another fee.
-  const deadline = Date.now() + 8 * 60_000;
+  deadline = Date.now() + 8 * 60_000;
   while (state.status === 'pending' && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 5000));
     state = await query();

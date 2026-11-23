@@ -7,6 +7,15 @@
   "always_retrieve_wallet": "consenti sempre il recupero automatico del wallet",
   "always_retrieve_wallet_transactions": "consenti sempre il recupero automatico delle transazioni del wallet",
   "amount_qty": "quantità: {{ quantity }}",
+  "arrr_initialization": {
+    "changed": "L’account o il nodo è cambiato. Riapri il portafoglio ARRR.",
+    "declined": "La configurazione del portafoglio ARRR è stata rifiutata.",
+    "explanation": "Su questo nodo non esiste un portafoglio ARRR. Per impostazione predefinita, la cronologia verrà recuperata dal blocco {{height}}. Saltare la cronologia può nascondere fondi esistenti.",
+    "new_wallet": "Questo portafoglio ARRR non ha mai ricevuto fondi. Inizia dal blocco attuale.",
+    "title": "Scegli l’inizio della scansione del portafoglio ARRR",
+    "unavailable": "La configurazione del portafoglio ARRR non è disponibile. Riprova quando il nodo sarà pronto.",
+    "upgrade": "Aggiorna Qortal Core per scegliere l’inizio della scansione del portafoglio ARRR."
+  },
   "arrr_preparation": {
     "amount": "{{amount}} ARRR al tuo indirizzo: {{address}}",
     "changed": "L’account o il nodo Core è cambiato. Avvia nuovamente la richiesta.",

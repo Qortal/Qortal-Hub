@@ -7,6 +7,15 @@
   "always_retrieve_wallet": "sempre permitir a recuperação automática da carteira",
   "always_retrieve_wallet_transactions": "sempre permitir a recuperação automática das transações da carteira",
   "amount_qty": "quantidade: {{ quantity }}",
+  "arrr_initialization": {
+    "changed": "A conta ou o nó mudou. Abra novamente a carteira ARRR.",
+    "declined": "A configuração da carteira ARRR foi recusada.",
+    "explanation": "Não existe uma carteira ARRR neste nó. Por predefinição, o histórico será recuperado a partir do bloco {{height}}. Ignorar o histórico pode ocultar fundos existentes.",
+    "new_wallet": "Esta carteira ARRR nunca recebeu fundos. Começar no bloco atual.",
+    "title": "Escolha o início da verificação da carteira ARRR",
+    "unavailable": "A configuração da carteira ARRR está indisponível. Tente novamente quando o nó estiver pronto.",
+    "upgrade": "Atualize o Qortal Core para escolher o início da verificação da carteira ARRR."
+  },
   "arrr_preparation": {
     "amount": "{{amount}} ARRR para o seu próprio endereço: {{address}}",
     "changed": "A conta ou o nó Core mudou. Inicie o pedido novamente.",

@@ -7,6 +7,15 @@
   "always_retrieve_wallet": "始终自动获取钱包",
   "always_retrieve_wallet_transactions": "始终自动获取钱包交易记录",
   "amount_qty": "金额：{{ quantity }}",
+  "arrr_initialization": {
+    "changed": "账户或节点已更改。请重新打开ARRR钱包。",
+    "declined": "已拒绝设置ARRR钱包。",
+    "explanation": "此节点上没有ARRR钱包。默认从区块{{height}}开始恢复历史记录。跳过历史记录可能导致已有资金不显示。",
+    "new_wallet": "此ARRR钱包从未收到过资金。从当前区块开始。",
+    "title": "选择ARRR钱包扫描起点",
+    "unavailable": "暂时无法设置ARRR钱包。请在节点就绪后重试。",
+    "upgrade": "请更新Qortal Core，以选择ARRR钱包扫描起点。"
+  },
   "arrr_preparation": {
     "amount": "向您自己的地址转入{{amount}} ARRR：{{address}}",
     "changed": "账户或Core节点已更改。请重新发起请求。",
