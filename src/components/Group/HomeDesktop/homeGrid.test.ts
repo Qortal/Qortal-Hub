@@ -71,6 +71,8 @@ describe('homeDefaultGrid', () => {
     expect(rect(grid, 'groupActivity')).toEqual([0, 84, 12, 63]);
     expect(rect(grid, 'feed')).toEqual([12, 84, 12, 63]);
     expect(homeGridRectPx(at(grid, 'feed'), 50).height).toBe(610);
+    // The Video publisher under everything, full width.
+    expect(rect(grid, 'video')).toEqual([0, 147, 24, 76]);
   });
 
   it('follows the stack order, pairing Group Activity and the feed only when next to each other', () => {
@@ -119,6 +121,7 @@ describe('normalizeHomeGrid', () => {
       'widgets',
       'groupActivity',
       'feed',
+      'video',
     ]);
     expect(rect(grid, 'feed')).toEqual([0, 0, 24, 40]);
     // Nothing overlaps, and nothing is left floating.
@@ -267,16 +270,17 @@ describe('copies of the Workspace', () => {
   it('keeps a copy only while the layout lists it', () => {
     const stored = [
       ...homeDefaultGrid(),
-      { key: copy, x: 0, y: 147, w: 6, h: 26 },
+      { key: copy, x: 0, y: 223, w: 6, h: 26 },
     ];
     expect(at(normalizeHomeGrid(stored), copy)).toBeUndefined();
     expect(rect(normalizeHomeGrid(stored, undefined, [copy]), copy)).toEqual([
-      0, 147, 6, 26,
+      0, 223, 6, 26,
     ]);
-    // One the grid lacks goes under everything, as big as the Workspace.
+    // One the grid lacks goes under everything (the Video publisher, last
+    // by default, ends at 223), as big as the Workspace.
     expect(
       rect(normalizeHomeGrid(homeDefaultGrid(), undefined, [copy]), copy)
-    ).toEqual([0, 147, 6, 20]);
+    ).toEqual([0, 223, 6, 20]);
   });
 
   it('can be made as small as the Workspace', () => {
@@ -360,7 +364,7 @@ describe('homeGridWithWindowUnder', () => {
     const grid = homeGridWithWindowUnder(homeDefaultGrid(), 'workspace', copy, [
       'workspace',
     ]);
-    expect(rect(grid, copy)).toEqual([0, 147, 6, 20]);
+    expect(rect(grid, copy)).toEqual([0, 223, 6, 20]);
   });
 });
 
@@ -814,7 +818,7 @@ describe('px helpers', () => {
     expect(homeGridCellAt(1130, 336, columnPx, 6)).toEqual({ x: 18, y: 34 });
     expect(homeGridCellAt(5000, -20, columnPx, 6)).toEqual({ x: 18, y: 0 });
     expect(homeGridSizeFor(355, 290, columnPx)).toEqual({ w: 6, h: 31 });
-    expect(homeGridHeightPx(homeDefaultGrid())).toBe(1450);
+    expect(homeGridHeightPx(homeDefaultGrid())).toBe(2210);
     expect(homeGridHeightPx([])).toBe(0);
   });
 
@@ -848,9 +852,9 @@ describe('widget windows', () => {
     const grid = normalizeHomeGrid(stored, undefined, [clock, weather]);
 
     expect(at(grid, 'widget:Gone:')).toBeUndefined();
-    // Risen to the bottom of Group Activity, the lowest in its columns.
-    expect(rect(grid, clock)).toEqual([0, 147, 8, 30]);
-    expect(rect(grid, weather)).toEqual([0, 177, 6, 27]);
+    // Risen to the bottom of the Video publisher, the lowest in its columns.
+    expect(rect(grid, clock)).toEqual([0, 223, 8, 30]);
+    expect(rect(grid, weather)).toEqual([0, 253, 6, 27]);
     expect(grid.map((item) => item.key).slice(-2)).toEqual([clock, weather]);
   });
 

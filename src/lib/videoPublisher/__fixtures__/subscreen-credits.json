@@ -1,0 +1,139 @@
+{
+  "_note": "Subscreen's record formats as found on QDN (2026-11-17): a film's and a series' cast & crew, and a person. Names, titles and publishers are made up; each identifier that is a hash of them was worked out again with Subscreen's own functions.",
+  "filmCredits": {
+    "resource": {
+      "name": "Film Owner",
+      "service": "DOCUMENT",
+      "identifier": "subscreen_credits_4c9b79231a0c057b",
+      "metadata": {
+        "title": "Credits qtube_vid_the-cabin-film_FuIjHs_metadata",
+        "description": "owen marsh ida kerr paul demarco rosa lind vera holt hugo b. lane ted brandt edith moor"
+      },
+      "size": 736,
+      "created": 1794762593486
+    },
+    "data": {
+      "titleRef": {
+        "name": "Film Owner",
+        "identifier": "qtube_vid_the-cabin-film_FuIjHs_metadata",
+        "service": "DOCUMENT"
+      },
+      "people": [
+        {
+          "personRef": {
+            "name": "Publisher",
+            "identifier": "subscreen_person_owen-marsh_s5ULO",
+            "service": "DOCUMENT"
+          },
+          "role": "actor",
+          "displayName": "Owen Marsh",
+          "character": "Ashley 'Ash' J. Wells",
+          "at": 1794761681851
+        },
+        {
+          "personRef": {
+            "name": "Publisher",
+            "identifier": "subscreen_person_ida-kerr_9CEpO",
+            "service": "DOCUMENT"
+          },
+          "role": "actor",
+          "displayName": "Ida Kerr",
+          "character": "Clara",
+          "at": 1794761681851
+        },
+        {
+          "personRef": {
+            "name": "Publisher",
+            "identifier": "subscreen_person_paul-demarco_7GnP0",
+            "service": "DOCUMENT"
+          },
+          "role": "actor",
+          "displayName": "Paul DeMarco",
+          "character": "Sean",
+          "at": 1794761681851
+        },
+        {
+          "personRef": {
+            "name": "Publisher",
+            "identifier": "subscreen_person_rosa-lind_GCwqf",
+            "service": "DOCUMENT"
+          },
+          "role": "actor",
+          "displayName": "Rosa Lind",
+          "character": "Lena",
+          "at": 1794761681851
+        },
+        {
+          "personRef": {
+            "name": "Publisher",
+            "identifier": "subscreen_person_vera-holt_M2wzD",
+            "service": "DOCUMENT"
+          },
+          "role": "actor",
+          "displayName": "Vera Holt",
+          "character": "Stella",
+          "at": 1794761681851
+        },
+        {
+          "personRef": {
+            "name": "Publisher",
+            "identifier": "subscreen_person_hugo-b-lane_ZYCxu",
+            "service": "DOCUMENT"
+          },
+          "role": "actor",
+          "displayName": "Hugo B. Lane",
+          "character": "Stand-in",
+          "at": 1794761681851
+        },
+        {
+          "personRef": {
+            "name": "Publisher",
+            "identifier": "subscreen_person_ted-brandt_b78gf",
+            "service": "DOCUMENT"
+          },
+          "role": "actor",
+          "displayName": "Ted Brandt",
+          "character": "Stand-in",
+          "at": 1794761681851
+        },
+        {
+          "personRef": {
+            "name": "Publisher",
+            "identifier": "subscreen_person_edith-moor_O9Zgb",
+            "service": "DOCUMENT"
+          },
+          "role": "actor",
+          "displayName": "Edith Moor",
+          "character": "Stand-in",
+          "at": 1794761681851
+        }
+      ],
+      "version": 2
+    }
+  },
+  "seriesCredits": {
+    "titleRef": {
+      "name": "Film Owner",
+      "identifier": "qtube_playlist_long-siege_saNjTX",
+      "service": "PLAYLIST"
+    },
+    "identifier": "subscreen_credits_91dec36a43c30cce",
+    "title": "Credits qtube_playlist_long-siege_saNjTX"
+  },
+  "person": {
+    "resource": {
+      "name": "Publisher",
+      "service": "DOCUMENT",
+      "identifier": "subscreen_person_nora-vale_bBg3e",
+      "metadata": {
+        "title": "Nora Vale",
+        "description": "Nora Vale"
+      },
+      "size": 48,
+      "created": 1794921358563
+    },
+    "data": {
+      "displayName": "Nora Vale"
+    }
+  }
+}

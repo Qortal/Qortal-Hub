@@ -65,6 +65,7 @@ export const HOME_WINDOW_IDS: readonly HomeFixedWindowId[] = [
   'widgets',
   'groupActivity',
   'feed',
+  'video',
 ];
 
 /**
@@ -103,6 +104,7 @@ export const HOME_WINDOW_MIN_SIZE: Record<
   widgets: { w: 6, h: 3 },
   groupActivity: { w: 7, h: 34 },
   feed: { w: 7, h: 34 },
+  video: { w: 8, h: 30 },
 };
 
 /** A widget's window: a clock's size at the least. */
@@ -166,7 +168,7 @@ const HOME_GRID_QORTINO_H = 23;
  * the Workspace what's left.
  */
 const HOME_GRID_TOP: Record<
-  Exclude<HomeFixedWindowId, HomeStackPanelId>,
+  Exclude<HomeFixedWindowId, HomeStackPanelId | 'video'>,
   GridRect
 > = {
   workspace: { x: 0, y: 0, w: 6, h: 43 - HOME_GRID_QORTINO_H },
@@ -188,6 +190,11 @@ const HOME_ACCOUNT_PLACE_H = HOME_GRID_TOP.account.h;
 const HOME_GRID_LIST_H = 63;
 /** Widgets until its content has been measured. */
 const HOME_GRID_WIDGETS_H = 20;
+/**
+ * The Video publisher: its queue and the chosen app's fields side by side,
+ * tall enough for a card's preview with the settings beside it.
+ */
+const HOME_GRID_VIDEO_H = 76;
 
 const int = (value: unknown, fallback: number): number => {
   const n = typeof value === 'number' ? value : Number(value);
@@ -297,7 +304,8 @@ const stackHomeGrid = (
  * The default layout: today's three columns at the top (the Workspace over
  * Qortino over Quick Tools, the account card over Featured Q-Apps, Node
  * Status over Wallet Activity), then the stack in its order. Group Activity
- * and the feed share a row when they're next to each other in it.
+ * and the feed share a row when they're next to each other in it. The Video
+ * publisher goes under everything, full width.
  */
 export const homeDefaultGrid = (
   stack: readonly HomeStackPanelId[] = ['widgets', 'groupActivity', 'feed']
@@ -322,6 +330,7 @@ export const homeDefaultGrid = (
       y += HOME_GRID_LIST_H;
     }
   }
+  items.push({ key: 'video', x: 0, y, w: 24, h: HOME_GRID_VIDEO_H });
   return HOME_WINDOW_IDS.map((key) =>
     items.find((item) => item.key === key)
   ).filter(Boolean);

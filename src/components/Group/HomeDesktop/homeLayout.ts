@@ -42,7 +42,8 @@ export type HomePanelId =
   | 'wallet'
   | 'widgets'
   | 'groupActivity'
-  | 'feed';
+  | 'feed'
+  | 'video';
 
 /** The full-width panels under the top part of the default layout. */
 export type HomeStackPanelId = Extract<
@@ -66,9 +67,13 @@ export const HOME_STACK_PANEL_IDS: readonly HomeStackPanelId[] = [
   'feed',
 ];
 
+/** Under everything in the default layout: the Video publisher. */
+export const HOME_BOTTOM_PANEL_IDS: readonly HomePanelId[] = ['video'];
+
 const HOME_PANEL_IDS: readonly HomePanelId[] = [
   ...HOME_TOP_PANEL_IDS,
   ...HOME_STACK_PANEL_IDS,
+  ...HOME_BOTTOM_PANEL_IDS,
 ];
 
 /**

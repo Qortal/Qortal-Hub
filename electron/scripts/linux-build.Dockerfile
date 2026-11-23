@@ -11,6 +11,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     git \
+    nasm \
+    pkg-config \
+    cmake \
+    meson \
+    ninja-build \
+    zlib1g-dev \
+    xz-utils \
+    bzip2 \
     gnupg \
     build-essential \
     python3 \

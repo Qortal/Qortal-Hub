@@ -1,0 +1,218 @@
+{
+  "qtubeMetadata": {
+    "title": "A long talk about an old book — and why it’s worth reading again ",
+    "version": 1,
+    "fullDescription": "Two hosts explain why an old story about a myth retold is really a story of change that mirrors its writer’s own life, chapter by chapter, and why it'",
+    "htmlDescription": "<p>Two&nbsp;hosts&nbsp;explain&nbsp;why&nbsp;an&nbsp;old&nbsp;story&nbsp;about&nbsp;a&nbsp;myth&nbsp;retold&nbsp;is&nbsp;really&nbsp;a&nbsp;story&nbsp;of&nbsp;change&nbsp;that&nbsp;mirrors&nbsp;its&nbsp;writer’s&nbsp;own&nbsp;life,&nbsp;chapter&nbsp;by&nbsp;chapter,&nbsp;and&nbsp;why&nbsp;it&#39;s&nbsp;worth&nbsp;a&nbsp;look</p><p></p><p>159MB,&nbsp;53m54s</p>",
+    "videoImage": "data:image/webp;base64,UklGRsaZAQBXRUJQV…",
+    "videoReference": {
+      "name": "Publisher",
+      "identifier": "qtube_vid_a-long-talk-about-an-old-book_uHksPT",
+      "service": "VIDEO"
+    },
+    "extracts": [
+      "data:image/webp;base64,UklGRr5uAABXRUJQV…",
+      "data:image/webp;base64,UklGRhRxAABXRUJQV…",
+      "data:image/webp;base64,UklGRrZyAABXRUJQV…",
+      "data:image/webp;base64,UklGRlqJAABXRUJQV…"
+    ],
+    "commentsId": "qtube_vid__cm_uHksPT",
+    "category": 21,
+    "subcategory": "",
+    "code": "flLgc",
+    "videoType": "video/mp4",
+    "filename": "A long talk about an old book — and why it’s worth reading again.mp4",
+    "fileSize": 159078091,
+    "duration": 3234.861
+  },
+  "subscreenFilmMetadata": {
+    "title": "The Cabin Film",
+    "version": 1,
+    "fullDescription": "Five friends travel to a cabin in the woods, where they unknowingly release flesh-possessing demons.",
+    "htmlDescription": "<p>Five friends travel to a cabin in the woods, where they unknowingly release flesh-possessing demons.</p>",
+    "videoImage": "data:image/webp;base64,UklGRqBmAABXRUJQV…",
+    "videoReference": {
+      "name": "Publisher",
+      "identifier": "qtube_vid_the-cabin-film_FuIjHs",
+      "service": "VIDEO"
+    },
+    "extracts": [
+      "data:image/webp;base64,UklGRmY1AABXRUJQV…",
+      "data:image/webp;base64,UklGRho8AABXRUJQV…",
+      "data:image/webp;base64,UklGRs5OAABXRUJQV…",
+      "data:image/webp;base64,UklGRkorAABXRUJQV…"
+    ],
+    "commentsId": "qtube_vid__cm_FuIjHs",
+    "category": 1,
+    "subcategory": 105,
+    "year": 1981,
+    "code": "vhCL7",
+    "videoType": "video/mp4",
+    "filename": "TheCabinFilm.mp4",
+    "fileSize": 1385868608,
+    "duration": 5118.780333,
+    "quality": 480
+  },
+  "subscreenFilmDocument": {
+    "name": "Publisher",
+    "service": "DOCUMENT",
+    "identifier": "qtube_vid_the-cabin-film_FuIjHs_metadata",
+    "metadata": {
+      "title": "The Cabin Film",
+      "description": "**category:1;subcategory:105;code:vhCL7**Five friends travel to a cabin in the woods, where they unknowingly release flesh-possessing demons.",
+      "tags": ["qtube_vid_"]
+    },
+    "size": 86144,
+    "created": 1794762553364
+  },
+  "subscreenEpisodeMetadata": {
+    "title": "Long Siege S01E01",
+    "version": 1,
+    "fullDescription": "After the destruction of the Second Temple, nine hundred Jewish zealots hold out against a five thousand man Roman legion on the mountaintop fortress of Long Siege.",
+    "htmlDescription": "<p>After the destruction of the Second Temple, nine hundred Jewish zealots hold out against a five thousand man Roman legion on the mountaintop fortress of Long Siege.</p>",
+    "videoImage": "data:image/webp;base64,UklGRsZxAABXRUJQV…",
+    "videoReference": {
+      "name": "Publisher",
+      "identifier": "qtube_vid_long-siege-s01e01_7JSB0w",
+      "service": "VIDEO"
+    },
+    "extracts": [
+      "data:image/webp;base64,UklGRnpPAABXRUJQV…",
+      "data:image/webp;base64,UklGRthbAABXRUJQV…",
+      "data:image/webp;base64,UklGRlh7AABXRUJQV…",
+      "data:image/webp;base64,UklGRu6mAABXRUJQV…"
+    ],
+    "commentsId": "qtube_vid__cm_7JSB0w",
+    "category": 2,
+    "subcategory": 201,
+    "code": "5bvrk",
+    "videoType": "video/mp4",
+    "filename": "LongSiegeS01E01.mp4",
+    "fileSize": 1631275557,
+    "duration": 5723.923924,
+    "quality": 480
+  },
+  "subscreenPlaylist": {
+    "title": "Long Siege",
+    "version": 1,
+    "description": "After the destruction of the Second Temple, nine hundred Jewish zealots hold out against a five thousand man Roman legion on the mountaintop fortress of Long Siege.",
+    "htmlDescription": "<p>After the destruction of the Second Temple, nine hundred Jewish zealots hold out against a five thousand man Roman legion on the mountaintop fortress of Long Siege.</p>",
+    "image": "data:image/webp;base64,UklGRsZxAABXRUJQV…",
+    "videos": [
+      {
+        "name": "Publisher",
+        "identifier": "qtube_vid_long-siege-s01e01_7JSB0w_metadata",
+        "service": "DOCUMENT",
+        "code": "5bvrk",
+        "season": 1,
+        "episode": 1,
+        "episodeKind": "episode",
+        "episodeTitle": "Long Siege S01E01",
+        "label": "Long Siege S01E01",
+        "order": 0,
+        "duration": 5723.923924,
+        "quality": 480
+      },
+      {
+        "name": "Publisher",
+        "identifier": "qtube_vid_long-siege-s01e02_8ByW5w_metadata",
+        "service": "DOCUMENT",
+        "code": "hpsue",
+        "season": 1,
+        "episode": 2,
+        "episodeKind": "episode",
+        "episodeTitle": "Long Siege S01E02",
+        "label": "Long Siege S01E02",
+        "order": 1,
+        "duration": 5779.97998,
+        "quality": 480
+      },
+      {
+        "name": "Publisher",
+        "identifier": "qtube_vid_long-siege-s01e03_i4XHZd_metadata",
+        "service": "DOCUMENT",
+        "code": "522Jo",
+        "season": 1,
+        "episode": 3,
+        "episodeKind": "episode",
+        "episodeTitle": "Long Siege S01E03",
+        "label": "Long Siege S01E03",
+        "order": 2,
+        "duration": 5719.152486,
+        "quality": 480
+      },
+      {
+        "name": "Publisher",
+        "identifier": "qtube_vid_long-siege-s01e04_BP8z6b_metadata",
+        "service": "DOCUMENT",
+        "code": "5UhSm",
+        "season": 1,
+        "episode": 4,
+        "episodeKind": "episode",
+        "episodeTitle": "Long Siege S01E04",
+        "label": "Long Siege S01E04",
+        "order": 3,
+        "duration": 5816.766767,
+        "quality": 480
+      }
+    ],
+    "commentsId": "qtube_playlist__cm_saNjTX",
+    "category": 2,
+    "subcategory": 201,
+    "year": 1981
+  },
+  "subtitleRecord": {
+    "subtitleData": "…",
+    "language": "en",
+    "filename": "Moon Base 2012 Directors Cut.en.srt",
+    "type": "application/x-subrip"
+  },
+  "subtitleResource": {
+    "name": "Film Owner",
+    "service": "FILE",
+    "identifier": "GYDXhZ-n6L9kG7WlQeS5d-gas6Ix6HUn2gMIb-v1",
+    "metadata": {
+      "title": "en"
+    },
+    "size": 9984,
+    "created": 1794182507890
+  },
+  "qshareDocument": {
+    "name": "Publisher",
+    "service": "DOCUMENT",
+    "identifier": "qshare_file_sunday-talk-part-28-chapter-19_eYbeSH_metadata",
+    "metadata": {
+      "title": "Sunday Talk - Part 28 - Chapter 19:1-7 - The Harbo",
+      "description": "**cat:4;sub:421**113MB, 39m40s",
+      "tags": ["qshare_file_"]
+    },
+    "size": 640,
+    "created": 1794709608917
+  },
+  "qshareMetadata": {
+    "title": "Sunday Talk - Part 28 - Chapter 19:1-7 - The Harbour and the Sea",
+    "version": 1,
+    "fullDescription": "113MB, 39m40s",
+    "htmlDescription": "<p>113MB, 39m40s</p>",
+    "commentsId": "qshare_file__cm_eYbeSH",
+    "category": "4",
+    "subcategory": "421",
+    "subcategory2": "",
+    "files": [
+      {
+        "filename": "Harbour_Part_28_Chapter_19_1-7_The_Harbour_and_the_Sea_A.mp4",
+        "identifier": "qshare_file_sunday-talk-part-28-chapter-19_0qS7dD",
+        "name": "Publisher",
+        "service": "FILE",
+        "mimetype": "video/mp4",
+        "size": 112527161
+      }
+    ],
+    "thumbnail": {
+      "service": "THUMBNAIL",
+      "name": "Publisher",
+      "identifier": "qshare_thumb_sunday-talk-part-28-chapter-19_BcqsnW"
+    }
+  },
+  "_note": "Real QDN records (2026-11), images cut short, publisher names replaced except where a hash depends on them."
+}

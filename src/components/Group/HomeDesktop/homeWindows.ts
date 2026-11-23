@@ -14,6 +14,7 @@ export const useHomeWindowTitles = (): Record<HomeFixedWindowId, string> => {
       qortino: t('group:dashboard.qortino_module'),
       status: t('group:dashboard.node_status'),
       tools: t('group:dashboard.quick_tools_module'),
+      video: t('group:dashboard.video_publisher_module'),
       wallet: t('group:dashboard.wallet_activity'),
       widgets: t('group:dashboard.widgets_module'),
       workspace: t('group:dashboard.workspace_module'),

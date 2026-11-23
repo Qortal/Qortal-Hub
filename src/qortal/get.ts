@@ -571,7 +571,7 @@ const alreadyAllowed =
 
 // `appInfo` is the tab the request came from: the dialog names that app, and
 // never one the payload claims.
-async function getUserPermission(
+export async function getUserPermission(
   payload,
   isFromExtension,
   appInfo?,

@@ -244,7 +244,8 @@ describe('copies of the Workspace', () => {
     expect(homeLayoutGrid(layout).find((item) => item.key === copyId)).toEqual({
       key: copyId,
       x: 0,
-      y: 147,
+      // Under everything: the Video publisher, last by default, ends at 223.
+      y: 223,
       w: 6,
       h: 20,
     });
@@ -511,6 +512,47 @@ describe('when the layout changed', () => {
   });
 });
 
+describe('the Video publisher in the Home layout', () => {
+  it('is under everything, full width, in the default layout', () => {
+    const grid = homeLayoutGrid(HOME_LAYOUT_DEFAULT);
+    const video = grid.find((item) => item.key === 'video');
+    const lowest = Math.max(
+      ...grid
+        .filter((item) => item.key !== 'video')
+        .map((item) => item.y + item.h)
+    );
+    expect(video).toMatchObject({ x: 0, y: lowest, w: 24 });
+  });
+
+  it('comes to a layout arranged before it existed, at the bottom', () => {
+    // An account's arrangement saved without the window: Group Activity
+    // and the feed full width, one above the other.
+    const arranged = homeDefaultGrid()
+      .filter((item) => item.key !== 'video')
+      .map((item) => (item.key === 'groupActivity' ? { ...item, w: 24 } : item))
+      .map((item) =>
+        item.key === 'feed' ? { ...item, x: 0, y: 147, w: 24 } : item
+      );
+    const layout = normalizeHomeLayout({
+      hidden: [],
+      stack: ['widgets', 'groupActivity', 'feed'],
+      grid: arranged,
+    });
+    const video = layout.grid.find((item) => item.key === 'video');
+    expect(video).toMatchObject({ x: 0, y: 210, w: 24, h: 76 });
+    // Nothing else moved for it.
+    expect(layout.grid.filter((item) => item.key !== 'video')).toEqual(
+      arranged
+    );
+  });
+
+  it('can be switched off like the others', () => {
+    const hidden = withHomePanelShown(HOME_LAYOUT_DEFAULT, 'video', false);
+    expect(hidden.hidden).toEqual(['video']);
+    expect(normalizeHomeLayout(hidden).hidden).toEqual(['video']);
+  });
+});
+
 describe('widget windows in the Home layout', () => {
   const clock = { name: 'GO Clock', identifier: null, title: 'Clock' };
   const clockId = homeWidgetWindowId(clock);
@@ -523,13 +565,13 @@ describe('widget windows in the Home layout', () => {
     expect(added.widgetWindows).toEqual([
       { name: 'GO Clock', identifier: null, title: 'Clock' },
     ]);
-    expect(placeOf(added)).toMatchObject({ x: 0, y: 147, w: 6, h: 27 });
+    expect(placeOf(added)).toMatchObject({ x: 0, y: 223, w: 6, h: 27 });
     expect(withHomeWidgetWindow(added, clock)).toBe(added);
   });
 
   it('places widget windows under a layout never arranged', () => {
     const layout = { ...HOME_LAYOUT_DEFAULT, widgetWindows: [clock] };
-    expect(placeOf(layout)).toMatchObject({ x: 0, y: 147 });
+    expect(placeOf(layout)).toMatchObject({ x: 0, y: 223 });
   });
 
   it('stops at the widget limit', () => {

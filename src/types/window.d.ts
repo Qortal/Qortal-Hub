@@ -4,6 +4,7 @@ import type {
   AudioSurfaceCommandResultEnvelope,
   AudioSurfaceEvent,
 } from '../lib/group-call/audioSurfaceBridge';
+import type { VideoToolBridge } from '../../electron/src/video-tool-types';
 import type { TabShortcutAction } from '../../electron/src/tab-shortcuts';
 
 declare global {
@@ -473,6 +474,8 @@ declare global {
         message?: string;
       }>;
     };
+    /** Home's Video publisher: ffmpeg in Electron main (desktop only). */
+    videoTool?: VideoToolBridge;
     videoServer?: {
       start: (
         port?: number

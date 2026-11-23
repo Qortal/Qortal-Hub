@@ -8,8 +8,27 @@
  *   Reticulum binary and break end-user startup.
  *
  * Use the matching host OS for each target, or use the GitHub Actions matrix workflow.
+ *
+ * The package also carries the Video publisher's ffmpeg
+ * (resources/ffmpeg/<platform>-<arch>, see scripts/build-ffmpeg.mjs): it is
+ * built here when it's missing or was built by another version of the
+ * script, where this machine can build it. Where it can't (Windows, the
+ * other processor of a macOS universal app), the folder has to be copied
+ * in first. QORTAL_SKIP_FFMPEG=1 packages without it (and stops while a
+ * folder it would carry is still there): Home then shows no Video publisher.
  */
 import { spawnSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import {
+  SKIP_FFMPEG_ENV,
+  canBuildHere,
+  ffmpegTargetsFor,
+  hostTarget,
+  isFolderCurrent,
+  recipeOf,
+} from './ffmpeg-release.mjs';
 
 const mode = process.argv[2];
 
@@ -178,6 +197,48 @@ function runWithEnv(cmd, args, envExtra) {
 
 const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
+/** The Video publisher's ffmpeg for each platform the package carries. */
+function ensureFfmpeg() {
+  const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
+  const folderOf = (target) =>
+    path.resolve(scriptsDir, '..', 'resources', 'ffmpeg', target);
+  if (process.env[SKIP_FFMPEG_ENV] === '1') {
+    // electron-builder copies resources/ffmpeg as it finds it: a folder left
+    // there would go in all the same, unchecked.
+    const left = ffmpegTargetsFor(mode).map(folderOf).filter(fs.existsSync);
+    if (left.length) {
+      fail(
+        `${SKIP_FFMPEG_ENV}=1, but ${left.join(', ')} would still be packaged: remove it first.`
+      );
+    }
+    console.warn(
+      `${SKIP_FFMPEG_ENV}=1: packaging without ffmpeg. This package's Hub shows no Video publisher.`
+    );
+    return;
+  }
+  const recipe = recipeOf(
+    fs.readFileSync(path.join(scriptsDir, 'build-ffmpeg.mjs'), 'utf8')
+  );
+  for (const target of ffmpegTargetsFor(mode)) {
+    const dir = folderOf(target);
+    if (isFolderCurrent(dir, target, recipe, { release: true })) continue;
+    if (!canBuildHere(target)) {
+      fail(
+        [
+          `No current ffmpeg for ${target} in ${dir}, and ${hostTarget()} can't build it.`,
+          target === 'win-x64'
+            ? 'Build it on Linux (needs the mingw-w64 cross compilers): npm run build:ffmpeg -- --target win-x64 --release'
+            : `Build it on a ${target} machine: npm run build:ffmpeg -- --release`,
+          `and copy electron/resources/ffmpeg/${target} here, or set ${SKIP_FFMPEG_ENV}=1 to package without the Video publisher.`,
+        ].join('\n')
+      );
+    }
+    run(npmCmd, ['run', 'build:ffmpeg', '--', '--target', target, '--release']);
+  }
+}
+
+// First, so a package that can't get its ffmpeg stops before the long build.
+ensureFfmpeg();
 run(npmCmd, ['run', 'build']);
 if (cfg.universal) {
   runWithEnv(npmCmd, ['run', 'build:private-transport'], {

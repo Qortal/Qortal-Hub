@@ -13,6 +13,14 @@ export const isRetryableStatus = (status: number): boolean =>
 export const needsApiKey = (status: number): boolean =>
   status === 401 || status === 403;
 
+/**
+ * Core answers a transaction it couldn't get its blockchain lock for, within
+ * its minute, as invalid (400), before taking it in: busy, not a refusal.
+ * The result's name stays in brackets in every language.
+ */
+const isBlockchainBusy = (status: number, message: string): boolean =>
+  status === 400 && message.includes('(NO_BLOCKCHAIN_LOCK)');
+
 export class NodeAnswerError extends Error {
   readonly status: number;
   readonly retryable: boolean;
@@ -21,7 +29,8 @@ export class NodeAnswerError extends Error {
     super(message);
     this.name = 'NodeAnswerError';
     this.status = status;
-    this.retryable = isRetryableStatus(status);
+    this.retryable =
+      isRetryableStatus(status) || isBlockchainBusy(status, message);
   }
 }
 

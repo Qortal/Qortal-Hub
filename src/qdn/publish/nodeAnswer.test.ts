@@ -111,6 +111,23 @@ describe('reading the node answer', () => {
     expect(isWorthRetrying(await nodeAnswerError(answer(400)))).toBe(false);
     expect(new NodeAnswerError('x', 404).retryable).toBe(false);
   });
+
+  it('retries a transaction the node was too busy to take in', async () => {
+    const busy = await nodeAnswerError(
+      answer(
+        400,
+        '{"error":312,"message":"transaction invalid: node\'s blockchain currently busy (NO_BLOCKCHAIN_LOCK)"}'
+      )
+    );
+    expect(isWorthRetrying(busy)).toBe(true);
+    const invalid = await nodeAnswerError(
+      answer(
+        400,
+        '{"error":312,"message":"transaction invalid: invalid name (INVALID_NAME_OWNER)"}'
+      )
+    );
+    expect(isWorthRetrying(invalid)).toBe(false);
+  });
 });
 
 describe('publishing against those answers', () => {

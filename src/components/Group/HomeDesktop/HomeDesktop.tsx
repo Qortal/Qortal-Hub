@@ -52,6 +52,8 @@ import {
   savedHomeWidgetsAtom,
 } from '../../HomeWidgets/homeWidgets';
 import { TORQ_APP_NAME } from '../../Widgets/quitter/torqFeed';
+import { VideoPublisher } from '../../VideoPublisher/VideoPublisher';
+import { isVideoPublisherAvailable } from '../../VideoPublisher/useVideoPublisher';
 import { InfoPreviewPanel } from './InfoPreviewPanel';
 import { HomeDesktopWalletActivity } from './HomeDesktopWalletActivity';
 import { OnlineUsersBadge } from './OnlineUsersBadge';
@@ -155,6 +157,11 @@ export const HomeDesktop = ({
 }) => {
   const groupActivityPanelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const [homeLayout, updateHomeLayout] = useHomeLayout(myAddress);
+  // Windows this Hub can't show (no widget host, no video converter) are
+  // neither shown nor offered.
+  const canShow = (id: HomePanelId) =>
+    (id !== 'widgets' || canHostHomeWidgets()) &&
+    (id !== 'video' || isVideoPublisherAvailable());
   // While Getting started shows in Qortino's window, the Workspace makes way,
   // but not in Edit Home: there the layout shows as it's kept, so what's
   // arranged is what's saved.
@@ -164,8 +171,7 @@ export const HomeDesktop = ({
   const isShown = (id: HomePanelId) =>
     isHomePanelShownNow(homeLayout, id, {
       gettingStarted: makingWayForGettingStarted,
-    }) &&
-    (id !== 'widgets' || canHostHomeWidgets());
+    }) && canShow(id);
   const [slots, slotRef] = useWindowSlots();
   const workspaceCopies = homeLayout.workspaces ?? [];
   // Every Workspace window's key: the first one's, then the copies'.
@@ -355,6 +361,17 @@ export const HomeDesktop = ({
         />
       </DashboardWidgetFrame>
     ),
+    video: () => (
+      <DashboardWidgetFrame
+        title={titles.video}
+        subtitle={t('group:dashboard.video_publisher_module_subtitle')}
+        widgetId="video-publisher"
+      >
+        <ErrorBoundary fallback={null}>
+          <VideoPublisher />
+        </ErrorBoundary>
+      </DashboardWidgetFrame>
+    ),
   };
   const widgetWindowEntries: HomeGridWindow[] = widgetWindows.map(
     (widget, index) => {
@@ -503,10 +520,7 @@ export const HomeDesktop = ({
   // The windows hidden in the layout, for Edit Home to show again (not the
   // Workspace making way for Getting started).
   const hiddenWindows = HOME_WINDOW_IDS.filter(
-    (id) =>
-      id !== 'account' &&
-      !isHomePanelShown(homeLayout, id) &&
-      (id !== 'widgets' || canHostHomeWidgets())
+    (id) => id !== 'account' && !isHomePanelShown(homeLayout, id) && canShow(id)
   ).map((id) => ({ id, title: titles[id] }));
   const headerLabelSx = {
     color: theme.palette.text.secondary,

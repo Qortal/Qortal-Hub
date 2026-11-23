@@ -12,6 +12,8 @@ node_modules
 native/libopus-fec-wasm/build
 electron/resources/private-transport/*/qortal-private-transport
 electron/resources/private-transport/*/qortal-private-transport.exe
+# ffmpeg/ffprobe built by electron/scripts/build-ffmpeg.mjs
+electron/resources/ffmpeg/*/
 electron/tools/masque-relay/
 dist
 dist.zip
