@@ -15614,12 +15614,16 @@ export class ReticulumChatManager extends EventEmitter {
       // carrying coverage never fits and `wireFitsReticulumChat` would reject it
       // — dropping the read entirely.
       //
-      // It is sent FIRST, and awaited. The receiver treats "this channel already
-      // has per-author coverage" as the signal to skip the channel-wide
-      // watermark, and applying the watermark is what re-created the
-      // cross-author over-coverage. Waiting here is what makes that signal
-      // reliable rather than a race against the receipt.
-      await this.sendReadCoverageToOwnDevices(state, coverage);
+      // It is sent FIRST, and awaited. The receiver decides whether to skip the
+      // channel-wide watermark from whether THIS receipt's coverage has arrived,
+      // and applying the watermark is what re-created the cross-author
+      // over-coverage. Waiting here is what makes that signal reliable rather
+      // than a race against the receipt. `bindReceipt` sends one wire even when
+      // no author's seq moved, because the receipt still carries a new
+      // `signedAt` that the receiver has to be able to match to coverage.
+      await this.sendReadCoverageToOwnDevices(state, coverage, undefined, {
+        bindReceipt: true,
+      });
     }
     return wire ? state : null;
   }
@@ -15665,6 +15669,12 @@ export class ReticulumChatManager extends EventEmitter {
    * `peers` narrows the send to a specific device, which the replay path needs:
    * a replay is per device, and broadcasting each replay to every device is what
    * multiplied the coverage traffic by the device count.
+   *
+   * `bindReceipt` is set by a fresh read, and only by a fresh read. The receipt
+   * that follows this call carries a new `signedAt`, so the receiving device
+   * needs at least one wire of this read to recognise that receipt's coverage as
+   * arrived. A replay re-sends a receipt the peer has already been told about, so
+   * it keeps the strict "only what moved" rule.
    */
   private async sendReadCoverageToOwnDevices(
     state: ReticulumChatDeviceReadState,
@@ -15673,7 +15683,8 @@ export class ReticulumChatManager extends EventEmitter {
       authorStreamId: string;
       coveredSeq: number;
     }>,
-    peers?: string[]
+    peers?: string[],
+    options: { bindReceipt?: boolean } = {}
   ): Promise<void> {
     if (
       state.scopeType !== 'group' ||
@@ -15709,9 +15720,31 @@ export class ReticulumChatManager extends EventEmitter {
           (alreadySent?.get(`${entry.authorAddress}|${entry.authorStreamId}`) ??
             0) < entry.coveredSeq
       );
-      if (moved.length === 0) continue;
+      // A read whose coverage has not moved still has a receipt to bind. That
+      // receipt carries a newer `signedAt`, and the receiving device decides
+      // whether to trust the per-author rows by asking whether THIS receipt's
+      // coverage has arrived (`hasAuthorCoverageFromReceipt`). Sending nothing
+      // leaves the rows stamped with the previous receipt, so the new one looks
+      // as if it carried no coverage at all, and the receiver falls back to the
+      // channel-wide sender timestamp. On a device whose clock runs fast that
+      // timestamp is ahead of the other author's message, and the re-read
+      // cleared an unread message nobody had seen.
+      //
+      // One entry is enough to bind it: the upsert raises `signed_at` on that
+      // row, and the per-receipt check takes the maximum for the channel. The
+      // seq carried is one this peer was already told about, so the claim does
+      // not widen — only the receipt it is attached to is new.
+      let toSend = moved;
+      if (toSend.length === 0 && options.bindReceipt) {
+        toSend = [
+          coverage.reduce((highest, entry) =>
+            entry.coveredSeq > highest.coveredSeq ? entry : highest
+          ),
+        ];
+      }
+      if (toSend.length === 0) continue;
       let sentNow = alreadySent;
-      for (const entry of moved) {
+      for (const entry of toSend) {
         if (this.isClosed) return;
         const entryWire = serializeReadCoverageEntry(entry);
         const unsignedWire: Extract<ReticulumChatWire, { k: 'read_cov' }> = {
@@ -15754,9 +15787,14 @@ export class ReticulumChatManager extends EventEmitter {
         const result = await this.sendToPeerOnce(peerHash, wire);
         if (result && result.ok === false) continue;
         if (sentNow === alreadySent) sentNow = new Map(alreadySent ?? []);
+        // Never lower the recorded progress. A `bindReceipt` send repeats an
+        // entry the peer already has, and its seq can be below the highest one
+        // recorded here — writing it raw would make the next read treat that
+        // author as moved again and re-sign a wire the peer does not need.
+        const entryKey = `${entry.authorAddress}|${entry.authorStreamId}`;
         sentNow!.set(
-          `${entry.authorAddress}|${entry.authorStreamId}`,
-          entry.coveredSeq
+          entryKey,
+          Math.max(sentNow!.get(entryKey) ?? 0, entry.coveredSeq)
         );
         this.sentReadCoverage.set(sentKey, sentNow!);
       }
@@ -15858,7 +15896,10 @@ export class ReticulumChatManager extends EventEmitter {
                     [peerHash]
                   );
                   if (this.isClosed) {
-                    return { ok: false, reason: 'send-command-failed' } as const;
+                    return {
+                      ok: false,
+                      reason: 'send-command-failed',
+                    } as const;
                   }
                 }
                 return this.sendToPeerOnce(peerHash, wire);

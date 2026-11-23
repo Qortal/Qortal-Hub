@@ -1911,7 +1911,9 @@ describe('reticulum chat protocol', () => {
       expect((deviceA as any).acceptValidatedEvent(second, false)).toBe(true);
 
       const coverageTo = (target: string) =>
-        sent.filter((item) => item.target === target && item.kind === 'read_cov');
+        sent.filter(
+          (item) => item.target === target && item.kind === 'read_cov'
+        );
 
       deviceA.markRead(groupId, 'general', second.timestamp, owner.address);
       await flushQueuedWork();
@@ -2028,6 +2030,181 @@ describe('reticulum chat protocol', () => {
       ]);
     } finally {
       deviceA.close();
+    }
+  });
+
+  it('a re-read with unchanged coverage still binds its receipt to coverage', async () => {
+    // Review follow-up. The sender skipped the coverage wires whenever no
+    // author's `author_seq` had moved since the last read, but the receipt still
+    // carried a NEW `signedAt`. The receiving device decides whether to honour
+    // the per-author rows by asking whether THIS receipt's coverage has landed,
+    // so with nothing sent the new receipt looked exactly like a V1 receipt and
+    // the receiver fell back to the channel-wide sender timestamp. A
+    // fast-clocked author's read then covered a correct-clock author's later
+    // message that nobody had read — the unread badge vanished on the other
+    // device, and came back only after the next new message.
+    //
+    // The sequence is the reported one: read on the laptop, then read the same
+    // channel again on the laptop while the desktop still holds a message the
+    // laptop has never seen.
+    const owner = createDmIdentity();
+    const deviceAHash = 'd1'.padEnd(32, '0');
+    const deviceBHash = 'e2'.padEnd(32, '0');
+    const groupId = 1_161;
+    const sent: ReticulumChatWire[] = [];
+    const commonMembership = {
+      groupId,
+      isPrivate: false,
+      localAddress: owner.address,
+    };
+    const happyBridge = {
+      on: () => undefined,
+      off: () => undefined,
+    };
+    const deviceA = new ReticulumChatManager({
+      dbPath: tempDbPath(),
+      signLocalFields: createDmSigner(owner),
+      hasGoodOverlayHealth: () => false,
+      getVerifiedReticulumPeers: () => [
+        {
+          destinationHash: deviceBHash,
+          address: owner.address,
+          lastSeen: Date.now(),
+        },
+      ],
+      bridge: {
+        ...happyBridge,
+        getLocalDestinationHash: () => deviceAHash,
+        sendReticulumChatDetailed: async (
+          _target: string,
+          wire: ReticulumChatWire
+        ) => {
+          sent.push(wire);
+          return { ok: true as const };
+        },
+      } as any,
+    });
+    const deviceB = new ReticulumChatManager({
+      dbPath: tempDbPath(),
+      hasGoodOverlayHealth: () => false,
+      getVerifiedReticulumPeers: () => [
+        {
+          destinationHash: deviceAHash,
+          address: owner.address,
+          lastSeen: Date.now(),
+        },
+      ],
+      bridge: {
+        ...happyBridge,
+        getLocalDestinationHash: () => deviceBHash,
+      } as any,
+    });
+    try {
+      deviceA.setLocalGroupMemberships([commonMembership]);
+      deviceB.setLocalGroupMemberships([commonMembership]);
+      const now = Date.now();
+      const unread = () =>
+        deviceB.getChatSummaries(owner.address)[0]?.unreadCount;
+      const watermark = () =>
+        (deviceB as any).db.getReadWatermark(groupId, 'general', owner.address);
+      const takeSent = () => sent.splice(0, sent.length);
+      const deliver = () => {
+        for (const wire of sent) deviceB.handleWire(wire as any, deviceAHash);
+      };
+
+      // A's clock runs 30 s fast; B is correct and nobody has read its message.
+      const fromA = signedEvent({
+        eventId: 'reread-coverage-from-a',
+        groupId,
+        channelId: 'general',
+        authorSeq: 1,
+        timestamp: now + 30_000,
+      });
+      const fromB = signedEvent({
+        eventId: 'reread-coverage-from-b',
+        groupId,
+        channelId: 'general',
+        authorStreamId: 'c'.repeat(32),
+        authorSeq: 1,
+        timestamp: now + 1_000,
+      });
+      expect(fromB.authorAddress).not.toBe(fromA.authorAddress);
+
+      // The laptop holds only A's message. The desktop holds both.
+      expect((deviceA as any).acceptValidatedEvent(fromA, false)).toBe(true);
+      expect((deviceB as any).acceptValidatedEvent(fromA, false)).toBe(true);
+      expect((deviceB as any).acceptValidatedEvent(fromB, false)).toBe(true);
+      expect(unread()).toBe(2);
+
+      // First read: A's message is covered, B's is not touched.
+      deviceA.markRead(groupId, 'general', fromA.timestamp, owner.address);
+      await flushQueuedWork();
+      expect(sent.filter((wire) => wire.k === 'read_cov')).toHaveLength(1);
+      const firstReceipt = sent.find(
+        (wire) => wire.k === 'read_sync'
+      ) as Extract<ReticulumChatWire, { k: 'read_sync' }>;
+      expect(firstReceipt).toBeTruthy();
+      deliver();
+      takeSent();
+      expect(unread()).toBe(1);
+      expect(watermark()).toBe(0);
+
+      // Second read of the same channel. No author's seq moved, so this is
+      // exactly the case the sender used to skip.
+      deviceA.markRead(groupId, 'general', fromA.timestamp, owner.address);
+      await flushQueuedWork();
+      const secondBatch = takeSent();
+      const secondReceipt = secondBatch.find(
+        (wire) => wire.k === 'read_sync'
+      ) as Extract<ReticulumChatWire, { k: 'read_sync' }>;
+      expect(secondReceipt).toBeTruthy();
+      expect(secondReceipt.w.n).toBeGreaterThan(firstReceipt.w.n);
+      for (const wire of secondBatch) {
+        deviceB.handleWire(wire as any, deviceAHash);
+      }
+
+      // The reported symptom, asserted first so a regression fails on the badge
+      // itself rather than on a wire-shape detail. The read still covers only A;
+      // B's message stays unread, and the channel-wide watermark is never
+      // advanced to A's future timestamp.
+      expect(unread()).toBe(1);
+      expect(watermark()).toBe(0);
+      // Why it works: the receipt is still bound to per-author coverage, and
+      // that coverage preceded the receipt so the per-receipt check cannot lose
+      // a race against it.
+      expect(
+        (deviceB as any).db.hasAuthorCoverageFromReceipt(
+          groupId,
+          'general',
+          owner.address,
+          secondReceipt.w.n
+        )
+      ).toBe(true);
+      expect(
+        secondBatch.filter((wire) => wire.k === 'read_cov').length
+      ).toBeGreaterThan(0);
+      expect(
+        secondBatch.findIndex((wire) => wire.k === 'read_cov')
+      ).toBeLessThan(secondBatch.findIndex((wire) => wire.k === 'read_sync'));
+      expect(
+        (deviceB as any).db.isEventCoveredByReadState(
+          groupId,
+          'general',
+          owner.address,
+          fromA
+        )
+      ).toBe(true);
+      expect(
+        (deviceB as any).db.isEventCoveredByReadState(
+          groupId,
+          'general',
+          owner.address,
+          fromB
+        )
+      ).toBe(false);
+    } finally {
+      deviceA.close();
+      deviceB.close();
     }
   });
 
