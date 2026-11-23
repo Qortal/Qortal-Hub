@@ -62,6 +62,7 @@ import {
   RecipientInvisibleCharactersError,
   recipientDisplayLabel,
 } from '../transactions/paymentSafety';
+import { paymentNotSentError } from '../transactions/paymentAnswer';
 import {
   encryptAndPublishSymmetricKeyGroupChat,
   getAllUserNames,
@@ -1883,8 +1884,8 @@ async function prepareAppFee(appFee: ParsedAmount, appFeeRecipient: unknown) {
 /**
  * Pays a Q-App's app fee after its publish went through. The publish has
  * already been reported to the Q-App, so a payment that fails or is refused
- * (for example a node fee above the one the dialog showed) is told to the
- * user instead.
+ * (for example a node fee above the one the dialog showed), or one the node's
+ * answer doesn't show as sent, is told to the user instead.
  */
 export function payAppFeeAfterPublish(payment: {
   amount: unknown;
@@ -1905,7 +1906,19 @@ export function payAppFeeAfterPublish(payment: {
   return sendCoinFunc({ ...payment }, true).then(
     (result) => {
       if (result?.res?.success) return;
-      const message = result?.res?.data?.message;
+      if (result?.res?.outcome === 'unknown') {
+        // It may have gone through: the user checks before paying again.
+        console.warn('[app fee] the node did not say whether it was sent');
+        executeEvent('openGlobalSnackBar', {
+          message: i18n.t('question:message.error.app_fee_outcome_unknown', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+          type: 'warning',
+          duration: 8000,
+        });
+        return;
+      }
+      const message = (result?.res?.data as { message?: unknown })?.message;
       tellUser(typeof message === 'string' ? message : '');
     },
     (error) => {
@@ -5931,7 +5944,11 @@ export const sendCoin = async (data, isFromExtension, appInfo?) => {
         },
         true
       );
-      return makePayment.res?.data;
+      // Only a payment the node's answer shows as sent resolves the request.
+      if (!makePayment.res?.success) {
+        throw paymentNotSentError(makePayment.res);
+      }
+      return makePayment.res.data;
     } else {
       throw codedQortalRequestError(
         USER_DECLINED_REQUEST_CODE,

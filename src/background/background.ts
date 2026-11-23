@@ -24,6 +24,10 @@ import {
   recipientFromNameRecord,
   type ResolvedRecipient,
 } from '../transactions/paymentSafety';
+import {
+  type PaymentResult,
+  readPaymentAnswer,
+} from '../transactions/paymentAnswer';
 import i18n from 'i18next';
 import {
   base64ToUint8Array,
@@ -818,24 +822,34 @@ export const processTransactionVersion2 = async (body: any) => {
   }
 };
 
+/**
+ * Signs and posts a QORT payment (sendCoin's `res`). `success` is true only
+ * when the node's answer carries the payment's signature; `outcome` tells a
+ * refusal from an answer that doesn't say whether the payment went through
+ * (see transactions/paymentAnswer.ts).
+ */
 const transaction = async (
   { type, params, apiVersion, keyPair }: any,
   validApi
-) => {
+): Promise<PaymentResult> => {
   const tx = createTransaction(type, keyPair, params);
   let res;
+  // A signed transaction ends with its 64-byte signature.
+  const signature = Base58.encode(tx.signedBytes.slice(-64));
 
   if (apiVersion && apiVersion === 2) {
     const signedBytes = Base58.encode(tx.signedBytes);
-    res = await processTransactionVersion2(signedBytes, validApi);
+    try {
+      res = await processTransactionVersion2(signedBytes, validApi);
+    } catch {
+      // No answer was read, yet the payment may have reached the node.
+    }
   }
-  let success = true;
-  if (res?.error) {
-    success = false;
-  }
+  const outcome = readPaymentAnswer(res, signature);
 
   return {
-    success,
+    success: outcome === 'sent',
+    outcome,
     data: res,
   };
 };

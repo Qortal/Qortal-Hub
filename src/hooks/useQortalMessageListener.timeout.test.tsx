@@ -165,4 +165,42 @@ describe('a Q-App request that waits for the user', () => {
       ]);
     });
   });
+
+  // Hub stops waiting after 5 minutes, yet the payment may still go through.
+  it('tells the app Hub cannot say whether a QORT payment went through when it stopped waiting', async () => {
+    answerRequestsAfter(6 * 60 * SECOND);
+    const replies = askFromApp({
+      action: 'SEND_COIN',
+      coin: 'QORT',
+      recipient: 'QExampleRecipient',
+      amount: 1,
+    });
+
+    await vi.advanceTimersByTimeAsync(5 * 60 * SECOND + SECOND);
+
+    expect(replies).toHaveLength(1);
+    expect(replies[0]).toMatchObject({
+      result: null,
+      error: {
+        error: 'PAYMENT_OUTCOME_UNKNOWN',
+        code: 'PAYMENT_OUTCOME_UNKNOWN',
+      },
+    });
+  });
+
+  it('still tells the app that another request timed out', async () => {
+    answerRequestsAfter(6 * 60 * SECOND);
+    const replies = askFromApp({
+      action: 'SEND_COIN',
+      coin: 'LTC',
+      recipient: 'ltc-receiver',
+      amount: 1,
+    });
+
+    await vi.advanceTimersByTimeAsync(5 * 60 * SECOND + SECOND);
+
+    expect(replies).toHaveLength(1);
+    expect(JSON.stringify(replies[0])).toContain('timed out');
+    expect(JSON.stringify(replies[0])).not.toContain('PAYMENT_OUTCOME_UNKNOWN');
+  });
 });

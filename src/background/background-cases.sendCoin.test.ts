@@ -34,7 +34,7 @@ afterEach(() => {
 describe('sendCoinCase', () => {
   it('passes the fee the dialog showed on to sendCoin', async () => {
     vi.mocked(sendCoin).mockResolvedValue({
-      res: { success: true, data: {} },
+      res: { success: true, outcome: 'sent', data: {} },
       validApi: null,
     });
     const event = messageEvent();

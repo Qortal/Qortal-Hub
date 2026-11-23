@@ -73,6 +73,7 @@ import Base58 from '../encryption/Base58.ts';
 import { encryptSingle } from '../qdn/encryption/group-encryption';
 import { _createPoll, _voteOnPoll } from '../qortal/get.ts';
 import { listNamePathSegment } from '../qortal/qappNodePaths';
+import { paymentNotSentError } from '../transactions/paymentAnswer';
 import { createTransaction } from '../transactions/transactions';
 import { getData, storeData } from '../utils/chromeStorage';
 import publicKeyToAddress from '../utils/generateWallet/publicKeyToAddress';
@@ -508,11 +509,13 @@ export async function sendCoinCase(request, event) {
       skipConfirmPassword === true
     );
     if (!res?.success) {
+      const notSent = paymentNotSentError(res);
       event.source.postMessage(
         {
           requestId: request.requestId,
           action: 'sendCoin',
-          error: res?.data?.message,
+          error: notSent.message,
+          ...(notSent.code ? { code: notSent.code } : {}),
           type: 'backgroundMessageResponse',
         },
         event.origin

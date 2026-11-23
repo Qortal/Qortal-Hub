@@ -147,6 +147,7 @@ import {
   checkValueTransferFee,
   parseDecimalAmount,
 } from '../../transactions/paymentSafety';
+import { serializeQortalRequestError } from '../qortal-request-errors';
 
 const Base58 = Base58Untyped as any;
 const publicKeyToAddress = publicKeyToAddressUntyped as any;
@@ -314,7 +315,7 @@ describe('SEND_COIN with QORT', () => {
     stubBalance(100);
     const payloads = answerPrompts({ accepted: true });
     vi.mocked(sendCoinFunc).mockResolvedValue({
-      res: { success: true, data: { signature: 'SIG' } },
+      res: { success: true, outcome: 'sent', data: { signature: 'SIG' } },
       validApi: null,
     });
 
@@ -342,7 +343,7 @@ describe('SEND_COIN with QORT', () => {
     stubBalance(100);
     const payloads = answerPrompts({ accepted: true });
     vi.mocked(sendCoinFunc).mockResolvedValue({
-      res: { success: true, data: { signature: 'SIG' } },
+      res: { success: true, outcome: 'sent', data: { signature: 'SIG' } },
       validApi: null,
     });
 
@@ -384,7 +385,7 @@ describe('SEND_COIN with QORT', () => {
     stubBalance(100);
     const payloads = answerPrompts({ accepted: true });
     vi.mocked(sendCoinFunc).mockResolvedValue({
-      res: { success: true, data: { signature: 'SIG' } },
+      res: { success: true, outcome: 'sent', data: { signature: 'SIG' } },
       validApi: null,
     });
     const amount = 0.1 + 0.2; // 0.30000000000000004
@@ -437,6 +438,60 @@ describe('SEND_COIN with QORT', () => {
     ).rejects.toThrow('question:message.error.fee_above_limit');
     expect(payloads).toHaveLength(0);
     expect(sendCoinFunc).not.toHaveBeenCalled();
+  });
+
+  // background.ts sendCoin reports `sent` only when the node's answer
+  // carries the payment's signature.
+  it("rejects with the node's reason when it refuses the payment", async () => {
+    stubBalance(100);
+    answerPrompts({ accepted: true });
+    vi.mocked(sendCoinFunc).mockResolvedValue({
+      res: {
+        success: false,
+        outcome: 'refused',
+        data: {
+          error: 312,
+          message: 'transaction invalid: insufficient balance (NO_BALANCE)',
+        },
+      },
+      validApi: null,
+    });
+    const error = await sendCoin(
+      { coin: 'QORT', amount: '1', recipient: ACCOUNT_A },
+      false,
+      OPENED_APP
+    ).catch((rejected) => rejected);
+    expect(error).toBeInstanceOf(Error);
+    expect(serializeQortalRequestError(error)).toEqual({
+      error: 'transaction invalid: insufficient balance (NO_BALANCE)',
+      message: 'transaction invalid: insufficient balance (NO_BALANCE)',
+    });
+  });
+
+  it('rejects with PAYMENT_OUTCOME_UNKNOWN when the answer does not say whether the payment went through', async () => {
+    stubBalance(100);
+    answerPrompts({ accepted: true });
+    vi.mocked(sendCoinFunc).mockResolvedValue({
+      res: {
+        success: false,
+        outcome: 'unknown',
+        data: '<html><body><h1>502 Bad Gateway</h1></body></html>',
+      },
+      validApi: null,
+    });
+    const error = await sendCoin(
+      { coin: 'QORT', amount: '1', recipient: ACCOUNT_A },
+      false,
+      OPENED_APP
+    ).catch((rejected) => rejected);
+    expect(error).toBeInstanceOf(Error);
+    // What the Q-App gets back (qortal-requests.ts serializes it).
+    expect(serializeQortalRequestError(error)).toEqual({
+      error: 'PAYMENT_OUTCOME_UNKNOWN',
+      code: 'PAYMENT_OUTCOME_UNKNOWN',
+      message: 'question:message.error.payment_outcome_unknown',
+    });
+    expect(sendCoinFunc).toHaveBeenCalledTimes(1);
   });
 
   it('leaves a foreign coin "send max" request as it was', async () => {
@@ -864,7 +919,7 @@ describe('app fee after a publish', () => {
 
   it('pays with the fee the dialog showed and says nothing when it goes through', async () => {
     vi.mocked(sendCoinFunc).mockResolvedValue({
-      res: { success: true, data: {} },
+      res: { success: true, outcome: 'sent', data: {} },
       validApi: null,
     });
     await expect(payAppFeeAfterPublish(payment)).resolves.toBeUndefined();
@@ -892,7 +947,11 @@ describe('app fee after a publish', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     onTestFinished(() => warn.mockRestore());
     vi.mocked(sendCoinFunc).mockResolvedValue({
-      res: { success: false, data: { error: 2, message: 'NO_BALANCE' } },
+      res: {
+        success: false,
+        outcome: 'refused',
+        data: { error: 2, message: 'NO_BALANCE' },
+      },
       validApi: null,
     });
     await expect(payAppFeeAfterPublish(payment)).resolves.toBeUndefined();
@@ -903,6 +962,29 @@ describe('app fee after a publish', () => {
         message: `question:message.error.app_fee_not_sent ${JSON.stringify({
           error: 'NO_BALANCE',
         })}`,
+      })
+    );
+  });
+
+  it('tells the user to check their transactions when the answer does not say whether the fee was paid', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    onTestFinished(() => warn.mockRestore());
+    vi.mocked(sendCoinFunc).mockResolvedValue({
+      res: {
+        success: false,
+        outcome: 'unknown',
+        data: '<html><body><h1>502 Bad Gateway</h1></body></html>',
+      },
+      validApi: null,
+    });
+    await expect(payAppFeeAfterPublish(payment)).resolves.toBeUndefined();
+    expect(sendCoinFunc).toHaveBeenCalledTimes(1);
+    expect(executeEvent).toHaveBeenCalledTimes(1);
+    expect(executeEvent).toHaveBeenCalledWith(
+      'openGlobalSnackBar',
+      expect.objectContaining({
+        type: 'warning',
+        message: 'question:message.error.app_fee_outcome_unknown',
       })
     );
   });
@@ -975,7 +1057,7 @@ describe('app fee after a publish', () => {
       vi.mocked(getAllUserNames).mockResolvedValue(['Publisher']);
       vi.mocked(publishData).mockResolvedValue({ signature: 'PUBLISH_SIG' });
       vi.mocked(sendCoinFunc).mockResolvedValue({
-        res: { success: true, data: {} },
+        res: { success: true, outcome: 'sent', data: {} },
         validApi: null,
       });
     });
