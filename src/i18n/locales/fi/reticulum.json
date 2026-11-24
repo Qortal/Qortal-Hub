@@ -129,6 +129,9 @@
     "return_to_chat": "Palaa keskusteluun"
   },
   "notification": {
+    "mention_special_in_group": "{{sender}} mainitsi kohteen {{target}} ryhmässä {{groupName}}",
+    "mention_you_in_group": "{{sender}} mainitsi sinua ryhmässä {{groupName}}",
+    "reply_you_in_group": "{{sender}} vastasi sinulle ryhmässä {{groupName}}",
     "someone": "joku",
     "welcome_joined": "{{name}} liittyi ryhmään {{groupName}}"
   },

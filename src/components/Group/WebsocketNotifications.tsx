@@ -44,6 +44,12 @@ import {
   type OsNotificationKind,
 } from './reticulumNotificationPrecedence';
 import {
+  mentionTitleKey,
+  mentionTitleTarget,
+  normalizeMentionBroadcastScope,
+  type MentionBroadcastScope,
+} from './reticulumMentionNotificationTitle';
+import {
   isHubBeingViewed,
   shouldNotifyForReticulumDm,
 } from '../../utils/reticulumDmNotifications';
@@ -636,10 +642,12 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
   useEffect(() => {
     const handleQChatMention = async (
       event: CustomEvent<{
+        broadcastScope?: 'here' | 'everyone' | null;
         channelId?: string;
         eventId?: string;
-        groupId?: number;
         groupName?: string;
+        groupId?: number;
+        isEveryoneOrHere?: boolean;
         mentionCount?: number;
         syncUnreadCount?: boolean;
         messageText?: string;
@@ -657,6 +665,15 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
 
       const channelId = String(detail?.channelId || 'general');
       const isEveryoneOrHere = detail?.isEveryoneOrHere === true;
+      // Copy only: tells the title whether the reader was reached by @here,
+      // @everyone, or by name (`null`). The gate above keeps reading the
+      // boolean, which the producer derives from this same scope.
+      //
+      // Narrowed rather than defaulted: this bus is untyped, so a stray value
+      // would otherwise fall through `mentionTitleKey`'s null check and render
+      // "@everyone" on a direct-mention title.
+      const broadcastScope: MentionBroadcastScope =
+        normalizeMentionBroadcastScope(detail?.broadcastScope);
       const groupStore = await getGroupNotificationStore(groupId).catch(
         () => null
       );
@@ -684,7 +701,8 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
 
       const timestamp = Number(detail?.timestamp || Date.now());
       const groupName =
-        String(detail?.groupName || '').trim() || `Group ${groupId}`;
+        String(detail?.groupName || '').trim() ||
+        i18n.t('group:activity_dashboard.group_fallback_name', { groupId });
       let channelName = getReticulumNotificationChannelLabel(channelId, null);
       let channelVisibilitySymbol = '';
       if (!isUnreadCountSync || Number(detail?.mentionCount || 0) > 0) {
@@ -836,7 +854,11 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
           'mention'
         )
       ) {
-        const mentionSender = detail.senderName || 'Someone';
+        const mentionSender =
+          detail.senderName ||
+          i18n.t('reticulum:notification.someone', {
+            postProcess: 'capitalizeFirstChar',
+          });
         const mentionText = detail.messageText || '';
         if (
           shouldSuppressForCurrentView(
@@ -857,7 +879,11 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
             appService: 'INTERNAL',
             event: QCHAT_MENTION_NOTIFICATION_EVENT,
           },
-          `${mentionSender} mentioned you in ${groupName}`,
+          i18n.t(mentionTitleKey(broadcastScope), {
+            groupName,
+            sender: mentionSender,
+            target: mentionTitleTarget(broadcastScope),
+          }),
           previewText,
           qortPng,
           undefined,
@@ -893,7 +919,8 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
       if (!eventId || !Number.isFinite(groupId)) return;
 
       const groupName =
-        String(detail?.groupName || '').trim() || `Group ${groupId}`;
+        String(detail?.groupName || '').trim() ||
+        i18n.t('group:activity_dashboard.group_fallback_name', { groupId });
       const channelId = String(detail?.channelId || 'general');
 
       const replyGroupStore = await getGroupNotificationStore(groupId).catch(
@@ -945,7 +972,11 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
         shouldSuppressForCurrentView(currentViewContextRef, groupId, channelId)
       )
         return;
-      const replySender = detail.senderName || 'Someone';
+      const replySender =
+        detail.senderName ||
+        i18n.t('reticulum:notification.someone', {
+          postProcess: 'capitalizeFirstChar',
+        });
       const replyText = detail.messageText || '';
       const previewText = truncatePreview(
         `${channelVisibilitySymbol ? channelVisibilitySymbol + '  ' : ''}${channelName}\n${replyText}`,
@@ -958,7 +989,10 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
           appService: 'INTERNAL',
           event: 'Q_CHAT_REPLY',
         },
-        `${replySender} replied to you in ${groupName}`,
+        i18n.t('reticulum:notification.reply_you_in_group', {
+          groupName,
+          sender: replySender,
+        }),
         previewText,
         qortPng,
         undefined,

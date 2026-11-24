@@ -131,6 +131,10 @@ import {
 } from '../../utils/qChatNotificationSettings';
 import { resolveChannelReadWatermarkFromSummaries } from '../../utils/qChatReadWatermark';
 import { planReticulumNotifications } from './reticulumNotificationPlan';
+import {
+  mentionBroadcastScope,
+  type MentionBroadcastScope,
+} from './reticulumMentionNotificationTitle';
 import { WalletsAppWrapper } from './WalletsAppWrapper';
 import { useTranslation } from 'react-i18next';
 import { GroupList } from './GroupList';
@@ -444,25 +448,35 @@ const resolveReticulumMentionAddressesFromPayload = (
   return [...mentioned];
 };
 
+/**
+ * Which authorized `@here` / `@everyone` reached the reader, if any.
+ *
+ * The rule itself lives in `reticulumMentionNotificationTitle.ts` so it can be
+ * unit-tested and loaded by the headless scenario harness. This wrapper only
+ * supplies the session clock.
+ */
+const reticulumBroadcastScopeForEvent = (
+  event: ReticulumBackgroundEvent
+): MentionBroadcastScope =>
+  mentionBroadcastScope({
+    privilegedMentionAuthorized: event.privilegedMentionAuthorized === true,
+    groupId: Number(event.groupId),
+    channelId: String(event.channelId || 'general'),
+    timestamp: Number(event.timestamp || 0),
+    onlineSinceMs: RETICULUM_RENDERER_ONLINE_SINCE_MS,
+    mentionTargets: event.mentionTargets,
+  });
+
+/**
+ * "An authorized broadcast applies to this post."
+ *
+ * Defined in terms of `reticulumBroadcastScopeForEvent` rather than repeating
+ * the target loop, so the boolean the notification gate consumes and the scope
+ * the title consumes can never disagree about the same post.
+ */
 const authorizedReticulumBroadcastApplies = (
   event: ReticulumBackgroundEvent
-): boolean => {
-  if (event.privilegedMentionAuthorized !== true) return false;
-  const groupId = Number(event.groupId);
-  const eventChannelId = String(event.channelId || 'general');
-  for (const target of event.mentionTargets || []) {
-    if (Number(target?.groupId) !== groupId) continue;
-    if (target?.type === 'everyone') return true;
-    if (
-      target?.type === 'here' &&
-      String(target?.channelId || eventChannelId) === eventChannelId &&
-      Number(event.timestamp || 0) >= RETICULUM_RENDERER_ONLINE_SINCE_MS
-    ) {
-      return true;
-    }
-  }
-  return false;
-};
+): boolean => reticulumBroadcastScopeForEvent(event) !== null;
 
 /** Subscribes to memberGroupsAtom and runs effects (Group does not subscribe). */
 function MemberGroupsEffects({
@@ -2793,7 +2807,13 @@ export const Group = ({
       groupId: number,
       groupName: string,
       mentionedAddresses: string[],
-      isEveryoneOrHere: boolean,
+      /**
+       * Which authorized broadcast reached the reader, or `null` when the
+       * reader was @-mentioned by name instead. The caller clears this to
+       * `null` for a direct ping, because a direct mention is the more specific
+       * claim and outranks any broadcast on the same post.
+       */
+      broadcastScope: MentionBroadcastScope,
       messageText: string,
       senderName: string
     ) => {
@@ -2813,11 +2833,14 @@ export const Group = ({
       const timestamp = Number(event.timestamp || Date.now());
 
       executeEvent('q-chat-mention-notification', {
+        broadcastScope,
         channelId,
         eventId,
         groupId,
         groupName,
-        isEveryoneOrHere,
+        // Policy, not copy: `suppressEveryoneHere` reads this. Derived from the
+        // scope so the gate and the title cannot disagree about the same post.
+        isEveryoneOrHere: broadcastScope !== null,
         messageText,
         senderName,
         timestamp,
@@ -3207,12 +3230,20 @@ export const Group = ({
 
       if (notificationPlan.mention) {
         const localAddress = myAddressRef.current || '';
+        // Specificity, most specific first: a direct ping outranks a broadcast.
+        // Reporting "$sender mentioned @everyone" for a post that also named
+        // the reader would understate how they were reached, and would let
+        // `suppressEveryoneHere` silence a direct mention.
+        const broadcastScope: MentionBroadcastScope =
+          notificationPlan.directMention
+            ? null
+            : reticulumBroadcastScopeForEvent(event);
         recordReticulumMentionNotification(
           event,
           groupId,
           groupName,
           [localAddress],
-          notificationPlan.authorizedBroadcast,
+          broadcastScope,
           text,
           senderName
         );

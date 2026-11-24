@@ -129,6 +129,9 @@
     "return_to_chat": "Вернуться в чат"
   },
   "notification": {
+    "mention_special_in_group": "{{sender}} упомянул {{target}} в {{groupName}}",
+    "mention_you_in_group": "{{sender}} упомянул вас в {{groupName}}",
+    "reply_you_in_group": "{{sender}} ответил вам в {{groupName}}",
     "someone": "кто-то",
     "welcome_joined": "{{name}} присоединился к группе {{groupName}}"
   },

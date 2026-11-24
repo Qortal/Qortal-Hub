@@ -31,6 +31,11 @@ const NOTIFICATION_POLICY_PATH = new URL(
   import.meta.url
 ).pathname;
 
+const MENTION_TITLE_PATH = new URL(
+  '../../src/components/Group/reticulumMentionNotificationTitle.ts',
+  import.meta.url
+).pathname;
+
 /** The event names `Group.tsx` emits and `WebsocketNotifications` listens for. */
 export const NOTIFICATION_EVENT_BY_KIND = {
   reply: 'q-chat-reply-notification',
@@ -78,26 +83,45 @@ export async function loadNotificationPolicy() {
   return cachedPolicyModule;
 }
 
+let cachedMentionTitleModule = null;
+
 /**
- * Mirrors `authorizedReticulumBroadcastApplies` in Group.tsx, which is not
- * exported. Kept small and adjacent to the note above so it stays honest.
+ * The real `mentionBroadcastScope` — the rule `Group.tsx` derives
+ * `authorizedReticulumBroadcastApplies()` from, and the one that decides the
+ * notification title's wording.
+ *
+ * This used to be a hand-copy of the loop in `Group.tsx`, which meant a change
+ * to the scope rule left every notification scenario green while the gate and
+ * the title drifted. The module imports nothing, so the same type-stripping
+ * trick as the plan and policy modules applies.
  */
-export function authorizedBroadcastApplies(event, onlineSinceMs = 0) {
-  if (event?.privilegedMentionAuthorized !== true) return false;
-  const groupId = Number(event?.groupId);
-  const channelId = String(event?.channelId || 'general');
-  for (const target of event?.mentionTargets || []) {
-    if (Number(target?.groupId) !== groupId) continue;
-    if (target?.type === 'everyone') return true;
-    if (
-      target?.type === 'here' &&
-      String(target?.channelId || channelId) === channelId &&
-      Number(event?.timestamp || 0) >= onlineSinceMs
-    ) {
-      return true;
-    }
+export async function loadMentionTitle() {
+  if (cachedMentionTitleModule) return cachedMentionTitleModule;
+  cachedMentionTitleModule = await import(MENTION_TITLE_PATH);
+  if (typeof cachedMentionTitleModule.mentionBroadcastScope !== 'function') {
+    throw new Error(
+      `reticulumMentionNotificationTitle.ts no longer exports mentionBroadcastScope`
+    );
   }
-  return false;
+  return cachedMentionTitleModule;
+}
+
+/**
+ * `authorizedReticulumBroadcastApplies` as `Group.tsx` defines it: an
+ * authorized broadcast applies exactly when the scope resolves to something.
+ */
+export async function authorizedBroadcastApplies(event, onlineSinceMs = 0) {
+  const { mentionBroadcastScope } = await loadMentionTitle();
+  return (
+    mentionBroadcastScope({
+      privilegedMentionAuthorized: event?.privilegedMentionAuthorized === true,
+      groupId: Number(event?.groupId),
+      channelId: String(event?.channelId || 'general'),
+      timestamp: Number(event?.timestamp || 0),
+      onlineSinceMs,
+      mentionTargets: event?.mentionTargets,
+    }) !== null
+  );
 }
 
 /**
@@ -128,6 +152,7 @@ export async function planForEvent(options) {
   } = options;
 
   const { planReticulumNotifications } = await loadNotificationPlan();
+  const { mentionBroadcastScope } = await loadMentionTitle();
 
   return planReticulumNotifications(
     {
@@ -146,7 +171,15 @@ export async function planForEvent(options) {
       getNotifyOnReplies: async () => notifyOnReplies,
       isChannelMuted: async () => channelMuted,
       isAuthorizedBroadcast: () =>
-        authorizedBroadcastApplies(event, onlineSinceMs),
+        mentionBroadcastScope({
+          privilegedMentionAuthorized:
+            event?.privilegedMentionAuthorized === true,
+          groupId: Number(event?.groupId),
+          channelId: String(event?.channelId || 'general'),
+          timestamp: Number(event?.timestamp || 0),
+          onlineSinceMs,
+          mentionTargets: event?.mentionTargets,
+        }) !== null,
       isDirectMention: () => event?.directMentionAuthorized === true,
     }
   );

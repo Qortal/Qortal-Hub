@@ -129,6 +129,9 @@
     "return_to_chat": "Volver al chat"
   },
   "notification": {
+    "mention_special_in_group": "{{sender}} mencionó a {{target}} en {{groupName}}",
+    "mention_you_in_group": "{{sender}} te mencionó en {{groupName}}",
+    "reply_you_in_group": "{{sender}} te respondió en {{groupName}}",
     "someone": "alguien",
     "welcome_joined": "{{name}} se ha unido al grupo {{groupName}}"
   },

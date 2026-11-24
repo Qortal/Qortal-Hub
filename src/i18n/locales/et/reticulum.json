@@ -129,6 +129,9 @@
     "return_to_chat": "Tagasi vestlusesse"
   },
   "notification": {
+    "mention_special_in_group": "{{sender}} mainis grupis {{groupName}} sihtrühma {{target}}",
+    "mention_you_in_group": "{{sender}} mainis sind grupis {{groupName}}",
+    "reply_you_in_group": "{{sender}} vastas sulle grupis {{groupName}}",
     "someone": "keegi",
     "welcome_joined": "{{name}} liitus grupiga {{groupName}}"
   },

@@ -129,6 +129,9 @@
     "return_to_chat": "チャットに戻る"
   },
   "notification": {
+    "mention_special_in_group": "{{sender}}が{{groupName}}で{{target}}をメンションしました",
+    "mention_you_in_group": "{{sender}}が{{groupName}}であなたをメンションしました",
+    "reply_you_in_group": "{{sender}}が{{groupName}}であなたに返信しました",
     "someone": "誰か",
     "welcome_joined": "{{name}}がグループ{{groupName}}に参加しました"
   },

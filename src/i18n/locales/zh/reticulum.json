@@ -129,6 +129,9 @@
     "return_to_chat": "返回聊天"
   },
   "notification": {
+    "mention_special_in_group": "{{sender}}在{{groupName}}中提到了{{target}}",
+    "mention_you_in_group": "{{sender}}在{{groupName}}中提到了你",
+    "reply_you_in_group": "{{sender}}在{{groupName}}中回复了你",
     "someone": "有人",
     "welcome_joined": "{{name}}加入了{{groupName}}群组"
   },

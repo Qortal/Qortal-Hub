@@ -129,6 +129,9 @@
     "return_to_chat": "العودة إلى المحادثة"
   },
   "notification": {
+    "mention_special_in_group": "{{sender}} أشار إلى {{target}} في {{groupName}}",
+    "mention_you_in_group": "{{sender}} أشار إليك في {{groupName}}",
+    "reply_you_in_group": "{{sender}} ردّ عليك في {{groupName}}",
     "someone": "أحد الأعضاء",
     "welcome_joined": "انضم {{name}} إلى مجموعة {{groupName}}"
   },

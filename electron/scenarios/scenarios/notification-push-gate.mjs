@@ -14,7 +14,11 @@
  * uses. What this asserts is therefore the real gate, not a copy of it.
  */
 
-import { loadNotificationPolicy } from '../notifications.mjs';
+import {
+  authorizedBroadcastApplies,
+  loadMentionTitle,
+  loadNotificationPolicy,
+} from '../notifications.mjs';
 
 const SETTINGS_ALL = {
   pushLevel: 'all',
@@ -332,6 +336,153 @@ export default {
         return 'welcome suppressed';
       }
     );
+
+    // ---- suppressEveryoneHere never silences a direct mention --------------
+    // `isEveryoneOrHere` is set by the producer from the broadcast scope, and
+    // the producer clears it when the reader was also @-mentioned by name. These
+    // two cases lock the contract from the gate's side: the setting only
+    // applies when the broadcast is the reader's sole claim.
+    const SETTINGS_MENTIONS_SUPPRESS = {
+      pushLevel: 'mentions',
+      suppressEveryoneHere: true,
+      notifyOnReplies: true,
+      notifyOnReactions: true,
+      notifyOnWelcomePosts: true,
+    };
+
+    const directMentionAlongsideEveryone = replayHandlers(
+      policy,
+      SETTINGS_MENTIONS_SUPPRESS,
+      // The producer saw a direct ping and cleared the flag.
+      { isMentionOfMe: true, isEveryoneOrHere: false },
+      'evt-gate-suppress-direct-mention'
+    );
+
+    await ctx.check(
+      'suppressEveryoneHere does not silence a post that also named the reader',
+      () => {
+        if (directMentionAlongsideEveryone.length !== 1) {
+          throw new Error(
+            `got ${JSON.stringify(directMentionAlongsideEveryone)}`
+          );
+        }
+        if (directMentionAlongsideEveryone[0] !== 'mention') {
+          throw new Error(
+            `got ${JSON.stringify(directMentionAlongsideEveryone)}`
+          );
+        }
+        return 'direct mention still notifies';
+      }
+    );
+
+    const broadcastOnlyEveryone = replayHandlers(
+      policy,
+      SETTINGS_MENTIONS_SUPPRESS,
+      { isMentionOfMe: true, isEveryoneOrHere: true },
+      'evt-gate-suppress-broadcast-only'
+    );
+
+    await ctx.check(
+      'suppressEveryoneHere still silences a broadcast-only mention',
+      () => {
+        if (broadcastOnlyEveryone.includes('mention')) {
+          throw new Error(`got ${JSON.stringify(broadcastOnlyEveryone)}`);
+        }
+        return 'broadcast suppressed';
+      }
+    );
+
+    // ---- the shipping scope rule drives the gate, not a harness copy -------
+    // `authorizedBroadcastApplies` in notifications.mjs resolves through
+    // `reticulumMentionNotificationTitle.ts` by type stripping, so a change to
+    // the scope rule cannot leave this suite green while the gate and the title
+    // diverge. Everything is awaited before the checks so the assertions stay
+    // synchronous like the rest of this file.
+    const mentionTitle = await loadMentionTitle();
+
+    const everyoneEvent = {
+      privilegedMentionAuthorized: true,
+      groupId: 716,
+      channelId: 'general',
+      timestamp: 2_000_000,
+      mentionTargets: [{ type: 'everyone', groupId: 716 }],
+    };
+    const everyoneApplies = await authorizedBroadcastApplies(
+      everyoneEvent,
+      1_000_000
+    );
+    const everyoneScope = mentionTitle.mentionBroadcastScope({
+      privilegedMentionAuthorized: true,
+      groupId: 716,
+      channelId: 'general',
+      timestamp: 2_000_000,
+      onlineSinceMs: 1_000_000,
+      mentionTargets: everyoneEvent.mentionTargets,
+    });
+    const otherChannelHereApplies = await authorizedBroadcastApplies(
+      {
+        ...everyoneEvent,
+        mentionTargets: [{ type: 'here', groupId: 716, channelId: 'random' }],
+      },
+      1_000_000
+    );
+    const staleHereApplies = await authorizedBroadcastApplies(
+      {
+        ...everyoneEvent,
+        timestamp: 500_000,
+        mentionTargets: [{ type: 'here', groupId: 716, channelId: 'general' }],
+      },
+      1_000_000
+    );
+
+    await ctx.check(
+      'an authorized @everyone resolves to a scope, so the gate opens',
+      () => {
+        if (everyoneApplies !== true) throw new Error(`got ${everyoneApplies}`);
+        if (everyoneScope !== 'everyone')
+          throw new Error(`scope ${everyoneScope}`);
+        return 'scope=everyone';
+      }
+    );
+
+    await ctx.check(
+      'an @here for another channel is not treated as a broadcast',
+      () => {
+        if (otherChannelHereApplies !== false) {
+          throw new Error(`got ${otherChannelHereApplies}`);
+        }
+        return 'not a broadcast';
+      }
+    );
+
+    await ctx.check(
+      'an @here older than this session is not treated as a broadcast',
+      () => {
+        if (staleHereApplies !== false) {
+          throw new Error(`got ${staleHereApplies}`);
+        }
+        return 'stale @here ignored';
+      }
+    );
+
+    await ctx.check('the title key and target follow the scope', () => {
+      const cases = [
+        [null, 'reticulum:notification.mention_you_in_group'],
+        ['here', 'reticulum:notification.mention_special_in_group'],
+        ['everyone', 'reticulum:notification.mention_special_in_group'],
+      ];
+      for (const [scope, expected] of cases) {
+        const key = mentionTitle.mentionTitleKey(scope);
+        if (key !== expected) throw new Error(`${scope} -> ${key}`);
+      }
+      if (mentionTitle.mentionTitleTarget('here') !== '@here') {
+        throw new Error('here target');
+      }
+      if (mentionTitle.mentionTitleTarget('everyone') !== '@everyone') {
+        throw new Error('everyone target');
+      }
+      return 'keys and targets match the scope';
+    });
 
     // ---- once per event, even if the same event arrives twice --------------
     const claims = new policy.OsNotificationClaims();
