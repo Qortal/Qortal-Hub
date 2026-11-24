@@ -42,7 +42,11 @@ import { getWalletErrorMessage } from '../utils/walletErrorMessages';
 import PhraseWallet from '../utils/generateWallet/phrase-wallet';
 import { RequestQueueWithPromise } from '../utils/queue/queue';
 import { validateAddress } from '../utils/validateAddress';
-import { createNotificationQueue } from '../utils/notificationQueue';
+import {
+  invalidateNotificationSession,
+  notificationQueue,
+} from '../utils/notificationSession';
+import type { NotificationSessionToken } from '../utils/notificationQueue';
 import {
   GENERAL_NOTIFICATION_TYPE_MARKER,
   notificationClickRoute,
@@ -2984,8 +2988,10 @@ function setupMessageListener() {
               // Ends the notification session, so anything still queued for the
               // account being logged out is skipped rather than presented under
               // the next one. The array clear inside it is not enough on its
-              // own: a drain already past its shift re-checks the epoch.
-              notificationQueue.invalidateSession();
+              // own: a drain already past its shift re-checks the epoch, and a
+              // Q-Chat handler still awaiting its settings finds its captured
+              // token stale when it finally tries to enqueue.
+              invalidateNotificationSession();
               if (interval) {
                 // for announcement notification
                 clearInterval(interval);
@@ -3194,15 +3200,11 @@ export const checkNewMessages = async () => {
   }
 };
 
-const NOTIFICATION_QUEUE_INTERVAL_MS = 5000;
-
-// Items are owned by the session that submitted them. Logout invalidates the
-// session, so a queued notification cannot be presented under the next account
-// with the previous account's sender name and body. See
-// src/utils/notificationQueue.ts.
-const notificationQueue = createNotificationQueue({
-  intervalMs: NOTIFICATION_QUEUE_INTERVAL_MS,
-});
+// The queue itself lives in src/utils/notificationSession.ts, because the
+// Q-Chat handlers that submit to it need the same session epoch to prove which
+// account their work belongs to. They capture it before their first await and
+// pass it here, so an item that resumes after an account switch is dropped.
+// See src/utils/notificationQueue.ts for the ownership rules.
 
 export const fireOsNotificationPayment = async (
   notificationPayload,
@@ -3222,7 +3224,18 @@ export const fireOsNotificationPayment = async (
    * routing id, so it passes a key here instead of an event id: the queue still
    * deduplicates and can cancel it, and the click still opens the DM.
    */
-  queueKey?: string
+  queueKey?: string,
+  /**
+   * The session the work that produced this notification was started under.
+   *
+   * Callers that await before calling this — every Q-Chat handler looks its
+   * settings up, and some fetch channel metadata — capture the token at the top
+   * of the handler and pass it here. Without it the item would be stamped with
+   * the *current* epoch, which after a logout/login is the new account's, and
+   * the queue's ownership guards would read it as that account's notification:
+   * the previous account's sender name, group name and preview would be shown.
+   */
+  session?: NotificationSessionToken
 ) => {
   // Record which account queues this item, resolved from the wallet read that
   // starts here rather than at presentation time. The settings lookup below
@@ -3243,7 +3256,7 @@ export const fireOsNotificationPayment = async (
   const effectiveQueueKey =
     queueKey ?? (eventId ? qchatNotificationIdForEvent(eventId) : null);
 
-  notificationQueue.enqueue(async (isSessionCurrent) => {
+  const presentNotification = async (isSessionCurrent: () => boolean) => {
     try {
       const isDisableNotifications =
         (await getUserSettings({ key: 'disable-push-notifications' })) || false;
@@ -3338,7 +3351,17 @@ export const fireOsNotificationPayment = async (
     } catch (error) {
       console.error(error);
     }
-  }, effectiveQueueKey ?? undefined);
+  };
+
+  // `session`, when supplied, is checked at submission: if the session that
+  // produced this notification has ended, the queue drops the item outright. A
+  // handler that resumed after a logout/login therefore cannot present the
+  // previous account's sender, group name and preview — it never gets queued.
+  notificationQueue.enqueue(
+    presentNotification,
+    effectiveQueueKey ?? undefined,
+    session
+  );
 };
 
 /**

@@ -13,6 +13,13 @@
  * pending items. Items from an older epoch are skipped before they start, and a
  * run body can re-check the epoch after an await — clearing the array alone
  * cannot cancel a closure that is already executing.
+ *
+ * Stamping at submission is only half of it. A caller that awaits before it
+ * queues — every Q-Chat handler looks its settings up first — is stamped with
+ * whichever account is signed in when the lookup settles, not the one that
+ * produced the notification. Such a caller passes the token it captured at the
+ * start of its work, and an item submitted on behalf of a session that has
+ * ended is dropped instead of being presented under the next account.
  */
 
 export interface NotificationQueueOptions {
@@ -40,7 +47,8 @@ export interface NotificationQueue {
    */
   enqueue: (
     run: (isSessionCurrent: IsSessionCurrent) => Promise<void>,
-    key?: string
+    key?: string,
+    session?: NotificationSessionToken
   ) => void;
   /**
    * Drops a pending item by key, without touching the session.
@@ -124,7 +132,13 @@ export function createNotificationQueue(
   };
 
   return {
-    enqueue(run, key) {
+    enqueue(run, key, session) {
+      // Work started under a session that has since ended is abandoned here, at
+      // the moment it would have been queued. Doing this before the key filter
+      // matters: a stale item carrying the same key as a waiting one would
+      // otherwise evict the current account's notification and then be dropped
+      // itself, so neither would ever be presented.
+      if (session !== undefined && session !== epoch) return;
       if (key) {
         // An item already draining has been shifted off the queue and cannot be
         // replaced, but anything still waiting is a duplicate of this one.

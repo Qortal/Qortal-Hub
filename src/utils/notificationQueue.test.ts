@@ -231,6 +231,108 @@ describe('notificationQueue', () => {
     expect(seen).toEqual(['delivered']);
   });
 
+  it('drops an item submitted on behalf of a session that already ended', async () => {
+    // The handler captured `stale` at the top of its work, then awaited its
+    // settings. Logging out and back in inside that window leaves it resuming
+    // under the new account, where an item stamped with the *current* epoch
+    // would look like the new account's own notification — showing the previous
+    // account's sender name, group name and message preview.
+    const queue = createNotificationQueue({
+      intervalMs: 1,
+      setTimer: makeClock().setTimer,
+    });
+    const presented: string[] = [];
+
+    const stale = queue.captureSession();
+    queue.invalidateSession();
+    const fresh = queue.captureSession();
+
+    queue.enqueue(
+      async () => {
+        presented.push('old-account');
+      },
+      'evt-1',
+      stale
+    );
+
+    // The new account's own notification for the same event still presents.
+    queue.enqueue(
+      async () => {
+        presented.push('new-account');
+      },
+      'evt-1',
+      fresh
+    );
+
+    await flush();
+    expect(presented).toEqual(['new-account']);
+    expect(queue.isSessionCurrent(stale)).toBe(false);
+  });
+
+  it('does not let a stale submission evict the current account item', async () => {
+    // Ordering matters: filtering by key before the session check would let a
+    // stale item share a key with the live one, evict it, and then drop itself
+    // — so neither notification would ever be presented.
+    const clock = makeClock();
+    const queue = createNotificationQueue({
+      intervalMs: 1,
+      setTimer: clock.setTimer,
+    });
+    const presented: string[] = [];
+
+    // Hold the drain open so both keyed items sit in the waiting list, which is
+    // where key replacement happens.
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    queue.enqueue(async () => {
+      await gate;
+      presented.push('filler');
+    });
+    await flush();
+
+    const stale = queue.captureSession();
+    queue.invalidateSession();
+
+    queue.enqueue(async () => {
+      presented.push('new-account');
+    }, 'evt-shared');
+    queue.enqueue(
+      async () => {
+        presented.push('old-account');
+      },
+      'evt-shared',
+      stale
+    );
+
+    expect(queue.pendingCount()).toBe(1);
+
+    release();
+    await flush();
+    clock.tick();
+    await flush();
+
+    expect(presented).toEqual(['filler', 'new-account']);
+  });
+
+  it('treats a missing session argument as the current session', async () => {
+    // Callers that do not await first (payments, app resources) pass no token
+    // and must keep working unchanged.
+    const queue = createNotificationQueue({
+      intervalMs: 1,
+      setTimer: makeClock().setTimer,
+    });
+    const seen: string[] = [];
+
+    queue.enqueue(async () => {
+      seen.push('immediate');
+    });
+
+    await flush();
+    expect(seen).toEqual(['immediate']);
+  });
+
   it('reports idle only once the queue is empty', async () => {
     const clock = makeClock();
     const queue = createNotificationQueue({

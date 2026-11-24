@@ -21,6 +21,10 @@ import {
 } from '../../background/background';
 import { dmNotificationQueueKey } from '../../utils/notificationClickRoute';
 import {
+  captureNotificationSession,
+  isNotificationSessionCurrent,
+} from '../../utils/notificationSession';
+import {
   getNotificationPermissionKey,
   getPermission,
 } from '../../qortal/qortal-requests';
@@ -346,6 +350,12 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
         return;
       }
 
+      // The delivery-method lookup below is awaited, so the account can change
+      // before the notification is queued. Capture the session now: the queue
+      // drops the item if that session has ended, instead of presenting this
+      // friend's name and this message preview under the next account.
+      const session = captureNotificationSession();
+
       if (
         reticulumDmOsNotifiedEventIdsRef.current.has(eventId) ||
         !shouldNotifyForReticulumDm({
@@ -417,7 +427,8 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
           // routing form to `general`, and a click would stop opening the
           // conversation. The queue key is what deduplicates and cancels.
           undefined,
-          dmNotificationQueueKey(eventId)
+          dmNotificationQueueKey(eventId),
+          session
         );
       });
     });
@@ -513,6 +524,9 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
         occurrence?: ReticulumCalendarOccurrence;
       };
       if (reminder.ownerAddress !== myAddress || !reminder.occurrence) return;
+      // Same as the DM path: the delivery lookup is awaited, so bind the item to
+      // the session that received the reminder before that await.
+      const session = captureNotificationSession();
       const occurrence = reminder.occurrence;
       const notificationId = `reticulum-calendar-${occurrence.occurrenceId}`;
       setPaymentNotifications((previous) =>
@@ -567,7 +581,10 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
               timezone: occurrence.timezone,
               openCalendar: true,
             },
-            calDeliveryMethod
+            calDeliveryMethod,
+            undefined,
+            undefined,
+            session
           );
         });
       }
@@ -662,6 +679,12 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
       if ((!eventId && !isUnreadCountSync) || !Number.isFinite(groupId)) {
         return;
       }
+      // Captured before the settings lookups below, which are awaited. Logging
+      // out and back in inside that window used to leave this handler running
+      // for the previous account: it would then write a bell entry and queue an
+      // OS notification under the new one, with the old account's sender, group
+      // name and message preview. The token is checked after each await.
+      const session = captureNotificationSession();
 
       const channelId = String(detail?.channelId || 'general');
       const isEveryoneOrHere = detail?.isEveryoneOrHere === true;
@@ -723,6 +746,10 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
           // The stable ID remains a useful fallback while metadata is syncing.
         }
       }
+      // Every await above is a chance for the account to change. Abandon the
+      // work rather than attributing this mention to whoever is signed in now.
+      if (!isNotificationSessionCurrent(session)) return;
+
       // A summaries refresh must not resurrect the bell entry for the channel
       // the user is looking at. The sync guard used to sit only on the OS-emit
       // block below, so the entry was rebuilt first and the suppression check
@@ -897,7 +924,9 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
           },
           mentionDeliveryMethod,
           { groupId, channelId },
-          eventId
+          eventId,
+          undefined,
+          session
         );
       }
     };
@@ -917,6 +946,9 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
       const eventId = String(detail?.eventId || '');
       const groupId = Number(detail?.groupId);
       if (!eventId || !Number.isFinite(groupId)) return;
+      // Captured before the settings and channel-name lookups below, which are
+      // awaited. See the mention handler for why this matters.
+      const session = captureNotificationSession();
 
       const groupName =
         String(detail?.groupName || '').trim() ||
@@ -956,6 +988,7 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
         channelId,
         globalNotifFormRef.current
       ).catch(() => null);
+      if (!isNotificationSessionCurrent(session)) return;
       if (
         !mayPresentQChatOsNotification(
           qChatOsNotificationClaimsRef.current,
@@ -1006,7 +1039,9 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
         },
         replyDeliveryMethod,
         { groupId, channelId },
-        eventId
+        eventId,
+        undefined,
+        session
       );
     };
 
@@ -1034,6 +1069,8 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
       const eventId = String(detail?.eventId || '');
       const groupId = Number(detail?.groupId);
       if (!eventId || !Number.isFinite(groupId)) return;
+      // Captured before the settings lookups below, which are awaited.
+      const session = captureNotificationSession();
 
       const channelId = String(detail?.channelId || 'general');
       const groupName =
@@ -1056,6 +1093,7 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
         channelId,
         globalNotifFormRef.current
       ).catch(() => null);
+      if (!isNotificationSessionCurrent(session)) return;
       if (
         !mayPresentQChatOsNotification(
           qChatOsNotificationClaimsRef.current,
@@ -1101,7 +1139,9 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
         },
         welcomeDeliveryMethod,
         { groupId, channelId },
-        eventId
+        eventId,
+        undefined,
+        session
       );
     };
 
@@ -1121,6 +1161,8 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
       const eventId = String(detail?.eventId || '');
       const groupId = Number(detail?.groupId);
       if (!eventId || !Number.isFinite(groupId)) return;
+      // Captured before the settings lookup below, which is awaited.
+      const session = captureNotificationSession();
 
       const reactionChannelId = String(detail?.channelId || 'general');
       // Reaction also skipped the gate. It now honours `notifyOnReactions`.
@@ -1130,6 +1172,9 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
         reactionChannelId,
         globalNotifFormRef.current
       ).catch(() => null);
+      // Before the claim, not after: a stale run that claimed the event would
+      // suppress the new account's genuine notification for the same event id.
+      if (!isNotificationSessionCurrent(session)) return;
       if (
         !mayPresentQChatOsNotification(
           qChatOsNotificationClaimsRef.current,
@@ -1203,7 +1248,9 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
         },
         reactionDeliveryMethod,
         { groupId, channelId },
-        eventId
+        eventId,
+        undefined,
+        session
       );
     };
 
@@ -1222,6 +1269,9 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
       const eventId = String(detail?.eventId || '');
       const groupId = Number(detail?.groupId);
       if (!eventId || !Number.isFinite(groupId)) return;
+      // Captured before the settings and channel-name lookups below, which are
+      // awaited. See the mention handler for why this matters.
+      const session = captureNotificationSession();
 
       const channelId = String(detail?.channelId || 'general');
       const groupStore = await getGroupNotificationStore(groupId).catch(
@@ -1246,6 +1296,10 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
         );
 
       if (!channelAllowed) return;
+
+      // Before the claim: a stale run that claimed the event would suppress the
+      // new account's genuine notification for the same event id.
+      if (!isNotificationSessionCurrent(session)) return;
 
       // The generic notification is the fallback kind: the shared gate refuses
       // it whenever the same post also merits a reply or mention, which is what
@@ -1307,7 +1361,9 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
         },
         messageDeliveryMethod,
         { groupId, channelId },
-        eventId
+        eventId,
+        undefined,
+        session
       );
     };
 
