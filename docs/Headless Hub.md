@@ -233,7 +233,10 @@ These cannot be asserted headlessly, and they are the majority of the remaining
 manual Q-Chat checklist:
 
 - `document.visibilityState` and real window focus
-- virtualized list contents (`react-virtuoso` — "latest visible message")
+- virtualized list contents (`@tanstack/react-virtual` — "latest visible
+  message"). The _landing position_ is the exception: it is a number the
+  virtualizer and the scroll element both expose, so it can be asserted in jsdom
+  (§4).
 - scroll position and its effect on read watermarks
 - component-local state, e.g. `selectedReticulumChannelId` in
   `src/components/Chat/ChatGroup.tsx` — 13,546 lines, 80 references and nine
@@ -335,6 +338,17 @@ changes, **7 are now automated**.
 
 The 14 share one cause: they assert on **renderer state** rather than on a
 decision with a pure surface.
+
+One exception has since been carved out. The initial channel landing — where
+`ChatList` puts the viewport when a channel opens — turned out to be assertable
+in jsdom without a display server, because `data-reticulum-chat-scroll-viewport`,
+`[data-index]`, and the virtualizer are all reachable from a unit test. That is
+how the "opens days above the newest message" defect was reproduced
+(`ChatList.reticulumHandoff.test.tsx`, "lands on the measured unread row"):
+`getOffsetForIndex` is stubbed to return the estimate for the first frames and
+the measured size afterwards, and the assertion is on the final `scrollTop`. It
+failed with `480` instead of `1280` before the fix. See
+`openspec/changes/fix-qchat-channel-landing-scroll/`.
 
 Note what the 7 did and did not buy. The precedence change was marked fully
 automated, and the scenarios were green — yet a real duplicate-notification bug
