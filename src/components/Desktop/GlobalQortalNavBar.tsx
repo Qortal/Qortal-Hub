@@ -1892,7 +1892,13 @@ export function GlobalQortalNavBar({
                   isInputFocusedRef.current = true;
                   setIsInputFocused(true);
                   window.setTimeout(() => {
-                    inputElementRef.current?.select();
+                    // Only while it still has the focus: select() would take
+                    // it back from a window opened from the bar (a group's
+                    // join link), whose focus trap takes it again, endlessly.
+                    const input = inputElementRef.current;
+                    if (input && document.activeElement === input) {
+                      input.select();
+                    }
                   }, 0);
                 }}
                 placeholder={t('core:navbar.search_placeholder')}

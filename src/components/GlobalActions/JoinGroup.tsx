@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   executeEvent,
   subscribeToEvent,
@@ -20,14 +20,36 @@ import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../../App';
 import { getFee } from '../../background/background.ts';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { FidgetSpinner } from 'react-loader-spinner';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { memberGroupsAtom, txListAtom } from '../../atoms/global';
+import { useAtom, useAtomValue, useStore } from 'jotai';
+import {
+  memberGroupsAtom,
+  rawWalletAtom,
+  txListAtom,
+  userInfoAtom,
+} from '../../atoms/global';
 import { appLockedAtom } from '../../atoms/presence';
 import { useTranslation } from 'react-i18next';
 
+/** Hub's task records of a join: being sent, or sent (done once confirmed). */
+const JOIN_RECORDS = ['joining-group', 'joined-group', 'joined-group-request'];
+
+/**
+ * A join of `groupId` that Hub's task list has on its way, as Find groups
+ * reads it: one being sent, or one sent whose record isn't done yet.
+ */
+const isJoinOnItsWay = (txList, groupId) =>
+  (txList || []).some(
+    (record) =>
+      JOIN_RECORDS.includes(record?.type) &&
+      record?.done !== true &&
+      Number(record?.groupId) === Number(groupId)
+  );
+
 export const JoinGroup = () => {
   const { show } = useContext(QORTAL_APP_CONTEXT);
-  const setTxList = useSetAtom(txListAtom);
+  const [txList, setTxList] = useAtom(txListAtom);
+  const titleId = useId();
+  const descriptionId = useId();
   const [memberGroups] = useAtom(memberGroupsAtom);
   // Read when a join link opens, after the listener was set up.
   const memberGroupsRef = useRef(memberGroups);
@@ -53,6 +75,16 @@ export const JoinGroup = () => {
   // The join whose fee confirmation is up, if any.
   const confirmingRef = useRef<object | null>(null);
   const windowRef = useRef<HTMLDivElement>(null);
+  // Read after a join's waits, which can outlast this window (it goes when
+  // the account signs out) and the account that pressed Join.
+  const store = useStore();
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   // Another Hub dialog is open, such as a fee confirmation of a join started
   // elsewhere or a Q-App's request.
   const isOtherDialogOpen = () =>
@@ -147,10 +179,26 @@ export const JoinGroup = () => {
     const confirmed = () => {
       if (confirmingRef.current === confirming) confirmingRef.current = null;
     };
+    // The join belongs to the account that pressed Join. Hub signs a join
+    // with whichever account is signed in when it is sent, so after each
+    // wait the join goes on only for that account, from this window. The
+    // wallet's address is known from unlock on; the account info only once
+    // the node has answered (as chatAccount() reads it).
+    const signedIn = () =>
+      store.get(rawWalletAtom)?.address0 ||
+      store.get(userInfoAtom)?.address ||
+      null;
+    const account = signedIn();
+    const sameAccount = () => signedIn() === account;
+    const stillItsJoin = () => mountedRef.current && sameAccount();
+    // This join's record in Hub's task list while it is being sent.
+    let sending: object | null = null;
     try {
       const groupId = group.groupId;
       confirmingRef.current = confirming;
       const fee = await getFee('JOIN_GROUP');
+      // Signed out, or another account signed in, meanwhile: no confirmation.
+      if (!stillItsJoin()) return;
 
       // Another fee confirmation taking this one's place answers it as
       // declined, so this join stops holding Q-Apps' group links.
@@ -165,6 +213,36 @@ export const JoinGroup = () => {
         { cancelIfReplaced: true }
       );
       confirmed();
+      // The same while the confirmation was up: nothing is sent.
+      if (!stillItsJoin()) return;
+      // Another join of this group went out while this one waited (its link
+      // opened again while this fee was looked up), or the account is in the
+      // group now: nothing more to send.
+      if (
+        isJoinOnItsWay(store.get(txListAtom), groupId) ||
+        (store.get(memberGroupsAtom) || []).some(
+          (item) => +item?.groupId === +groupId
+        )
+      )
+        return;
+      // In Hub's task list from now on, before the node has answered; the
+      // record of the join that was sent takes its place.
+      const record = {
+        type: 'joining-group',
+        label: isOpen
+          ? t('group:message.success.group_join_name', {
+              group_name: group?.groupName,
+              postProcess: 'capitalizeFirstChar',
+            })
+          : t('group:message.success.group_join_request', {
+              group_name: group?.groupName,
+              postProcess: 'capitalizeFirstChar',
+            }),
+        done: false,
+        groupId,
+      };
+      sending = record;
+      setTxList((prev) => [record, ...prev]);
 
       setIsLoadingJoinGroup(true);
 
@@ -182,7 +260,15 @@ export const JoinGroup = () => {
                 }),
               });
 
-              if (isOpen) {
+              // The join that was sent takes the place of its record, in the
+              // task list of the account that sent it only.
+              const sent = sending;
+              sending = null;
+              if (!sameAccount()) {
+                // Another account's list now: the join isn't one of its
+                // tasks, and its record of the join being sent goes.
+                setTxList((prev) => prev.filter((item) => item !== sent));
+              } else if (isOpen) {
                 setTxList((prev) => [
                   {
                     ...response,
@@ -198,7 +284,7 @@ export const JoinGroup = () => {
                     done: false,
                     groupId,
                   },
-                  ...prev,
+                  ...prev.filter((item) => item !== sent),
                 ]);
               } else {
                 setTxList((prev) => [
@@ -216,7 +302,7 @@ export const JoinGroup = () => {
                     done: false,
                     groupId,
                   },
-                  ...prev,
+                  ...prev.filter((item) => item !== sent),
                 ]);
               }
               setOpenSnack(true);
@@ -249,8 +335,23 @@ export const JoinGroup = () => {
       console.log(error);
     } finally {
       confirmed();
+      // A join that wasn't sent comes off Hub's task list.
+      if (sending) {
+        const failed = sending;
+        setTxList((prev) => prev.filter((item) => item !== failed));
+      }
       setIsLoadingJoinGroup(false);
     }
+  };
+
+  const onItsWay = !!groupInfo && isJoinOnItsWay(txList, groupInfo.groupId);
+  const canJoin = !!groupInfo && !isInGroup && !onItsWay;
+  const buttonFocusSx = {
+    borderRadius: '5px',
+    '&.Mui-focusVisible': {
+      outline: `2px solid ${theme.palette.primary.main}`,
+      outlineOffset: '2px',
+    },
   };
 
   return (
@@ -258,8 +359,25 @@ export const JoinGroup = () => {
       <Dialog
         ref={windowRef}
         open={isOpen}
-        aria-labelledby="alert-dialog-title"
-        aria-describedby="alert-dialog-description"
+        onClose={(_event, reason) => {
+          if (reason === 'escapeKeyDown') showWindow(false);
+        }}
+        // Named after its group, or what went wrong; "loading" while the
+        // group is read.
+        aria-labelledby={groupInfo || loadError ? titleId : undefined}
+        slotProps={{
+          paper: {
+            'aria-label':
+              groupInfo || loadError
+                ? undefined
+                : t('core:loading.generic', {
+                    postProcess: 'capitalizeFirstChar',
+                  }),
+          },
+        }}
+        aria-describedby={
+          groupInfo?.description && !loadError ? descriptionId : undefined
+        }
       >
         <DialogContent>
           {!groupInfo && !loadError && (
@@ -293,6 +411,7 @@ export const JoinGroup = () => {
               }}
             >
               <Typography
+                id={titleId}
                 sx={{
                   fontSize: '15px',
                   fontWeight: 600,
@@ -327,13 +446,14 @@ export const JoinGroup = () => {
             }}
           >
             <Typography
+              id={loadError ? undefined : titleId}
               sx={{
                 fontSize: '15px',
                 fontWeight: 600,
               }}
             >
               {t('group:group.name', { postProcess: 'capitalizeFirstChar' })}:{' '}
-              {` ${groupInfo?.groupName}`}
+              {` ${groupInfo?.groupName ?? ''}`}
             </Typography>
 
             <Typography
@@ -350,6 +470,7 @@ export const JoinGroup = () => {
 
             {groupInfo?.description && (
               <Typography
+                id={descriptionId}
                 sx={{
                   fontSize: '15px',
                   fontWeight: 600,
@@ -392,7 +513,8 @@ export const JoinGroup = () => {
 
               showWindow(false);
             }}
-            disabled={isInGroup || !groupInfo}
+            disabled={!canJoin}
+            sx={buttonFocusSx}
           >
             <CustomButtonAccept
               customColor="black"
@@ -401,28 +523,32 @@ export const JoinGroup = () => {
                 minWidth: '102px',
                 height: '45px',
                 fontSize: '16px',
-                opacity: isInGroup || !groupInfo ? 0.1 : 1,
+                opacity: canJoin ? 1 : onItsWay ? 0.6 : 0.1,
               }}
             >
-              {t('core:action.join', {
+              {/* A join on its way says so, as Find groups does. */}
+              {onItsWay
+                ? t('group:find_groups.action_pending')
+                : t('core:action.join', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+            </CustomButtonAccept>
+          </ButtonBase>
+
+          <ButtonBase onClick={() => showWindow(false)} sx={buttonFocusSx}>
+            <CustomButtonAccept
+              customColor="black"
+              customBgColor={theme.palette.other.danger}
+              sx={{
+                minWidth: '102px',
+                height: '45px',
+              }}
+            >
+              {t('core:action.close', {
                 postProcess: 'capitalizeFirstChar',
               })}
             </CustomButtonAccept>
           </ButtonBase>
-
-          <CustomButtonAccept
-            customColor="black"
-            customBgColor={theme.palette.other.danger}
-            sx={{
-              minWidth: '102px',
-              height: '45px',
-            }}
-            onClick={() => showWindow(false)}
-          >
-            {t('core:action.close', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </CustomButtonAccept>
         </DialogActions>
       </Dialog>
 
