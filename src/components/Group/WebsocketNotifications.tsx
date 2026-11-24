@@ -560,6 +560,13 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
       );
       if (!isHubBeingViewed()) {
         getNotificationDeliveryMethod().then((calDeliveryMethod) => {
+          // Positional call: `calDeliveryMethod` is the delivery method, then
+          // group context, event id and queue key are all deliberately absent —
+          // a reminder has no event id to route a click by. Only then does the
+          // session token arrive. Omitting one of the `undefined`s shifts it
+          // into `queueKey`, which silently disables the staleness check: the
+          // epoch is a number, so it would be used as a queue key and the real
+          // `session` argument would stay undefined.
           void fireOsNotificationPayment(
             {
               appName: 'Q-Chat',
@@ -582,6 +589,7 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
               openCalendar: true,
             },
             calDeliveryMethod,
+            undefined,
             undefined,
             undefined,
             session
