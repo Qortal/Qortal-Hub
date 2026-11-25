@@ -198,6 +198,30 @@ describe('assetTradesRead', () => {
         : undefined);
     await expect(assetTradesRead(ME).load()).rejects.toBeTruthy();
   });
+
+  it('an account that never signed a transaction has placed no order; any other failure throws', async () => {
+    // Core finds orders by the account's public key, and says it doesn't
+    // know an account without one.
+    const orders = (answer: Answer) => (path: string) =>
+      path.startsWith(`/assets/orders/${ME}?`) ? answer : undefined;
+    route = orders({
+      status: 404,
+      body: { error: 124, message: 'account address unknown' },
+    });
+    const read = await assetTradesRead(ME).load();
+    expect(read.trades).toEqual([]);
+    expect(read.orders).toBe(0);
+    expect(read.truncated).toBe(false);
+    // One read of each state, and nothing after.
+    expect(paths).toHaveLength(3);
+    route = orders({
+      status: 500,
+      body: { error: 5, message: 'repository issue' },
+    });
+    await expect(assetTradesRead(ME).load()).rejects.toBeTruthy();
+    route = orders({ status: 404, body: { error: 999, message: 'other' } });
+    await expect(assetTradesRead(ME).load()).rejects.toBeTruthy();
+  });
 });
 
 const trade = (
