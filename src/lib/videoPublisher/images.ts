@@ -157,14 +157,14 @@ const asBlob = (source: Blob | string): Blob =>
 async function withDecoded<T>(
   source: Blob | string,
   backend: ImageBackend,
-  use: (image: DecodedImage) => Promise<T>
+  work: (image: DecodedImage) => Promise<T>
 ): Promise<T> {
   const image = await backend.decode(asBlob(source));
   try {
     if (!(image.width > 0 && image.height > 0)) {
       throw new VideoPublishError('image-unreadable');
     }
-    return await use(image);
+    return await work(image);
   } finally {
     image.close();
   }
