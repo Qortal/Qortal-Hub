@@ -894,7 +894,8 @@ that block alone, oldest first).
   Where a button goes once pressed (Retry, more blocks), the keyboard goes to
   the first row the read brought, the line that says what came, or the Retry
   of a read that failed again; another kind, range, order or tip starts a
-  list afresh, the keyboard left where it is. The kind, the blocks, the
+  list afresh, the keyboard left where it is. None of these moves it off a
+  control it was put on while the page read. The kind, the blocks, the
   order, the tip and how many pages show belong to the step, so Back and
   Forward show it as it was left.
 - **What waits for a block,** with the latest blocks only: the node's own list
