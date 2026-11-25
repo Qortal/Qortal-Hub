@@ -574,6 +574,8 @@ describe('Transactions on Qortal', () => {
     const list = await results();
     await waitFor(() => expect(rowButtons(list)).toHaveLength(20));
     node.tip = TIP + 4;
+    // Pressed as a click presses it: the keyboard on the button.
+    act(() => showMoreButton(list).focus());
     fireEvent.click(showMoreButton(list));
     await waitFor(() => expect(rowButtons(list)).toHaveLength(40));
     await waitFor(() => expect(rowButtons(list)[20]).toHaveFocus());
@@ -763,6 +765,40 @@ describe('Transactions on Qortal', () => {
     await waitFor(() => expect(rowButtons(list)).toHaveLength(30));
     await waitFor(() => expect(rowButtons(list)[20]).toHaveFocus());
     expect(coverage(list)).toContain('All 30 in blocks 1,999,501–2,000,500.');
+  });
+
+  it('a Retry that reads slowly still puts the keyboard on the first row it brings', async () => {
+    node.rows = range(0, 30).map((n) => payment(n));
+    let fail = true;
+    const slow = hold();
+    node.special = (path) => {
+      if (!isChainSearch(path) || params(path).get('offset') !== '20')
+        return undefined;
+      return fail
+        ? { status: 503, body: { error: 1, message: 'busy' } }
+        : { ...(chainRoute(path) as Answer), delay: slow.until };
+    };
+    await openChainStep();
+    const list = await results();
+    await waitFor(() => expect(rowButtons(list)).toHaveLength(20));
+    fireEvent.click(showMoreButton(list));
+    const retry = await findRetry(list);
+    await waitFor(() => expect(retry).toHaveFocus());
+    fail = false;
+    fireEvent.click(retry);
+    // The Retry went with its press: while the page reads, Hub's dialog puts
+    // the keyboard on its own frame, out of the tab order (its focus trap
+    // does so in a browser; jsdom has no document focus for it to run).
+    const frame = dialog().parentElement as HTMLElement;
+    expect(frame).toHaveAttribute('tabindex', '-1');
+    act(() => frame.focus());
+    expect(frame).toHaveFocus();
+    await act(async () => {
+      slow.release();
+      await slow.until;
+    });
+    await waitFor(() => expect(rowButtons(list)).toHaveLength(30));
+    await waitFor(() => expect(rowButtons(list)[20]).toHaveFocus());
   });
 
   it('a page that fails when Back reads it again: its Retry puts the keyboard on the first row it brings', async () => {
@@ -1572,6 +1608,61 @@ describe('the keyboard, from one list to another', () => {
         /Second registered the name “Example”/
       )
     );
+    await settle();
+    expect(names).toHaveFocus();
+  });
+
+  it('a page that comes in after the keyboard went to another control leaves it there', async () => {
+    node.rows = range(0, 30).map((n) => payment(n));
+    await openChainStep();
+    const list = await results();
+    await waitFor(() => expect(rowButtons(list)).toHaveLength(20));
+    const slow = hold();
+    node.special = (path) =>
+      isChainSearch(path) && params(path).get('offset') === '20'
+        ? { ...(chainRoute(path) as Answer), delay: slow.until }
+        : undefined;
+    act(() => showMoreButton(list).focus());
+    fireEvent.click(showMoreButton(list));
+    await waitFor(() => expect(chainSearches()).toHaveLength(2));
+    // While the page reads, the keyboard goes to another kind's button.
+    const names = within(dialog()).getByRole('button', { name: /^names$/i });
+    act(() => names.focus());
+    await act(async () => {
+      slow.release();
+      await slow.until;
+    });
+    await waitFor(() => expect(rowButtons(list)).toHaveLength(30));
+    await settle();
+    expect(names).toHaveFocus();
+  });
+
+  it('a page that fails after the keyboard went to another control leaves it there too', async () => {
+    node.rows = range(0, 30).map((n) => payment(n));
+    await openChainStep();
+    const list = await results();
+    await waitFor(() => expect(rowButtons(list)).toHaveLength(20));
+    const slow = hold();
+    node.special = (path) =>
+      isChainSearch(path) && params(path).get('offset') === '20'
+        ? {
+            status: 503,
+            body: { error: 1, message: 'busy' },
+            delay: slow.until,
+          }
+        : undefined;
+    act(() => showMoreButton(list).focus());
+    fireEvent.click(showMoreButton(list));
+    await waitFor(() => expect(chainSearches()).toHaveLength(2));
+    const names = within(dialog()).getByRole('button', { name: /^names$/i });
+    act(() => names.focus());
+    await act(async () => {
+      slow.release();
+      await slow.until;
+    });
+    expect(
+      await within(list).findByText("Couldn't load older transactions.")
+    ).toBeInTheDocument();
     await settle();
     expect(names).toHaveFocus();
   });
