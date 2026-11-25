@@ -50,17 +50,17 @@ import { CHAIN_STATE, type ChainShown } from './chainStep';
 
 /**
  * Whether the keyboard may be moved to what a read brought: it is in this
- * list, or on nothing chosen (the page, or what the window put it on when
- * the control that had it went: anything out of the tab order). Never off a
- * control the user went to meanwhile.
+ * list, or on nothing chosen (the page, or the window around the list, where
+ * the window puts it when the control that had it went). Never off anything
+ * outside the list it went to meanwhile: another control, a menu's item, the
+ * step's heading.
  */
 function keyboardFree(panel: HTMLElement | null): boolean {
   const active = document.activeElement as HTMLElement | null;
   return (
     !active ||
     active === document.body ||
-    active.tabIndex < 0 ||
-    Boolean(panel?.contains(active))
+    Boolean(panel && (panel.contains(active) || active.contains(panel)))
   );
 }
 

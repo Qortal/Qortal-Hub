@@ -798,15 +798,17 @@ that block alone, oldest first).
   Where a button goes once pressed (Retry, more blocks), the keyboard goes to
   the first row the read brought, the line that says what came, or the Retry
   of a read that failed again; another kind, range, order or tip starts a
-  list afresh, the keyboard left where it is. None of these moves it off a
-  control it was put on while the page read. The kind, the blocks, the
+  list afresh, the keyboard left where it is. None of these moves it off
+  anything outside the list it was put on while the page read: another
+  control, a menu's item, the step's heading. The kind, the blocks, the
   order, the tip and how many pages show belong to the step, so Back and
   Forward show it as it was left.
 - **What waits for a block,** with the latest blocks only: the node's own list
   (`/transactions/unconfirmed?txType=…&limit=20&reverse=true`), apart,
   "waiting to be confirmed (n)", or "(the newest 20)" when the node gave as
   many as it gives at most; a line while it reads, nothing when none waits, a
-  failure with Retry. Read when the list opens, and again on Refresh.
+  failure with Retry (once pressed, the keyboard waits on the step's
+  heading). Read when the list opens, and again on Refresh.
 - **On the start page,** "The whole chain": the newest five of the latest
   1,000 blocks, every kind but messages, read when the start page shows,
   once, with "Transactions on Qortal", which opens the list on the same tip
