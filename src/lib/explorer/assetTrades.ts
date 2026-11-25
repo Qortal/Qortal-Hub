@@ -19,7 +19,10 @@
  *
  * The two order transactions behind a trade are read only when its row
  * opens. A failed read throws (Retry reads again); Core's "unknown asset
- * order" is an answer of its own. Nothing here writes.
+ * order" is an answer of its own, and so is its "account address unknown"
+ * for the orders of an account that never signed a transaction: Core finds
+ * orders by the account's public key, and an account without one has
+ * placed none. Nothing here writes.
  */
 import { CoreHttpError, getJson, isCoreError, queryString, seg } from './core';
 import type { ReadSpec } from './reads';
@@ -41,6 +44,8 @@ export const FILLED_MAX = 100;
 const AT_ONCE = 4;
 /** Core's "unknown asset order ID". */
 const ORDER_UNKNOWN = 603;
+/** Core's "account address unknown". */
+const ADDRESS_UNKNOWN = 124;
 
 /** One side of a trade: what moved and how much, as Core writes it. */
 export interface TradeSide {
@@ -131,14 +136,22 @@ async function ordersIn(
 ): Promise<{ orders: OrderRow[]; more: boolean }> {
   const orders: OrderRow[] = [];
   for (let page = 0; page < ORDERS_PAGES; page++) {
-    const chunk = await getJson<unknown>(
-      `/assets/orders/${seg(address)}?${queryString({
-        ...state,
-        limit: ORDERS_PAGE,
-        offset: page * ORDERS_PAGE,
-        reverse: true,
-      })}`
-    );
+    let chunk: unknown;
+    try {
+      chunk = await getJson<unknown>(
+        `/assets/orders/${seg(address)}?${queryString({
+          ...state,
+          limit: ORDERS_PAGE,
+          offset: page * ORDERS_PAGE,
+          reverse: true,
+        })}`
+      );
+    } catch (error) {
+      // An account that never signed a transaction: no orders, not a failure.
+      if (isCoreError(error, 404, ADDRESS_UNKNOWN))
+        return { orders, more: false };
+      throw error;
+    }
     const rows = Array.isArray(chunk) ? (chunk as OrderRow[]) : [];
     orders.push(...rows);
     if (rows.length < ORDERS_PAGE) return { orders, more: false };
