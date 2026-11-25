@@ -292,7 +292,13 @@ export function useSupportChat(hasStarted = false): UseSupportChatReturn {
       lastKnockAtRef.current = 0;
       agentKnockTimesRef.current.clear();
     });
-  }, [hasStarted, myAddress, userInfo?.publicKey, postQueueKnock, onlineAddresses]);
+  }, [
+    hasStarted,
+    myAddress,
+    userInfo?.publicKey,
+    postQueueKnock,
+    onlineAddresses,
+  ]);
 
   // Re-knock on a per-agent basis whenever onlineAddresses changes (~25 s heartbeat).
   //
@@ -336,7 +342,14 @@ export function useSupportChat(hasStarted = false): UseSupportChatReturn {
     }
 
     postQueueKnock(myAddress, userInfo!.publicKey).catch(() => {});
-  }, [hasStarted, onlineAddresses, myAddress, userInfo?.publicKey, isClosed, postQueueKnock]);
+  }, [
+    hasStarted,
+    onlineAddresses,
+    myAddress,
+    userInfo?.publicKey,
+    isClosed,
+    postQueueKnock,
+  ]);
 
   // ── Decrypt incoming messages ─────────────────────────────────────────────
 
@@ -490,7 +503,13 @@ export function useSupportChat(hasStarted = false): UseSupportChatReturn {
       const encrypted = await encryptForSupport(trimmed);
       await inner.sendMessage(encrypted);
     },
-    [inner.sendMessage, isClosed, myAddress, userInfo?.publicKey, postQueueKnock]
+    [
+      inner.sendMessage,
+      isClosed,
+      myAddress,
+      userInfo?.publicKey,
+      postQueueKnock,
+    ]
   );
 
   const sendEdit = useCallback(
@@ -577,10 +596,14 @@ export function useSupportChat(hasStarted = false): UseSupportChatReturn {
       const encryptedData = await encryptAttachmentForSupport(rawBase64);
 
       // Step 5: SHA-256 hash of the encrypted bytes for signature integrity.
-      const encBytes = Uint8Array.from(atob(encryptedData), (c) => c.charCodeAt(0));
+      const encBytes = Uint8Array.from(atob(encryptedData), (c) =>
+        c.charCodeAt(0)
+      );
       const hashBuf = await crypto.subtle.digest('SHA-256', encBytes);
       const hashArray = Array.from(new Uint8Array(hashBuf));
-      const attachmentDataHash = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+      const attachmentDataHash = hashArray
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
 
       // Step 6: dispatch via the underlying useP2PChat sendImageData.
       await inner.sendImageData({

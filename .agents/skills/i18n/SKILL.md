@@ -84,8 +84,8 @@ Every locale operation has a script, and they ship with this skill in
 `.agents/skills/i18n/`. Editing the JSON by hand is how keys go missing
 from one language, so reach for these instead:
 
-| Task                              | Command                                                                              |
-| --------------------------------- | ------------------------------------------------------------------------------------ |
+| Task                              | Command                                                                      |
+| --------------------------------- | ---------------------------------------------------------------------------- |
 | Find what needs migrating         | `python3 .agents/skills/i18n/i18n_scan_hardcoded.py <path>`                  |
 | Seed new keys into all 12 locales | `python3 .agents/skills/i18n/i18n_add_keys.py <ns> <patch.json>`             |
 | Apply the translations            | `python3 .agents/skills/i18n/i18n_apply_translations.py <translations.json>` |

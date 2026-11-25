@@ -9,9 +9,7 @@ import {
 } from './groupQueues';
 
 export async function getNameInfo(address: string): Promise<string> {
-  const response = await fetch(
-    `${getBaseApiReact()}/names/primary/` + address
-  );
+  const response = await fetch(`${getBaseApiReact()}/names/primary/` + address);
   const nameData = await response.json();
 
   if (nameData?.name) {
@@ -21,9 +19,12 @@ export async function getNameInfo(address: string): Promise<string> {
 }
 
 /** Primary name for avatar display (wallets/auth). Uses avatar-friendly base URL (e.g. HTTP when local HTTPS). */
-export async function getPrimaryNameForAvatar(address: string): Promise<string> {
+export async function getPrimaryNameForAvatar(
+  address: string
+): Promise<string> {
   const response = await fetch(
-    `${getBaseApiReactForPrimaryName()}/names/primary/` + encodeURIComponent(address)
+    `${getBaseApiReactForPrimaryName()}/names/primary/` +
+      encodeURIComponent(address)
   );
   const nameData = await response.json();
 
@@ -41,13 +42,16 @@ export async function getPrimaryNamesForAddresses(
   );
   if (uniqueAddresses.length === 0) return {};
 
-  const response = await fetch(`${getBaseApiReactForPrimaryName()}/names/list`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(uniqueAddresses),
-  });
+  const response = await fetch(
+    `${getBaseApiReactForPrimaryName()}/names/list`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(uniqueAddresses),
+    }
+  );
 
   if (!response.ok) {
     throw new Error(`Request failed: ${response.status}`);
@@ -167,7 +171,9 @@ export const getGroupAdminsAddress = async (
   return members;
 };
 
-export const getGroupMembers = async (groupNumber: number): Promise<{
+export const getGroupMembers = async (
+  groupNumber: number
+): Promise<{
   members?: { member: string; primaryName?: string }[];
   memberCount?: number;
   [key: string]: unknown;
@@ -194,15 +200,17 @@ export const getGroupAdmins = async (
   const membersAddresses: string[] = [];
   const both: { name: string; address: string }[] = [];
 
-  groupData?.members?.forEach((member: { member?: string; primaryName?: string }) => {
-    if (member?.member) {
-      membersAddresses.push(member.member);
-      if (member.primaryName) {
-        names.push(member.primaryName);
-        both.push({ name: member.primaryName, address: member.member });
+  groupData?.members?.forEach(
+    (member: { member?: string; primaryName?: string }) => {
+      if (member?.member) {
+        membersAddresses.push(member.member);
+        if (member.primaryName) {
+          names.push(member.primaryName);
+          both.push({ name: member.primaryName, address: member.member });
+        }
       }
     }
-  });
+  );
 
   return { names, addresses: membersAddresses, both };
 };

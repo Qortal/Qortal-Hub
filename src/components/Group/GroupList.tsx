@@ -1,15 +1,20 @@
 import {
   Avatar,
   Box,
+  Button,
   ButtonBase,
+  Checkbox,
   Dialog,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   GlobalStyles,
   List,
   ListItem,
   ListItemAvatar,
   ListItemText,
+  Radio,
+  RadioGroup,
   Switch,
   Tooltip,
   Typography,
@@ -48,9 +53,9 @@ import { CustomButton } from '../../styles/App-styles';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import PersonOffIcon from '@mui/icons-material/PersonOff';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import NotificationsNoneRoundedIcon from '@mui/icons-material/NotificationsNoneRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import AccessibilityNewOutlinedIcon from '@mui/icons-material/AccessibilityNewOutlined';
-import NotificationsNoneRoundedIcon from '@mui/icons-material/NotificationsNoneRounded';
 import ChatBubbleOutlineRoundedIcon from '@mui/icons-material/ChatBubbleOutlineRounded';
 import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
@@ -64,6 +69,7 @@ import {
   groupsOwnerNamesSelector,
   isRunningPublicNodeAtom,
   memberGroupsWithReticulumChatAtom,
+  memberGroupsAtom,
   qortalGroupMeshCallActiveAtom,
   qortalGroupMeshCallMaxParticipantsAtom,
   qortalGroupMeshCallParticipantCountAtom,
@@ -72,10 +78,30 @@ import {
   reticulumLegacyThreadsEnabledAtom,
   reticulumChatTextScaleAtom,
   timestampEnterDataSelector,
+  notificationSettingsCacheAtom,
+  muteExpiryTickAtom,
+  unreadWelcomeEventIdsAtom,
+  globalNotificationFormAtom,
+  DEFAULT_GLOBAL_NOTIF_FORM,
 } from '../../atoms/global';
 import { timeDifferenceForNotificationChats } from './Group';
 import { useAtom, useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import {
+  groupHasUnreadConsideringMute,
+  getGroupUnreadCountConsideringMute,
+  getWelcomeUnreadCount,
+  shouldShowMentionBadge,
+  DEFAULT_NOTIFICATION_SETTINGS,
+  applyNotificationSettingsToAllGroups,
+  setGlobalNotificationSettings,
+  wipeAllChannelOverrides,
+  getNotificationDeliveryMethod,
+  setNotificationDeliveryMethod,
+  getDefaultNotificationDeliveryMethod,
+  type PushLevel,
+  type NotificationDeliveryMethod,
+} from '../../utils/qChatNotificationSettings';
 import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
 import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
 import {
@@ -87,20 +113,23 @@ import {
   orderReticulumGroups,
   persistReticulumGroupOrder,
   readReticulumGroupOrder,
+  subscribeToReticulumGroupOrder,
 } from './reticulumGroupRail';
-import { QChatWhatsNewDialog } from './QChatWhatsNewDialog';
 import {
-  getQChatMentionNotificationsEnabled,
-  QCHAT_MENTION_NOTIFICATIONS_UPDATED_EVENT,
-  setQChatMentionNotificationsEnabled,
-} from '../../utils/qChatMentionNotifications';
+  readGroupSortMode,
+  subscribeToGroupSortMode,
+  persistGroupSortMode,
+  type GroupSortMode,
+} from './SortGroupsSubmenu';
+import { QChatWhatsNewDialog } from './QChatWhatsNewDialog';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import {
   ReticulumUnreadCountBadge,
   RETICULUM_NOTIFICATION_RED,
 } from '../common/ReticulumUnreadCountBadge';
 
-const RETICULUM_ACTIVE_BLUE = '#2563eb';
+const RETICULUM_ACTIVE_BLUE_DARK = '#2563eb';
+const RETICULUM_ACTIVE_BLUE_LIGHT = '#5090e1';
 const RETICULUM_CALL_GREEN = '#22c55e';
 const GROUP_RAIL_TOOLTIP_MODIFIERS = [
   {
@@ -112,21 +141,82 @@ const GROUP_RAIL_TOOLTIP_MODIFIERS = [
 /** Atom values, doubling as key suffixes under reticulum:settings.text_size */
 const reticulumTextScaleOptions = ['default', 'medium', 'high'] as const;
 
-const ReticulumChatSettingsDialog = ({
+export const ReticulumChatSettingsDialog = ({
   open,
   onClose,
 }: {
   open: boolean;
   onClose: () => void;
 }) => {
-  const { t } = useTranslation(['core', 'reticulum']);
+  const { t } = useTranslation(['core', 'reticulum', 'group']);
   const theme = useTheme();
+  const memberGroups = useAtomValue(memberGroupsAtom);
   const [activeSection, setActiveSection] = useState<
     'text-size' | 'messages' | 'notifications' | 'legacy-threads'
   >('text-size');
   const [accessibilityExpanded, setAccessibilityExpanded] = useState(true);
   const [notificationsExpanded, setNotificationsExpanded] = useState(true);
   const [legacyExpanded, setLegacyExpanded] = useState(true);
+  const [committedNotifForm, setNotifForm] = useAtom(
+    globalNotificationFormAtom
+  );
+  const [draftNotifForm, setDraftNotifForm] = useState(committedNotifForm);
+  const [deliveryMethod, setDeliveryMethod] =
+    useState<NotificationDeliveryMethod>('native');
+  const [deliveryMethodLoaded, setDeliveryMethodLoaded] = useState(false);
+  const [applying, setApplying] = useState(false);
+  // `writeUserSetting` throws when `addUserSettings` fails. Both Apply handlers
+  // had `finally` but no `catch`, so a failed save became an unhandled rejection
+  // with no feedback: the dialog stayed open on a partial write and the user had
+  // no idea anything went wrong.
+  const [applyError, setApplyError] = useState('');
+  useEffect(() => {
+    // A read that settles after the dialog closed would latch a stale method for
+    // the life of the mount, and would also fight the reset branch below.
+    let cancelled = false;
+    if (open && !deliveryMethodLoaded) {
+      setDraftNotifForm(committedNotifForm);
+      getNotificationDeliveryMethod()
+        .then((method) => {
+          if (cancelled) return;
+          setDeliveryMethod(method);
+          setDeliveryMethodLoaded(true);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          // Keep the defaults rather than leaving the spinner up for ever.
+          setDeliveryMethod(getDefaultNotificationDeliveryMethod());
+          setDeliveryMethodLoaded(true);
+        });
+    } else if (!open) {
+      setDeliveryMethod(getDefaultNotificationDeliveryMethod());
+      setDeliveryMethodLoaded(false);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [open, deliveryMethodLoaded, committedNotifForm]);
+  const notifFormChanged =
+    draftNotifForm.pushLevel !== DEFAULT_GLOBAL_NOTIF_FORM.pushLevel ||
+    draftNotifForm.suppressEveryoneHere !==
+      DEFAULT_GLOBAL_NOTIF_FORM.suppressEveryoneHere ||
+    draftNotifForm.notifyOnReplies !==
+      DEFAULT_GLOBAL_NOTIF_FORM.notifyOnReplies ||
+    draftNotifForm.notifyOnReactions !==
+      DEFAULT_GLOBAL_NOTIF_FORM.notifyOnReactions ||
+    draftNotifForm.notifyOnWelcomePosts !==
+      DEFAULT_GLOBAL_NOTIF_FORM.notifyOnWelcomePosts ||
+    draftNotifForm.hideMutedChannels !==
+      DEFAULT_GLOBAL_NOTIF_FORM.hideMutedChannels;
+  const applyDisabled =
+    draftNotifForm.pushLevel === committedNotifForm.pushLevel &&
+    draftNotifForm.suppressEveryoneHere ===
+      committedNotifForm.suppressEveryoneHere &&
+    draftNotifForm.notifyOnReplies === committedNotifForm.notifyOnReplies &&
+    draftNotifForm.notifyOnReactions === committedNotifForm.notifyOnReactions &&
+    draftNotifForm.notifyOnWelcomePosts ===
+      committedNotifForm.notifyOnWelcomePosts &&
+    draftNotifForm.hideMutedChannels === committedNotifForm.hideMutedChannels;
   const [textScale, setTextScale] = useAtom(reticulumChatTextScaleAtom);
   const [highlightOwnMessages, setHighlightOwnMessages] = useAtom(
     reticulumHighlightOwnMessagesAtom
@@ -134,32 +224,6 @@ const ReticulumChatSettingsDialog = ({
   const [legacyThreadsEnabled, setLegacyThreadsEnabled] = useAtom(
     reticulumLegacyThreadsEnabledAtom
   );
-  const [mentionNotificationsEnabled, setMentionNotificationsEnabled] =
-    useState(true);
-
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    void getQChatMentionNotificationsEnabled().then((enabled) => {
-      if (!cancelled) setMentionNotificationsEnabled(enabled);
-    });
-    const handleSettingUpdated = (
-      event: CustomEvent<{ enabled?: boolean }>
-    ) => {
-      setMentionNotificationsEnabled(event.detail?.enabled === true);
-    };
-    subscribeToEvent(
-      QCHAT_MENTION_NOTIFICATIONS_UPDATED_EVENT,
-      handleSettingUpdated as EventListener
-    );
-    return () => {
-      cancelled = true;
-      unsubscribeFromEvent(
-        QCHAT_MENTION_NOTIFICATIONS_UPDATED_EVENT,
-        handleSettingUpdated as EventListener
-      );
-    };
-  }, [open]);
   const navButtonSx = (selected: boolean) => ({
     alignItems: 'center',
     backgroundColor: selected ? theme.palette.action.hover : 'transparent',
@@ -294,7 +358,7 @@ const ReticulumChatSettingsDialog = ({
             onClick={() => setNotificationsExpanded((expanded) => !expanded)}
             sx={{ ...categoryButtonSx, mt: 2.25 }}
           >
-            <span>{t('core:message.generic.notifications')}</span>
+            <span>{t('reticulum:settings.nav.notifications')}</span>
             {notificationsExpanded ? (
               <ExpandMoreRoundedIcon sx={{ fontSize: 18 }} />
             ) : (
@@ -307,7 +371,7 @@ const ReticulumChatSettingsDialog = ({
               sx={navButtonSx(activeSection === 'notifications')}
             >
               <NotificationsNoneRoundedIcon sx={{ fontSize: 19 }} />{' '}
-              {t('reticulum:settings.nav.mentions')}
+              {t('reticulum:settings.nav.notifications')}
             </ButtonBase>
           )}
           <ButtonBase
@@ -515,57 +579,446 @@ const ReticulumChatSettingsDialog = ({
               >
                 {t('reticulum:settings.notifications.description')}
               </Typography>
-              <Box
+              <RadioGroup
+                value={draftNotifForm.pushLevel}
+                onChange={(_, value: string) =>
+                  setDraftNotifForm((prev) => ({
+                    ...prev,
+                    pushLevel: value as PushLevel,
+                  }))
+                }
                 sx={{
-                  alignItems: 'center',
-                  backgroundColor: 'background.default',
-                  border: `1px solid ${theme.palette.divider}`,
-                  borderRadius: '10px',
                   display: 'flex',
-                  gap: 2,
-                  justifyContent: 'space-between',
+                  gap: 0,
                   mt: 2.5,
-                  px: 2,
-                  py: 1.5,
                 }}
               >
-                <Box sx={{ minWidth: 0 }}>
-                  <Typography
-                    sx={{
-                      color: 'text.primary',
-                      fontSize: 14,
-                      fontWeight: 600,
-                      lineHeight: '20px',
-                    }}
-                  >
-                    {t('reticulum:settings.notifications.mentions.label')}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      color: 'text.secondary',
-                      fontSize: 13,
-                      lineHeight: '18px',
-                      mt: 0.25,
-                    }}
-                  >
-                    {t('reticulum:settings.notifications.mentions.description')}
-                  </Typography>
-                </Box>
-                <Switch
-                  checked={mentionNotificationsEnabled === true}
-                  inputProps={{
-                    'aria-label': t(
-                      'reticulum:settings.notifications.mentions.label'
-                    ),
+                <FormControlLabel
+                  value="all"
+                  control={<Radio size="small" />}
+                  label={
+                    <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
+                      {t('group:notification_settings.all_messages')}
+                    </Typography>
+                  }
+                  sx={{
+                    m: 0,
+                    px: 1.5,
+                    py: 0.75,
+                    borderRadius: '8px',
+                    '&:hover': {
+                      backgroundColor: theme.palette.action.hover,
+                    },
                   }}
-                  onChange={(_, checked) => {
-                    setMentionNotificationsEnabled(checked);
-                    void setQChatMentionNotificationsEnabled(checked).catch(
-                      () => setMentionNotificationsEnabled(!checked)
-                    );
+                />
+                <FormControlLabel
+                  value="mentions"
+                  control={<Radio size="small" />}
+                  label={
+                    <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
+                      {t('group:notification_settings.only_mentions')}
+                    </Typography>
+                  }
+                  sx={{
+                    m: 0,
+                    px: 1.5,
+                    py: 0.75,
+                    borderRadius: '8px',
+                    '&:hover': {
+                      backgroundColor: theme.palette.action.hover,
+                    },
+                  }}
+                />
+                <FormControlLabel
+                  value="none"
+                  control={<Radio size="small" />}
+                  label={
+                    <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
+                      {t('group:notification_settings.none')}
+                    </Typography>
+                  }
+                  sx={{
+                    m: 0,
+                    px: 1.5,
+                    py: 0.75,
+                    borderRadius: '8px',
+                    '&:hover': {
+                      backgroundColor: theme.palette.action.hover,
+                    },
+                  }}
+                />
+              </RadioGroup>
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 0,
+                  mt: 1.5,
+                }}
+              >
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={draftNotifForm.suppressEveryoneHere}
+                      disabled={draftNotifForm.pushLevel === 'all'}
+                      onChange={(_, checked) => {
+                        if (draftNotifForm.pushLevel === 'all') return;
+                        setDraftNotifForm((prev) => ({
+                          ...prev,
+                          suppressEveryoneHere: checked,
+                        }));
+                      }}
+                    />
+                  }
+                  label={
+                    <Typography
+                      sx={{
+                        fontSize: 14,
+                        fontWeight: 600,
+                        opacity: draftNotifForm.pushLevel === 'all' ? 0.4 : 1,
+                      }}
+                    >
+                      {t('group:notification_settings.suppress_everyone_here')}
+                    </Typography>
+                  }
+                  sx={{
+                    m: 0,
+                    px: 1.5,
+                    py: 0.75,
+                    borderRadius: '8px',
+                    '&:hover': {
+                      backgroundColor: theme.palette.action.hover,
+                    },
+                  }}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={draftNotifForm.notifyOnReplies}
+                      disabled={draftNotifForm.pushLevel === 'all'}
+                      onChange={(_, checked) => {
+                        if (draftNotifForm.pushLevel === 'all') return;
+                        setDraftNotifForm((prev) => ({
+                          ...prev,
+                          notifyOnReplies: checked,
+                        }));
+                      }}
+                    />
+                  }
+                  label={
+                    <Typography
+                      sx={{
+                        fontSize: 14,
+                        fontWeight: 600,
+                        opacity: draftNotifForm.pushLevel === 'all' ? 0.4 : 1,
+                      }}
+                    >
+                      {t('group:notification_settings.notify_on_replies')}
+                    </Typography>
+                  }
+                  sx={{
+                    m: 0,
+                    px: 1.5,
+                    py: 0.75,
+                    borderRadius: '8px',
+                    '&:hover': {
+                      backgroundColor: theme.palette.action.hover,
+                    },
+                  }}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={draftNotifForm.notifyOnReactions}
+                      disabled={draftNotifForm.pushLevel === 'all'}
+                      onChange={(_, checked) => {
+                        if (draftNotifForm.pushLevel === 'all') return;
+                        setDraftNotifForm((prev) => ({
+                          ...prev,
+                          notifyOnReactions: checked,
+                        }));
+                      }}
+                    />
+                  }
+                  label={
+                    <Typography
+                      sx={{
+                        fontSize: 14,
+                        fontWeight: 600,
+                        opacity: draftNotifForm.pushLevel === 'all' ? 0.4 : 1,
+                      }}
+                    >
+                      {t('group:notification_settings.notify_on_reactions')}
+                    </Typography>
+                  }
+                  sx={{
+                    m: 0,
+                    px: 1.5,
+                    py: 0.75,
+                    borderRadius: '8px',
+                    '&:hover': {
+                      backgroundColor: theme.palette.action.hover,
+                    },
+                  }}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={draftNotifForm.notifyOnWelcomePosts}
+                      disabled={draftNotifForm.pushLevel === 'all'}
+                      onChange={(_, checked) => {
+                        if (draftNotifForm.pushLevel === 'all') return;
+                        setDraftNotifForm((prev) => ({
+                          ...prev,
+                          notifyOnWelcomePosts: checked,
+                        }));
+                      }}
+                    />
+                  }
+                  label={
+                    <Typography
+                      sx={{
+                        fontSize: 14,
+                        fontWeight: 600,
+                        opacity: draftNotifForm.pushLevel === 'all' ? 0.4 : 1,
+                      }}
+                    >
+                      {t('group:notification_settings.notify_on_welcome_posts')}
+                    </Typography>
+                  }
+                  sx={{
+                    m: 0,
+                    px: 1.5,
+                    py: 0.75,
+                    borderRadius: '8px',
+                    '&:hover': {
+                      backgroundColor: theme.palette.action.hover,
+                    },
+                  }}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={draftNotifForm.hideMutedChannels}
+                      onChange={(_, checked) =>
+                        setDraftNotifForm((prev) => ({
+                          ...prev,
+                          hideMutedChannels: checked,
+                        }))
+                      }
+                    />
+                  }
+                  label={
+                    <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
+                      {t('group:notification_settings.hide_muted_channels')}
+                    </Typography>
+                  }
+                  sx={{
+                    m: 0,
+                    px: 1.5,
+                    py: 0.75,
+                    borderRadius: '8px',
+                    '&:hover': {
+                      backgroundColor: theme.palette.action.hover,
+                    },
                   }}
                 />
               </Box>
+              <Box
+                sx={{
+                  display: 'flex',
+                  gap: 2,
+                  mt: 3,
+                  alignItems: 'center',
+                }}
+              >
+                <Button
+                  variant="contained"
+                  disabled={applying || applyDisabled}
+                  onClick={async () => {
+                    setApplying(true);
+                    try {
+                      const groupIds = memberGroups
+                        .map((g: { groupId: number | string }) => g.groupId)
+                        .filter((id) => id != null && id !== '' && id !== '0');
+                      // New model: the global defaults are the source of truth.
+                      // Applying sets them as the new defaults and wipes all
+                      // channel overrides so every channel inherits them.
+                      await setGlobalNotificationSettings({
+                        pushLevel: draftNotifForm.pushLevel,
+                        suppressEveryoneHere:
+                          draftNotifForm.suppressEveryoneHere,
+                        notifyOnReplies: draftNotifForm.notifyOnReplies,
+                        notifyOnReactions: draftNotifForm.notifyOnReactions,
+                      });
+                      await wipeAllChannelOverrides(groupIds);
+                      setNotifForm(draftNotifForm);
+                      setApplyError('');
+                      onClose();
+                    } catch (error) {
+                      console.error(
+                        'Failed to apply notification settings:',
+                        error
+                      );
+                      setApplyError(
+                        t('core:message.error.generic', {
+                          postProcess: 'capitalizeFirstChar',
+                        })
+                      );
+                    } finally {
+                      setApplying(false);
+                    }
+                  }}
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    color: 'common.white',
+                  }}
+                >
+                  {t('reticulum:settings.notifications.apply_button')}
+                </Button>
+                {notifFormChanged && (
+                  <Button
+                    variant="text"
+                    disabled={applying}
+                    onClick={async () => {
+                      setApplying(true);
+                      try {
+                        const groupIds = memberGroups
+                          .map((g: { groupId: number | string }) => g.groupId)
+                          .filter(
+                            (id) => id != null && id !== '' && id !== '0'
+                          );
+                        await setGlobalNotificationSettings({
+                          pushLevel: DEFAULT_GLOBAL_NOTIF_FORM.pushLevel,
+                          suppressEveryoneHere:
+                            DEFAULT_GLOBAL_NOTIF_FORM.suppressEveryoneHere,
+                          notifyOnReplies:
+                            DEFAULT_GLOBAL_NOTIF_FORM.notifyOnReplies,
+                          notifyOnReactions:
+                            DEFAULT_GLOBAL_NOTIF_FORM.notifyOnReactions,
+                        });
+                        await wipeAllChannelOverrides(groupIds);
+                        setNotifForm(DEFAULT_GLOBAL_NOTIF_FORM);
+                        onClose();
+                      } finally {
+                        setApplying(false);
+                      }
+                    }}
+                    sx={{
+                      textTransform: 'none',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {t('reticulum:settings.notifications.revert_button')}
+                  </Button>
+                )}
+              </Box>
+              {applyError ? (
+                <Typography sx={{ color: 'error.main', fontSize: 14, mt: 1 }}>
+                  {applyError}
+                </Typography>
+              ) : null}
+              <Typography
+                sx={{
+                  color: 'text.primary',
+                  fontSize: 16,
+                  fontWeight: 650,
+                  mt: 3,
+                  mb: 0.5,
+                }}
+              >
+                {t('reticulum:settings.notifications.delivery_title')}
+              </Typography>
+              <Typography
+                sx={{
+                  color: 'text.secondary',
+                  fontSize: 13,
+                  mb: 1,
+                }}
+              >
+                {t('reticulum:settings.notifications.delivery_description')}
+              </Typography>
+              <RadioGroup
+                value={deliveryMethod}
+                onChange={(_, value: string) => {
+                  const method = value as NotificationDeliveryMethod;
+                  const previous = deliveryMethod;
+                  setDeliveryMethod(method);
+                  // `setNotificationDeliveryMethod` rejects when the write
+                  // fails. Fired bare it became an unhandled rejection while the
+                  // radio stayed on the new value, so the UI claimed a save that
+                  // did not happen. Put the radio back and say so.
+                  setNotificationDeliveryMethod(method).catch((error) => {
+                    console.error('Failed to set delivery method:', error);
+                    setDeliveryMethod(previous);
+                    setApplyError(
+                      t('core:message.error.generic', {
+                        postProcess: 'capitalizeFirstChar',
+                      })
+                    );
+                  });
+                }}
+                sx={{ display: 'flex', gap: 0 }}
+              >
+                <FormControlLabel
+                  value="native"
+                  control={<Radio size="small" />}
+                  label={
+                    <Tooltip
+                      title={t(
+                        'reticulum:settings.notifications.delivery_native_tooltip'
+                      )}
+                      placement="right"
+                    >
+                      <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
+                        {t('reticulum:settings.notifications.delivery_native')}
+                      </Typography>
+                    </Tooltip>
+                  }
+                  sx={{
+                    m: 0,
+                    px: 1.5,
+                    py: 0.75,
+                    borderRadius: '8px',
+                    '&:hover': {
+                      backgroundColor: theme.palette.action.hover,
+                    },
+                  }}
+                />
+                <FormControlLabel
+                  value="ephemeral"
+                  control={<Radio size="small" />}
+                  label={
+                    <Tooltip
+                      title={t(
+                        'reticulum:settings.notifications.delivery_ephemeral_tooltip'
+                      )}
+                      placement="right"
+                    >
+                      <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
+                        {t(
+                          'reticulum:settings.notifications.delivery_ephemeral'
+                        )}
+                      </Typography>
+                    </Tooltip>
+                  }
+                  sx={{
+                    m: 0,
+                    px: 1.5,
+                    py: 0.75,
+                    borderRadius: '8px',
+                    '&:hover': {
+                      backgroundColor: theme.palette.action.hover,
+                    },
+                  }}
+                />
+              </RadioGroup>
             </>
           ) : activeSection === 'legacy-threads' ? (
             <>
@@ -694,11 +1147,15 @@ function GroupDropIndicator({
 }: {
   position: GroupDragInsertionPosition;
 }) {
+  const theme = useTheme();
   return (
     <Box
       aria-hidden
       sx={{
-        backgroundColor: RETICULUM_ACTIVE_BLUE,
+        backgroundColor:
+          theme.palette.mode === 'dark'
+            ? RETICULUM_ACTIVE_BLUE_DARK
+            : RETICULUM_ACTIVE_BLUE_LIGHT,
         borderRadius: '999px',
         boxShadow: '0 0 0 1px rgba(37, 99, 235, 0.22)',
         height: 2,
@@ -847,10 +1304,23 @@ const GroupListInner = ({
   const groups = useAtomValue(memberGroupsWithReticulumChatAtom);
   const groupChatHasUnread = useAtomValue(groupChatHasUnreadAtom);
   const groupsAnnHasUnread = useAtomValue(groupsAnnHasUnreadAtom);
+  const muteSettingsCache = useAtomValue(notificationSettingsCacheAtom);
+  useAtomValue(muteExpiryTickAtom);
   const railMode = Boolean(reticulumChatEnabled);
   const [manualGroupOrder, setManualGroupOrder] = useState<string[]>(
     readReticulumGroupOrder
   );
+
+  useEffect(() => {
+    const unsubscribe = subscribeToReticulumGroupOrder(setManualGroupOrder);
+    return unsubscribe;
+  }, []);
+  const [sortMode, setSortMode] = useState<GroupSortMode>(readGroupSortMode);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToGroupSortMode(setSortMode);
+    return unsubscribe;
+  }, []);
   const [groupDragTarget, setGroupDragTarget] =
     useState<GroupDragTarget | null>(null);
   const groupDragTargetRef = useRef<GroupDragTarget | null>(null);
@@ -859,9 +1329,24 @@ const GroupListInner = ({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
   const orderedGroups = useMemo(() => {
-    if (!railMode) return groups;
-    return orderReticulumGroups(groups, manualGroupOrder);
-  }, [groups, manualGroupOrder, railMode]);
+    if (!railMode) {
+      if (sortMode === 'alphabetical') {
+        return [...groups].sort((a: any, b: any) =>
+          String(a?.groupName || '').localeCompare(String(b?.groupName || ''))
+        );
+      }
+      return groups;
+    }
+    if (sortMode === 'manual') {
+      return orderReticulumGroups(groups, manualGroupOrder);
+    }
+    if (sortMode === 'alphabetical') {
+      return [...groups].sort((a: any, b: any) =>
+        String(a?.groupName || '').localeCompare(String(b?.groupName || ''))
+      );
+    }
+    return groups;
+  }, [groups, manualGroupOrder, railMode, sortMode]);
   const orderedGroupIds = useMemo(
     () => orderedGroups.map((group: any) => String(group?.groupId)),
     [orderedGroups]
@@ -887,8 +1372,12 @@ const GroupListInner = ({
           groupDragInsertionPosition(event)
         )
       );
+      if (sortMode !== 'manual') {
+        setSortMode('manual');
+        persistGroupSortMode('manual');
+      }
     },
-    [orderedGroupIds, persistManualGroupOrder]
+    [orderedGroupIds, persistManualGroupOrder, sortMode]
   );
 
   const updateGroupDragTarget = useCallback(
@@ -950,9 +1439,9 @@ const GroupListInner = ({
               borderRadius: '6px',
               boxShadow: '0 8px 18px rgba(0, 0, 0, 0.28)',
               color: theme.palette.text.primary,
-              fontSize: 12,
+              fontSize: '14px !important',
               fontWeight: 600,
-              padding: '6px 8px',
+              padding: '8px 12px !important',
             },
             '.MuiTooltip-arrow': {
               color:
@@ -1095,6 +1584,7 @@ const GroupListInner = ({
                     myAddress={myAddress}
                     reticulumChatEnabled={reticulumChatEnabled}
                     railMode
+                    desktopSideView={desktopSideView}
                   />
                 ))}
               </List>
@@ -1137,7 +1627,7 @@ const GroupListInner = ({
                 },
               }}
             >
-              <SearchRoundedIcon sx={{ fontSize: 20 }} />
+              <SearchRoundedIcon sx={{ fontSize: 24 }} />
             </ButtonBase>
           </Tooltip>
 
@@ -1168,7 +1658,7 @@ const GroupListInner = ({
                 },
               }}
             >
-              <AddCircleOutlineIcon sx={{ fontSize: 21 }} />
+              <AddCircleOutlineIcon sx={{ fontSize: 24 }} />
             </ButtonBase>
           </Tooltip>
 
@@ -1192,7 +1682,7 @@ const GroupListInner = ({
                 },
               }}
             >
-              <SettingsOutlinedIcon sx={{ fontSize: 20 }} />
+              <SettingsOutlinedIcon sx={{ fontSize: 24 }} />
             </ButtonBase>
           </Tooltip>
 
@@ -1440,7 +1930,7 @@ const GroupListInner = ({
           className="group-list"
           dense={false}
         >
-          {groups.map((group: any) => (
+          {orderedGroups.map((group: any) => (
             <GroupItem
               selectGroupFunc={selectGroupFunc}
               key={group.groupId}
@@ -1449,6 +1939,7 @@ const GroupListInner = ({
               getUserSettings={getUserSettings}
               myAddress={myAddress}
               reticulumChatEnabled={reticulumChatEnabled}
+              desktopSideView={desktopSideView}
             />
           ))}
         </List>
@@ -1520,6 +2011,7 @@ interface GroupItemProps {
   myAddress: string;
   reticulumChatEnabled?: boolean;
   railMode?: boolean;
+  desktopSideView: string;
 }
 
 const GroupItem = memo(
@@ -1532,9 +2024,14 @@ const GroupItem = memo(
     myAddress,
     reticulumChatEnabled = false,
     railMode = false,
+    desktopSideView,
   }: GroupItemProps) => {
     const theme = useTheme();
     const { t } = useTranslation(['core', 'group']);
+    const muteSettingsCache = useAtomValue(notificationSettingsCacheAtom);
+    const welcomeUnreadMap = useAtomValue(unreadWelcomeEventIdsAtom);
+    useAtomValue(muteExpiryTickAtom);
+    const globalNotifForm = useAtomValue(globalNotificationFormAtom);
     const { attributes, listeners, setNodeRef, isDragging } = useSortable({
       id: String(group?.groupId),
       disabled: !railMode,
@@ -1601,18 +2098,55 @@ const GroupItem = memo(
     }, [setIsPreviewOpen, setPreviewSrc]);
 
     const isSelected = group?.groupId === selectedGroupId;
-    const reticulumUnreadCount = Math.max(
+    const groupMuteSettings = muteSettingsCache[String(group?.groupId)];
+    const welcomeUnreadCount = getWelcomeUnreadCount(
+      welcomeUnreadMap,
+      String(group?.groupId)
+    );
+    const notifyOnWelcomePosts =
+      groupMuteSettings?.notifyOnWelcomePosts ??
+      globalNotifForm.notifyOnWelcomePosts ??
+      true;
+    const reticulumFilteredUnreadCount = Math.max(
       0,
-      Number(group?.reticulumChatSummary?.unreadCount || 0)
+      getGroupUnreadCountConsideringMute(
+        groupMuteSettings,
+        group?.reticulumChatSummary,
+        welcomeUnreadCount,
+        globalNotifForm
+      )
     );
     const reticulumReplyCount = Math.max(
       0,
       Number(group?.reticulumChatSummary?.replyCount || 0)
     );
-    const hasReticulumUnread = reticulumUnreadCount > 0;
-    const hasReticulumMention =
-      group?.reticulumChatSummary?.hasUnreadMention === true ||
-      (group?.reticulumChatSummary?.mentionCount ?? 0) > 0;
+    // What the badge shows. It used the raw `replyCount`, so a muted group still
+    // displayed a number while its dot was correctly suppressed: the two halves
+    // disagreed. Use the mute-aware count, and keep the reply count only as a
+    // floor so a channel with replies but no filtered total still shows a figure.
+    const reticulumBadgeCount =
+      reticulumFilteredUnreadCount > 0
+        ? Math.max(reticulumFilteredUnreadCount, reticulumReplyCount)
+        : 0;
+    const hasReticulumUnread = reticulumFilteredUnreadCount > 0;
+    // Welcome posts nobody has read must not mask a real @mention. Subtracting
+    // the welcome count by hand is wrong at the boundary: one stale welcome id
+    // from another device makes `1 - 1 > 0` false and the mention badge
+    // disappears. The decision lives in `shouldShowMentionBadge` so it can be
+    // tested without mounting the row; it applies the same clamp the rest of the
+    // codebase uses.
+    const hasReticulumMention = shouldShowMentionBadge({
+      hasUnreadMention: group?.reticulumChatSummary?.hasUnreadMention,
+      mentionCount: group?.reticulumChatSummary?.mentionCount,
+      notifyOnWelcomePosts,
+      welcomeUnreadCount,
+      unreadCount: group?.reticulumChatSummary?.unreadCount,
+    });
+    // `isGroupMuted` used to be computed here and never read. It also called
+    // isScopeMuted + groupHasUnreadConsideringMute on every row, on every
+    // render, for a value nothing consumed — which defeated `memo` on this item.
+    // The mute-aware answer the UI actually needs is `hasReticulumMention`
+    // above, and the badge below.
 
     const gcallRoomIdForRow =
       group?.groupId &&
@@ -1636,7 +2170,12 @@ const GroupItem = memo(
     );
     const showGroupCallIndicator =
       Boolean(gcallRoomIdForRow) && (imInThisGroupGcall || meshShowsCall);
+    // `isPrivate` counts as closed, the same way `Group.tsx` reads it: a legacy
+    // private group carries no `isOpen: false` and no `groupType`, so without
+    // this the rail showed a globe and the list dropped the lock.
     const isClosedGroup =
+      groupProperty?.isPrivate === true ||
+      (group as { isPrivate?: unknown })?.isPrivate === true ||
       groupProperty?.isOpen === false ||
       group?.isOpen === false ||
       Number(group?.groupType) === 1 ||
@@ -1644,8 +2183,15 @@ const GroupItem = memo(
     const isOpenGroup = !isClosedGroup;
 
     if (railMode) {
+      // Reuse the already-translated keys rather than hardcoded English, the
+      // same way GroupsWidget reads them.
       const groupLabel =
-        group.groupId === '0' ? 'General' : group.groupName || 'Group';
+        group.groupId === '0'
+          ? t('group:groups_widget.group_general')
+          : group.groupName ||
+            t('group:groups_widget.group_named', {
+              id: group.groupId,
+            });
       const fallbackAvatarBackground =
         theme.palette.mode === 'dark'
           ? 'rgba(7, 10, 17, 0.82)'
@@ -1721,7 +2267,7 @@ const GroupItem = memo(
                   sx={{
                     color:
                       theme.palette.mode === 'dark' ? '#a9c9ff' : '#315d97',
-                    fontSize: 15,
+                    fontSize: 17,
                   }}
                 />
               ) : (
@@ -1729,12 +2275,12 @@ const GroupItem = memo(
                   sx={{
                     color:
                       theme.palette.mode === 'dark' ? '#f1a0a8' : '#933642',
-                    fontSize: 14,
+                    fontSize: 16,
                   }}
                 />
               )}
               <Typography
-                sx={{ color: 'inherit', fontSize: 12, fontWeight: 600 }}
+                sx={{ color: 'inherit', fontSize: 14, fontWeight: 600 }}
               >
                 {groupLabel}
               </Typography>
@@ -1794,7 +2340,13 @@ const GroupItem = memo(
             sx={{
               alignItems: 'center',
               backgroundColor: isSelected
-                ? RETICULUM_ACTIVE_BLUE
+                ? desktopSideView === 'groups'
+                  ? theme.palette.mode === 'dark'
+                    ? RETICULUM_ACTIVE_BLUE_DARK
+                    : RETICULUM_ACTIVE_BLUE_LIGHT
+                  : theme.palette.mode === 'dark'
+                    ? `${RETICULUM_ACTIVE_BLUE_DARK}66`
+                    : `${RETICULUM_ACTIVE_BLUE_LIGHT}66`
                 : 'transparent',
               borderRadius: '8px',
               boxSizing: 'border-box',
@@ -1814,7 +2366,13 @@ const GroupItem = memo(
               zIndex: isDragging ? 4 : 'auto',
               '&:hover': {
                 backgroundColor: isSelected
-                  ? RETICULUM_ACTIVE_BLUE
+                  ? desktopSideView === 'groups'
+                    ? theme.palette.mode === 'dark'
+                      ? RETICULUM_ACTIVE_BLUE_DARK
+                      : RETICULUM_ACTIVE_BLUE_LIGHT
+                    : theme.palette.mode === 'dark'
+                      ? `${RETICULUM_ACTIVE_BLUE_DARK}66`
+                      : `${RETICULUM_ACTIVE_BLUE_LIGHT}66`
                   : theme.palette.action.hover,
               },
             }}
@@ -1843,7 +2401,12 @@ const GroupItem = memo(
               >
                 {avatarNode}
 
-                {(hasReticulumUnread ||
+                {(groupHasUnreadConsideringMute(
+                  groupMuteSettings,
+                  group?.reticulumChatSummary,
+                  welcomeUnreadCount,
+                  globalNotifForm
+                ) ||
                   (!reticulumChatEnabled &&
                     group?.data &&
                     groupChatTimestamp &&
@@ -1854,32 +2417,38 @@ const GroupItem = memo(
                         timeDifferenceForNotificationChats) ||
                       timestampEnterData < group?.timestamp))) && (
                   <ReticulumUnreadCountBadge
-                    count={reticulumReplyCount > 0 ? reticulumReplyCount : null}
+                    count={reticulumBadgeCount > 0 ? reticulumBadgeCount : null}
                     outlineColor={theme.palette.background.surface}
-                    size={reticulumReplyCount > 0 ? 18 : 8}
+                    size={reticulumBadgeCount > 0 ? 18 : 8}
                     sx={{
-                      bottom: reticulumReplyCount > 0 ? -2 : 1,
+                      bottom: reticulumBadgeCount > 0 ? -2 : 1,
                       position: 'absolute',
-                      right: reticulumReplyCount > 0 ? -2 : 1,
+                      right: reticulumBadgeCount > 0 ? -2 : 1,
                       zIndex: 2,
                     }}
                   />
                 )}
 
-                {hasReticulumMention && (
-                  <AlternateEmailIcon
-                    sx={{
-                      backgroundColor: theme.palette.background.surface,
-                      borderRadius: '50%',
-                      color: RETICULUM_NOTIFICATION_RED,
-                      fontSize: 16,
-                      position: 'absolute',
-                      right: 0,
-                      top: 0,
-                      zIndex: 2,
-                    }}
-                  />
-                )}
+                {hasReticulumMention &&
+                  groupHasUnreadConsideringMute(
+                    groupMuteSettings,
+                    group?.reticulumChatSummary,
+                    welcomeUnreadCount,
+                    globalNotifForm
+                  ) && (
+                    <AlternateEmailIcon
+                      sx={{
+                        backgroundColor: theme.palette.background.surface,
+                        borderRadius: '50%',
+                        color: RETICULUM_NOTIFICATION_RED,
+                        fontSize: 16,
+                        position: 'absolute',
+                        right: 0,
+                        top: 0,
+                        zIndex: 2,
+                      }}
+                    />
+                  )}
 
                 {!reticulumChatEnabled &&
                   announcement &&
@@ -1992,7 +2561,16 @@ const GroupItem = memo(
           },
         }}
       >
-        <ContextMenu getUserSettings={getUserSettings} groupId={group.groupId}>
+        {/* The rail instance above passes `myAddress` and `reticulumGroup`; this
+            legacy one did not, so `isGroupOwner` could never be true and the
+            invite-link, About and leave-group items silently vanished whenever
+            Reticulum chat was off. */}
+        <ContextMenu
+          getUserSettings={getUserSettings}
+          groupId={group.groupId}
+          myAddress={myAddress}
+          reticulumGroup={group}
+        >
           <Box
             sx={{
               alignItems: 'center',
@@ -2046,7 +2624,11 @@ const GroupItem = memo(
             </ListItemAvatar>
 
             <ListItemText
-              primary={group.groupId === '0' ? 'General' : group.groupName}
+              primary={
+                group.groupId === '0'
+                  ? t('group:groups_widget.group_general')
+                  : group.groupName
+              }
               secondary={
                 !group?.timestamp
                   ? t('core:message.generic.no_messages', {
@@ -2067,7 +2649,10 @@ const GroupItem = memo(
               }}
               secondaryTypographyProps={{
                 sx: {
-                  color: theme.palette.text.secondary,
+                  color:
+                    theme.palette.mode === 'dark'
+                      ? 'rgb(200, 200, 200)'
+                      : theme.palette.text.secondary,
                   fontFamily: 'Inter',
                   fontSize: '12px',
                   lineHeight: 1.4,
@@ -2105,7 +2690,12 @@ const GroupItem = memo(
                 marginLeft: '4px',
               }}
             >
-              {(hasReticulumUnread ||
+              {(groupHasUnreadConsideringMute(
+                groupMuteSettings,
+                group?.reticulumChatSummary,
+                welcomeUnreadCount,
+                globalNotifForm
+              ) ||
                 (!reticulumChatEnabled &&
                   group?.data &&
                   groupChatTimestamp &&
@@ -2125,14 +2715,20 @@ const GroupItem = memo(
                 />
               )}
 
-              {hasReticulumMention && (
-                <AlternateEmailIcon
-                  sx={{
-                    color: RETICULUM_NOTIFICATION_RED,
-                    fontSize: '18px',
-                  }}
-                />
-              )}
+              {hasReticulumMention &&
+                groupHasUnreadConsideringMute(
+                  groupMuteSettings,
+                  group?.reticulumChatSummary,
+                  welcomeUnreadCount,
+                  globalNotifForm
+                ) && (
+                  <AlternateEmailIcon
+                    sx={{
+                      color: RETICULUM_NOTIFICATION_RED,
+                      fontSize: '18px',
+                    }}
+                  />
+                )}
 
               {groupProperty?.isOpen === false && (
                 <LockIcon

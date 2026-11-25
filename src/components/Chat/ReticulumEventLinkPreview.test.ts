@@ -120,8 +120,8 @@ describe('parseReticulumEventLinks', () => {
         '14f883c2-6636-4b18-8f4b-bfd6f6f6e07c',
         'ab62bc26-537d-4e38-8314-12925bc0fcbd'
       );
-    expect(parseReticulumEventLinks(`${eventLink} ${eventLink} ${second}`)).toHaveLength(
-      1
-    );
+    expect(
+      parseReticulumEventLinks(`${eventLink} ${eventLink} ${second}`)
+    ).toHaveLength(1);
   });
 });

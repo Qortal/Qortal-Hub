@@ -84,8 +84,7 @@ export const capitalizeSentenceStarts = {
     // Line/paragraph break without ending .!? on the same fragment (e.g. "one\ntwo").
     result = result.replace(
       /(\n+)(\p{L})/gu,
-      (_: string, nl: string, letter: string) =>
-        nl + letter.toLocaleUpperCase()
+      (_: string, nl: string, letter: string) => nl + letter.toLocaleUpperCase()
     );
 
     return result;

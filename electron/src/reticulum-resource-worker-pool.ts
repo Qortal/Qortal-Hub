@@ -26,13 +26,22 @@ type QueueEntry = {
 
 function resolveWorkerPath(): string {
   if (__dirname.includes('app.asar')) {
-    const unpacked = __dirname.replace(/app\.asar(\/|\\)/, 'app.asar.unpacked$1');
+    const unpacked = __dirname.replace(
+      /app\.asar(\/|\\)/,
+      'app.asar.unpacked$1'
+    );
     const unpackedPath = path.join(unpacked, WORKER_FILENAME);
     if (fs.existsSync(unpackedPath)) return unpackedPath;
   }
   const adjacent = path.join(__dirname, WORKER_FILENAME);
   if (fs.existsSync(adjacent)) return adjacent;
-  const development = path.join(__dirname, '..', 'build', 'src', WORKER_FILENAME);
+  const development = path.join(
+    __dirname,
+    '..',
+    'build',
+    'src',
+    WORKER_FILENAME
+  );
   return fs.existsSync(development) ? development : adjacent;
 }
 
@@ -64,7 +73,10 @@ export class ReticulumResourceWorkerPool {
       return null;
     }
     return new Promise((resolve) => {
-      const task = { ...input, id: ++this.nextId } as ReticulumResourceWorkerTask;
+      const task = {
+        ...input,
+        id: ++this.nextId,
+      } as ReticulumResourceWorkerTask;
       this.enqueue({ task, priority, retries: 0, resolve });
       this.pump();
     });
@@ -161,7 +173,9 @@ export class ReticulumResourceWorkerPool {
       this.active = null;
       this.activeTimeout = null;
       this.crashCount += 1;
-      loggerWarn(`[ReticulumResourceWorker] task_timeout kind=${entry.task.kind}`);
+      loggerWarn(
+        `[ReticulumResourceWorker] task_timeout kind=${entry.task.kind}`
+      );
       const timedOutWorker = this.worker;
       timedOutWorker?.removeAllListeners();
       void timedOutWorker?.terminate();
@@ -177,7 +191,10 @@ export class ReticulumResourceWorkerPool {
       if (this.activeTimeout) clearTimeout(this.activeTimeout);
       this.activeTimeout = null;
       this.crashCount += 1;
-      loggerWarn(`[ReticulumResourceWorker] post_failed kind=${entry.task.kind}`, error);
+      loggerWarn(
+        `[ReticulumResourceWorker] post_failed kind=${entry.task.kind}`,
+        error
+      );
       const failedWorker = this.worker;
       failedWorker?.removeAllListeners();
       void failedWorker?.terminate();
@@ -195,7 +212,8 @@ export class ReticulumResourceWorkerPool {
       const candidate = this.queue[middle];
       if (
         candidate.priority < entry.priority ||
-        (candidate.priority === entry.priority && candidate.task.id < entry.task.id)
+        (candidate.priority === entry.priority &&
+          candidate.task.id < entry.task.id)
       ) {
         low = middle + 1;
       } else {
@@ -208,7 +226,8 @@ export class ReticulumResourceWorkerPool {
 
   private reserveQueueSlot(): Promise<boolean> {
     if (this.stopping) return Promise.resolve(false);
-    const admitted = this.queue.length + this.reservedQueueSlots + (this.active ? 1 : 0);
+    const admitted =
+      this.queue.length + this.reservedQueueSlots + (this.active ? 1 : 0);
     if (admitted < MAX_PENDING_TASKS) {
       this.reservedQueueSlots += 1;
       this.updateQueuePressureState();
@@ -257,7 +276,10 @@ export class ReticulumResourceWorkerPool {
       );
       return;
     }
-    if (this.queuePressureLogged && pending < Math.floor(QUEUE_PRESSURE_THRESHOLD / 2)) {
+    if (
+      this.queuePressureLogged &&
+      pending < Math.floor(QUEUE_PRESSURE_THRESHOLD / 2)
+    ) {
       this.queuePressureLogged = false;
     }
   }

@@ -399,7 +399,6 @@ function AttachmentImage({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
   const aspectRatio = width && height ? `${width} / ${height}` : undefined;
@@ -1040,7 +1039,6 @@ export function SupportChat() {
     async (fields: Record<string, unknown>) => {
       // Reuses the existing 'signPresenceMessage' background case which performs
       // Ed25519 signing over canonicalized (alphabetically sorted) JSON fields.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const res = await (window as any).sendMessage(
         'signPresenceMessage',
         fields,

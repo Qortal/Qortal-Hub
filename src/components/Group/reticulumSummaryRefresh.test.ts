@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   beginReticulumSummaryRefresh,
-  getReticulumMentionBadgeCount,
+  getReticulumTotalBadgeCount,
   scheduleReticulumSummaryRefresh,
 } from './reticulumSummaryRefresh';
 
@@ -12,17 +12,26 @@ describe('Reticulum summary refresh', () => {
 
   it('allows an authoritative mention count to decrease after reads', () => {
     expect(
-      getReticulumMentionBadgeCount({
-        '519': { mentionCount: 3 },
-        '716': { mentionCount: 2 },
+      getReticulumTotalBadgeCount({
+        '519': { mentionCount: 3, unreadCount: 0 },
+        '716': { mentionCount: 2, unreadCount: 0 },
       })
     ).toBe(5);
     expect(
-      getReticulumMentionBadgeCount({
-        '519': { mentionCount: 0 },
-        '716': { mentionCount: 0 },
+      getReticulumTotalBadgeCount({
+        '519': { mentionCount: 0, unreadCount: 0 },
+        '716': { mentionCount: 0, unreadCount: 0 },
       })
     ).toBe(0);
+  });
+
+  it('includes unreadCount in the badge total', () => {
+    expect(
+      getReticulumTotalBadgeCount({
+        '519': { mentionCount: 2, unreadCount: 5 },
+        '716': { mentionCount: 0, unreadCount: 3 },
+      })
+    ).toBe(10);
   });
 
   it('rejects an older refresh after a newer refresh starts', () => {

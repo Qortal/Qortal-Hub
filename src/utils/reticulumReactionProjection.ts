@@ -68,7 +68,10 @@ export const projectReticulumReactionReferences = (
       string,
       Map<
         string,
-        { event: ReticulumReactionEvent; reaction: Record<string, unknown> | null }
+        {
+          event: ReticulumReactionEvent;
+          reaction: Record<string, unknown> | null;
+        }
       >
     >
   >();
