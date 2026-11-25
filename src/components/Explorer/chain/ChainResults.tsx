@@ -48,6 +48,22 @@ import { typeTitle } from '../transactions/sentenceText';
 import { TxList } from '../transactions/TxListRow';
 import { CHAIN_STATE, type ChainShown } from './chainStep';
 
+/**
+ * Whether the keyboard may be moved to what a read brought: it is in this
+ * list, or on nothing chosen (the page, or what the window put it on when
+ * the control that had it went: anything out of the tab order). Never off a
+ * control the user went to meanwhile.
+ */
+function keyboardFree(panel: HTMLElement | null): boolean {
+  const active = document.activeElement as HTMLElement | null;
+  return (
+    !active ||
+    active === document.body ||
+    active.tabIndex < 0 ||
+    Boolean(panel?.contains(active))
+  );
+}
+
 export function ChainResults({
   types,
   range,
@@ -96,7 +112,8 @@ export function ChainResults({
 
   // After Show older, a Retry or more blocks: the keyboard goes to the first
   // row the read added (or the line, when none came), or to the Retry of a
-  // read that failed (once).
+  // read that failed (once); never off a control it was put on meanwhile.
+  const panel = useRef<HTMLDivElement>(null);
   const listBox = useRef<HTMLDivElement>(null);
   const lineRef = useRef<HTMLParagraphElement>(null);
   const errorBox = useRef<HTMLDivElement>(null);
@@ -111,11 +128,12 @@ export function ChainResults({
     const from = focusFrom.current;
     if (from === null || list.pending === 'loading') return;
     if (list.pending === 'failed') {
-      if (was !== 'failed')
+      if (was !== 'failed' && keyboardFree(panel.current))
         errorBox.current?.querySelector<HTMLElement>('button')?.focus();
       return;
     }
     focusFrom.current = null;
+    if (!keyboardFree(panel.current)) return;
     const rows =
       listBox.current?.querySelectorAll<HTMLElement>('[data-tx-row]');
     (rows?.[from] ?? lineRef.current)?.focus();
@@ -279,7 +297,9 @@ export function ChainResults({
 
   return (
     <Section id="explorer-chain-list" title={title}>
-      <Box sx={panelSx}>{body}</Box>
+      <Box ref={panel} sx={panelSx}>
+        {body}
+      </Box>
     </Section>
   );
 }
