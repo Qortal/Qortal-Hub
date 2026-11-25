@@ -634,6 +634,52 @@ const CENTER_GAP = 4;
 export const nodeRadius = (size: number): number =>
   Math.max(TARGET, size + 2 * RING) / 2;
 
+/**
+ * The least room a name beside an avatar keeps next to its amount (px).
+ * Where its amount leaves it less, a second line is made for the amount,
+ * which goes under the name when both don't fit on one line.
+ */
+export const SIDE_NAME_MIN = 128;
+/** Between a name beside an avatar and its amount on one line (px). */
+export const SIDE_AMOUNT_GAP = 4;
+
+/**
+ * How wide the name beside a side avatar may be (px): from its avatar
+ * outwards to the drawing's edge, `pad` px past the `width` laid out.
+ */
+export const sideNameRoom = (
+  node: Pick<PlacedNode, 'side' | 'x' | 'size'>,
+  width: number,
+  pad: number
+): number =>
+  ((node.side === 'out' ? 100 - node.x : node.x) / 100) * width +
+  pad -
+  nodeRadius(node.size) -
+  LABEL_MARGIN;
+
+/**
+ * How many lines the name beside an avatar may take in `room` px: 2 where
+ * its amount (`amountWidth` px; null for none) would leave the name less
+ * than SIDE_NAME_MIN beside it, else 1.
+ */
+export const sideNameLines = (
+  room: number,
+  amountWidth: number | null
+): number =>
+  amountWidth !== null && room - SIDE_AMOUNT_GAP - amountWidth < SIDE_NAME_MIN
+    ? 2
+    : 1;
+
+/**
+ * How many lines the name beside the side avatar `node` may take in a
+ * drawing `width` px wide.
+ */
+export type SideNameLines = (node: PlacedNode, width: number) => number;
+
+/** A name beside an avatar, `lines` lines tall (px). */
+export const sideNameHeight = (lines: number): number =>
+  LABEL_HEIGHT * Math.max(1, lines);
+
 /** The middle's avatar, with its padding and its 3 px ring. */
 const centerRadius = (options: LayoutOptions) => options.centerSize / 2 + 7;
 
@@ -674,14 +720,28 @@ function reachesInto(a: PlacedNode, b: PlacedNode, width: number): boolean {
 const besideNames = (node: PlacedNode) =>
   node.side === 'in' || node.side === 'out';
 
+/** How tall (px) each name beside an avatar is in a drawing `width` px wide. */
+function sideNameHeights(
+  placed: readonly PlacedNode[],
+  width: number,
+  sideLines: SideNameLines
+): (node: PlacedNode) => number {
+  const heights = new Map<string, number>();
+  for (const node of placed)
+    if (besideNames(node))
+      heights.set(node.key, sideNameHeight(sideLines(node, width)));
+  return (node) => heights.get(node.key) ?? LABEL_HEIGHT;
+}
+
 /**
  * How tall (px) the drawing must be at `width` px wide: at least its
  * aspect's height, and enough that
  *
  * - no two avatars come closer than AVATAR_GAP, nor one and the middle;
- * - with names beside them, no name passes under another node of its side
- *   or a bottom one (two names of a side never share a line: their
- *   avatars keep them apart);
+ * - with names beside them (each one line, or two where its amount goes
+ *   under it: `sideLines`), no name passes under another node of its side
+ *   or a bottom one (two names of a side never meet: their avatars keep
+ *   them apart);
  * - nothing covers the middle's name.
  *
  * Every rule only asks for more height (the places are % of it), so the
@@ -690,9 +750,11 @@ const besideNames = (node: PlacedNode) =>
 export function circleHeight(
   layout: CircleLayout,
   options: LayoutOptions,
-  width: number
+  width: number,
+  sideLines: SideNameLines = () => 1
 ): number {
   const { placed } = layout;
+  const tall = sideNameHeights(placed, width, sideLines);
   let height = width / circleAspect(layout, options);
   const raise = (needed: number) => {
     if (Number.isFinite(needed) && needed > height) height = needed;
@@ -709,11 +771,11 @@ export function circleHeight(
       const dx = Math.abs(px(a.x) - px(b.x));
       const apart = ra + rb + AVATAR_GAP;
       if (dx < apart) raise(Math.sqrt(apart * apart - dx * dx) / dy);
-      // Two names of a side never share a line: the avatars beside them,
-      // at least TARGET tall, keep them further apart than a line.
+      // Two names of a side never on one another: the avatars beside them,
+      // at least TARGET tall, keep them further apart than two lines.
       if (options.named && a.side === b.side && besideNames(a)) {
-        if (reachesInto(a, b, width)) raise((LABEL_HEIGHT / 2 + rb) / dy);
-        if (reachesInto(b, a, width)) raise((LABEL_HEIGHT / 2 + ra) / dy);
+        if (reachesInto(a, b, width)) raise((tall(a) / 2 + rb) / dy);
+        if (reachesInto(b, a, width)) raise((tall(b) / 2 + ra) / dy);
       }
       // A side's name running outwards, and a bottom avatar in its way.
       if (options.named && besideNames(a) !== besideNames(b)) {
@@ -721,7 +783,7 @@ export function circleHeight(
         const low = side === a ? b : a;
         const below = (low.y - side.y) / 100;
         if (below > 0 && reachesInto(side, low, width))
-          raise((LABEL_HEIGHT / 2 + nodeRadius(low.size) + AVATAR_GAP) / below);
+          raise((tall(side) / 2 + nodeRadius(low.size) + AVATAR_GAP) / below);
       }
     }
     // The middle's avatar, and its name under it.
@@ -842,19 +904,22 @@ export function bottomNames(
 /**
  * What overlaps in a drawing `width` by `height` (px), as words for a
  * test's message; none when everything has its room. The names beside the
- * avatars are taken as long as their room (to the drawing's edge), and the
- * names under the bottom ones as wide and as tall as `bottomNames` makes
- * them (`rows`: their amounts' rows at that width).
+ * avatars are taken as long as their room (to the drawing's edge) and as
+ * tall as their lines (`sideLines`), and the names under the bottom ones
+ * as wide and as tall as `bottomNames` makes them (`rows`: their amounts'
+ * rows at that width).
  */
 export function circleOverlaps(
   layout: CircleLayout,
   options: LayoutOptions,
   width: number,
   height: number,
-  rows: AmountRows = () => 1
+  rows: AmountRows = () => 1,
+  sideLines: SideNameLines = () => 1
 ): string[] {
   const out: string[] = [];
   const { placed } = layout;
+  const tall = sideNameHeights(placed, width, sideLines);
   const at = (p: { x: number; y: number }) => ({
     x: (p.x / 100) * width,
     y: (p.y / 100) * height,
@@ -877,10 +942,11 @@ export function circleOverlaps(
         out.push(`${a.key} and ${b.key}: avatars`);
       if (options.named && a.side === b.side && besideNames(a)) {
         const dy = Math.abs(pa.y - pb.y);
-        if (dy < LABEL_HEIGHT - slack) out.push(`${a.key} and ${b.key}: names`);
-        if (reachesInto(a, b, width) && dy < LABEL_HEIGHT / 2 + rb - slack)
+        if (dy < (tall(a) + tall(b)) / 2 - slack)
+          out.push(`${a.key} and ${b.key}: names`);
+        if (reachesInto(a, b, width) && dy < tall(a) / 2 + rb - slack)
           out.push(`${a.key}'s name and ${b.key}`);
-        if (reachesInto(b, a, width) && dy < LABEL_HEIGHT / 2 + ra - slack)
+        if (reachesInto(b, a, width) && dy < tall(b) / 2 + ra - slack)
           out.push(`${b.key}'s name and ${a.key}`);
       }
     }
@@ -914,7 +980,7 @@ export function circleOverlaps(
     // avatar, nor the name under one, in its way.
     for (const side of placed.filter(besideNames)) {
       const p = at(side);
-      const strip = [p.y - LABEL_HEIGHT / 2, p.y + LABEL_HEIGHT / 2];
+      const strip = [p.y - tall(side) / 2, p.y + tall(side) / 2];
       const from = p.x + (side.side === 'out' ? 1 : -1) * nodeRadius(side.size);
       const inPath = (x0: number, x1: number) =>
         side.side === 'out'
@@ -1034,7 +1100,9 @@ export function fitCircle(
     options: LayoutOptions,
     width: number,
     height: number
-  ) => number
+  ) => number,
+  /** How many lines each name beside an avatar takes at a width. */
+  sideLines: SideNameLines = () => 1
 ): CircleFit {
   const ordinary = (): CircleFit => {
     const options = layoutFor(room.ordinary);
@@ -1043,7 +1111,7 @@ export function fitCircle(
       options,
       layout,
       width: room.ordinary,
-      height: circleHeight(layout, options, room.ordinary),
+      height: circleHeight(layout, options, room.ordinary, sideLines),
       big: false,
     };
   };
@@ -1066,7 +1134,7 @@ export function fitCircle(
   // it is narrower), and the width taken in again until it fits.
   let width = Math.floor(Math.min(big.width, big.height * aspect));
   for (let round = 0; round < 4 && width >= room.ordinary; round++) {
-    const needed = circleHeight(layout, options, width);
+    const needed = circleHeight(layout, options, width, sideLines);
     const total = needed + around(layout, options, width, needed);
     if (total <= big.height)
       return { options, layout, width, height: needed, big: true };
@@ -1082,7 +1150,10 @@ export function fitCircle(
   const scrolled = Math.max(
     room.ordinary,
     Math.floor(
-      Math.min(big.width, circleHeight(layout, options, room.ordinary) * aspect)
+      Math.min(
+        big.width,
+        circleHeight(layout, options, room.ordinary, sideLines) * aspect
+      )
     )
   );
   if (scrolled <= room.ordinary) {
@@ -1093,7 +1164,7 @@ export function fitCircle(
     options,
     layout,
     width: scrolled,
-    height: circleHeight(layout, options, scrolled),
+    height: circleHeight(layout, options, scrolled, sideLines),
     big: true,
   };
 }

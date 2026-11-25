@@ -15,6 +15,7 @@ import {
   circleNodes,
   circleOverlaps,
   fitCircle,
+  LABEL_MARGIN,
   layoutFor,
   NARROW_LAYOUT,
   NARROW_MIN,
@@ -25,7 +26,12 @@ import {
   qortSize,
   receivedShare,
   shortAmount,
+  SIDE_AMOUNT_GAP,
+  SIDE_NAME_MIN,
   sideMaxSize,
+  sideNameHeight,
+  sideNameLines,
+  sideNameRoom,
   TINY_LAYOUT,
   WIDE_LAYOUT,
   WIDE_MIN,
@@ -37,6 +43,7 @@ import {
   type CircleRoom,
   type LayoutOptions,
   type PlacedNode,
+  type SideNameLines,
 } from './circle';
 import { recordedFindings, type Finding } from './findings';
 import type { TxRow } from './reads';
@@ -589,6 +596,129 @@ describe('the drawing’s height: nothing overlaps', () => {
             );
   });
 
+  it('with names of two lines beside the avatars (an amount under its name), at every width too', () => {
+    // All of them, or every other one: a name of two lines beside one of one.
+    const all: SideNameLines = () => 2;
+    const everyOther: SideNameLines = (node) =>
+      Number(node.key.split(':Q')[1]) % 2 ? 2 : 1;
+    for (const sideLines of [all, everyOther])
+      for (const inCount of [1, 2, 4, 7, 10, 14])
+        for (const outCount of [0, 3, 6, 12])
+          for (const bothCount of [0, 2, 4])
+            for (const width of WIDTHS) {
+              const options = layoutFor(width);
+              const layout = circleLayout(
+                {
+                  in: side('in', inCount, mixed(inCount)),
+                  out: side('out', outCount, mixed(outCount)),
+                  both: bothSide(bothCount, mixed(bothCount)),
+                },
+                options
+              );
+              const height = circleHeight(layout, options, width, sideLines);
+              expect(
+                circleOverlaps(
+                  layout,
+                  options,
+                  width,
+                  height,
+                  lines,
+                  sideLines
+                ),
+                `${width} px, ${layout.placed.length} nodes`
+              ).toEqual([]);
+            }
+  });
+
+  it('a name of two lines is made room for: at the height for names of one line, it passes over the next avatar', () => {
+    const options = layoutFor(600);
+    // Three on the left and four at the bottom: the top two names close.
+    const layout = circleLayout(groups(3, 0, 4), options);
+    const oneLine = circleHeight(layout, options, 600);
+    expect(
+      circleOverlaps(layout, options, 600, oneLine, lines, () => 2)
+    ).not.toEqual([]);
+    const twoLines = circleHeight(layout, options, 600, () => 2);
+    expect(twoLines).toBeGreaterThan(oneLine);
+    expect(
+      circleOverlaps(layout, options, 600, twoLines, lines, () => 2)
+    ).toEqual([]);
+  });
+
+  it('a name of two lines clears an avatar of its side it runs past, above it or below it', () => {
+    const [upper, lower] = side('in', 2);
+    for (const [outerAbove, crossing] of [
+      [true, "in:Q1's name and in:Q0"],
+      [false, "in:Q0's name and in:Q1"],
+    ] as const) {
+      // The one further out (left) above the other, or under it.
+      const placed: PlacedNode[] = [
+        { ...upper, x: outerAbove ? 18 : 30, y: 62, size: 28 },
+        { ...lower, x: outerAbove ? 30 : 18, y: 70, size: 28 },
+      ];
+      const layout: CircleLayout = {
+        placed,
+        rest: { in: 0, out: 0, both: 0 },
+      };
+      const options = layoutFor(600);
+      const oneLine = circleHeight(layout, options, 600);
+      expect(
+        circleOverlaps(
+          layout,
+          options,
+          600,
+          oneLine,
+          () => 1,
+          () => 2
+        )
+      ).toContain(crossing);
+      const twoLines = circleHeight(layout, options, 600, () => 2);
+      expect(
+        circleOverlaps(
+          layout,
+          options,
+          600,
+          twoLines,
+          () => 1,
+          () => 2
+        )
+      ).toEqual([]);
+    }
+  });
+
+  it('a name of two lines clears a bottom avatar in its way, too', () => {
+    // A name on the left running out over a bottom avatar further out than
+    // its own.
+    const placed: PlacedNode[] = [
+      { ...side('in', 1)[0], x: 30, y: 62, size: 28 },
+      { ...bothSide(1)[0], x: 18, y: 70, size: 28 },
+    ];
+    const layout: CircleLayout = { placed, rest: { in: 0, out: 0, both: 0 } };
+    const options = layoutFor(600);
+    const oneLine = circleHeight(layout, options, 600);
+    expect(
+      circleOverlaps(
+        layout,
+        options,
+        600,
+        oneLine,
+        () => 1,
+        () => 2
+      )
+    ).toEqual(["in:Q0's name and both:B0"]);
+    const twoLines = circleHeight(layout, options, 600, () => 2);
+    expect(
+      circleOverlaps(
+        layout,
+        options,
+        600,
+        twoLines,
+        () => 1,
+        () => 2
+      )
+    ).toEqual([]);
+  });
+
   it('the height made for it is what keeps them apart (a drawing of its aspect alone overlaps)', () => {
     const crowded = groups(10, 10, 4);
     let overlapped = 0;
@@ -603,6 +733,24 @@ describe('the drawing’s height: nothing overlaps', () => {
       );
     }
     expect(overlapped).toBeGreaterThan(0);
+  });
+
+  it('a name beside an avatar keeps SIDE_NAME_MIN beside its amount; with less, the amount goes under it', () => {
+    const room = 200;
+    const fits = room - SIDE_AMOUNT_GAP - SIDE_NAME_MIN;
+    expect(sideNameLines(room, null)).toBe(1);
+    expect(sideNameLines(room, fits)).toBe(1);
+    expect(sideNameLines(room, fits + 1)).toBe(2);
+    expect(sideNameLines(room, room * 2)).toBe(2);
+    expect(sideNameHeight(2)).toBe(2 * sideNameHeight(1));
+    // From its avatar outwards to the drawing's edge, on either side.
+    const out = { side: 'out', x: 80, size: 28 } as const;
+    const expected = 0.2 * 600 + 24 - nodeRadius(28) - LABEL_MARGIN;
+    expect(sideNameRoom(out, 600, 24)).toBeCloseTo(expected, 9);
+    expect(sideNameRoom({ ...out, side: 'in', x: 20 }, 600, 24)).toBeCloseTo(
+      expected,
+      9
+    );
   });
 
   it('a name under a bottom avatar takes a line for each amount', () => {
@@ -717,6 +865,70 @@ describe('the drawing in a bigger window (full screen)', () => {
     // An ordinary window, however it is zoomed: never bigger than 1,140 px of its own.
     for (const zoom of [0.5, 0.67, 1])
       expect(windowRoom([1920, 1080], zoom, false).big).toBeNull();
+  });
+
+  it('with names of two lines beside the avatars, in an ordinary window and full screen alike, nothing overlaps', () => {
+    const twoLines: SideNameLines = () => 2;
+    let changed = 0;
+    for (const screen of [
+      [1366, 768],
+      [1920, 1080],
+      [2560, 1440],
+    ] as Array<[number, number]>)
+      for (const zoom of [0.5, 0.67, 1, 1.5])
+        for (const full of [false, true]) {
+          const room = windowRoom(screen, zoom, full);
+          for (const [inCount, outCount, bothCount] of [
+            [1, 2, 8],
+            [2, 0, 8],
+            [3, 0, 4],
+            [10, 10, 4],
+            [16, 16, 8],
+          ])
+            for (const order of ['count', 'qort'] as const) {
+              const g = {
+                in: side('in', inCount, mixedSizes(inCount)),
+                out: side('out', outCount, mixedSizes(outCount)),
+                both: bothSide(bothCount, mixedSizes(bothCount)),
+              };
+              const fit = fitCircle(g, order, room, around, twoLines);
+              const what = `${screen.join('x')} at ${zoom * 100} %${full ? ', full screen' : ''}, ${inCount}/${outCount}/${bothCount} ${order}`;
+              expect(
+                circleOverlaps(
+                  fit.layout,
+                  fit.options,
+                  fit.width,
+                  fit.height,
+                  amountRows,
+                  twoLines
+                ),
+                what
+              ).toEqual([]);
+              const plain = fitCircle(g, order, room, around);
+              if (plain.width !== fit.width || plain.height !== fit.height)
+                changed += 1;
+            }
+        }
+    // Somewhere the second lines take room of their own.
+    expect(changed).toBeGreaterThan(0);
+    // An ordinary window where they need it: three on the left, four at the bottom.
+    const narrow = fitCircle(
+      groups(3, 0, 4),
+      'count',
+      { ordinary: 600, big: null },
+      around,
+      twoLines
+    );
+    expect(
+      circleOverlaps(
+        narrow.layout,
+        narrow.options,
+        narrow.width,
+        narrow.height,
+        amountRows,
+        twoLines
+      )
+    ).toEqual([]);
   });
 
   it('full screen draws every account it may, names given more room, all of it in the height it shows where it fits there', () => {

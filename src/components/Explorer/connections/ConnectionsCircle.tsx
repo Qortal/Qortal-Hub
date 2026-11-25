@@ -67,6 +67,9 @@ import {
   nodeWeight,
   receivedShare,
   RING,
+  SIDE_AMOUNT_GAP,
+  sideNameLines,
+  sideNameRoom,
   TINY_LAYOUT,
   type AmountRows,
   type CircleLayout,
@@ -75,10 +78,11 @@ import {
   type CircleSide,
   type LayoutOptions,
   type PlacedNode,
+  type SideNameLines,
 } from '../../../lib/explorer/circle';
 import type { Finding } from '../../../lib/explorer/findings';
 import { formatCount } from '../../../lib/explorer/format';
-import { wrapRows } from '../../../lib/explorer/textWidth';
+import { textWidth, wrapRows } from '../../../lib/explorer/textWidth';
 import { useNearScreen, useStepState } from '../ExplorerContext';
 import { ExplorerAvatar } from '../ExplorerSearchField';
 import { cap, EXPLORER_WINDOW_WIDTH, isolate, mutedText } from '../parts';
@@ -119,6 +123,8 @@ const HEAD_ROOM = 68;
 const BOTH_HEAD_ROOM = 68;
 /** The amounts under a bottom avatar (px): 0.75rem. */
 const AMOUNT_PX = 12;
+/** The names and amounts beside the avatars (px): 0.875rem. */
+const SIDE_PX = 14;
 
 /**
  * The room the circle has, in CSS px, measured and followed as it changes
@@ -343,6 +349,7 @@ function CircleNodeButton({
   order,
   named,
   room,
+  twoLines,
   near,
   onActive,
   onPick,
@@ -355,6 +362,11 @@ function CircleNodeButton({
   named: boolean;
   /** How wide its name may be (px). */
   room: number;
+  /**
+   * A second line is made for its amount (beside the name it could leave
+   * the name too little room): it goes under the name when both don't fit.
+   */
+  twoLines: boolean;
   near: boolean;
   onActive: (key: string | null) => void;
   onPick: (node: CircleNode) => void;
@@ -461,9 +473,12 @@ function CircleNodeButton({
                 : node.side === 'in'
                   ? 'row-reverse'
                   : 'row',
-              fontSize: '0.875rem',
+              // Where a line is made for it, the amount goes under the name
+              // when both don't fit on one, each line against the avatar.
+              flexWrap: twoLines ? 'wrap' : 'nowrap',
+              fontSize: `${SIDE_PX / 16}rem`,
               fontWeight: 600,
-              gap: below ? 0 : 0.5,
+              gap: below ? 0 : `0 ${SIDE_AMOUNT_GAP}px`,
               lineHeight: 1.2,
               maxWidth: `${Math.max(0, Math.floor(room))}px`,
               pointerEvents: 'none',
@@ -505,6 +520,12 @@ function CircleNodeButton({
                   color: mutedText(theme),
                   flexShrink: 0,
                   fontWeight: 500,
+                  // Whole beside the name (it leaves the name its room); on
+                  // a line of its own, cut short only where it can't fit.
+                  maxWidth: '100%',
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
                 })}
               >
                 {t('explorer:circle.side_amount', { amount: moved })}
@@ -803,6 +824,24 @@ export function ConnectionsCircle({
       ),
     [t, language]
   );
+  // The lines a name beside an avatar may take in a drawing so wide: one
+  // more for its amount where, beside it, it would leave the name too
+  // little.
+  const sideLines: SideNameLines = useMemo(
+    () => (node, width) => {
+      const moved = shortMoved(node, language);
+      return sideNameLines(
+        Math.floor(sideNameRoom(node, width, PAD)),
+        moved
+          ? textWidth(
+              String(t('explorer:circle.side_amount', { amount: moved })),
+              SIDE_PX
+            )
+          : null
+      );
+    },
+    [t, language]
+  );
   // In an ordinary window, as wide as its column, at most Q-Mintership+'s;
   // in a bigger one (full screen), as wide and as detailed as fits in what
   // the window shows (fitCircle), centred on it.
@@ -832,9 +871,10 @@ export function ConnectionsCircle({
           bottomPadOf(layout, options, width, height, rows) +
           (layout.placed.some((node) => node.side === 'both')
             ? BOTH_HEAD_ROOM
-            : 0)
+            : 0),
+        sideLines
       ),
-    [groups, order, ordinary, widest, view, rows]
+    [groups, order, ordinary, widest, view, rows, sideLines]
   );
   const { options, layout, width, height } = fit;
   const { placed, rest } = layout;
@@ -846,10 +886,7 @@ export function ConnectionsCircle({
   const roomOf = (node: PlacedNode) =>
     node.side === 'both'
       ? (names.get(node.key)?.room ?? options.bottomNameMax)
-      : ((node.side === 'out' ? 100 - node.x : node.x) / 100) * width +
-        PAD -
-        nodeRadius(node.size) -
-        LABEL_MARGIN;
+      : sideNameRoom(node, width, PAD);
   const bottomPad = bottomPadOf(layout, options, width, height, rows);
   const drawnWidth = width + 2 * PAD;
   const all = [...groups.in, ...groups.out, ...groups.both, ...groups.other];
@@ -885,6 +922,7 @@ export function ConnectionsCircle({
             order={order}
             named={named}
             room={roomOf(node)}
+            twoLines={named && side !== 'both' && sideLines(node, width) > 1}
             near={near}
             onActive={setActive}
             onPick={(next) => setPickedKey(next.key)}

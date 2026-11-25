@@ -260,7 +260,10 @@ after another and the lines fade in, never with reduced motion.
   worked out from its width so that no two avatars (each a 44 px button), no
   name and another avatar, and nothing and the middle overlap (`circleHeight`;
   `circleOverlaps` checks it at every width, in the tests). Names sit beside
-  the avatars only from 600 px; narrower, the buttons say them. A bottom
+  the avatars only from 600 px; narrower, the buttons say them. Where a
+  name's amount would leave it less than 128 px beside it (a long amount, a
+  Q-Asset's long name, a narrow window), the height is made for a second
+  line, and the amount goes under the name when both don't fit on one. A bottom
   avatar's amounts wrap where its name is narrow, and the room under it is
   made for the rows they take: counted at the whole px the name is drawn at,
   less 1 px, from widths estimated never narrower than Hub draws them

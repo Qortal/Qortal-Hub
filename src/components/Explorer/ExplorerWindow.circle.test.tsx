@@ -16,11 +16,23 @@ vi.mock('../../App', () => ({
   getBaseApiReact: () => 'http://node.test',
 }));
 
+// The circle's layout as it is, watched: what the drawing was laid out with.
+vi.mock('../../lib/explorer/circle', async (importOriginal) => {
+  const real =
+    await importOriginal<typeof import('../../lib/explorer/circle')>();
+  return { ...real, fitCircle: vi.fn(real.fitCircle) };
+});
+
 import '../../i18n/i18n';
 import { userInfoAtom } from '../../atoms/global';
 import Base58Module from '../../encryption/Base58';
 import { darkTheme } from '../../styles/theme-dark';
 import { KNOWN_EXCHANGES } from '../../lib/explorer/exchanges';
+import {
+  fitCircle,
+  type CircleFit,
+  type PlacedNode,
+} from '../../lib/explorer/circle';
 import { NULL_ACCOUNT } from '../../lib/explorer/reads';
 import { executeEvent } from '../../utils/events';
 import { ExplorerWindow } from './ExplorerWindow';
@@ -1334,6 +1346,72 @@ describe('Connections as a circle', () => {
     collect(watcher.takeRecords());
     watcher.disconnect();
     expect([...sizes]).toEqual(['880']);
+  });
+
+  it('a name beside an avatar keeps its room: an amount too long beside it gets a line of its own', async () => {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(
+      () => 1100
+    );
+    // Third got a Q-Asset with a long name: beside Third's name, its amount
+    // would leave the name no room. Six more were paid 2 QORT each.
+    routes.push(
+      viewer(LEVEL_FIVE),
+      ...publisherNode({
+        payments: [
+          tx('TRANSFER_ASSET', 1_500_100, {
+            creatorAddress: PUBLISHER,
+            recipient: THIRD,
+            amount: '5',
+            assetId: 77,
+            assetName: 'Community Garden Allotment Shares',
+          }),
+          ...manyPayments(0, 6, 0),
+        ],
+        orders: false,
+      })
+    );
+    renderWindow();
+    await lookUp(PUBLISHER);
+    await within(dialog()).findByRole('heading', {
+      level: 2,
+      name: 'Publisher',
+    });
+    const { figure } = await openCircle();
+    const sent = within(figure).getByRole('list', {
+      name: 'Sent to: the most transactions first',
+    });
+    const labelOf = async (name: RegExp) => {
+      const button = await within(sent).findByRole('button', { name }, T);
+      // Beside its button: the name and the amount, as drawn.
+      const label = button.parentElement?.querySelector(
+        ':scope > [aria-hidden="true"]'
+      );
+      expect(label).toBeInstanceOf(HTMLElement);
+      return label as HTMLElement;
+    };
+    const third = await labelOf(/^\u2068?Third\u2069?, /);
+    await waitFor(() => expect(third).toHaveTextContent(/^Third/), T);
+    expect(third).toHaveTextContent('(5 Community Garden Allotment Shares)');
+    // A line is made for its amount, which goes under the name when both
+    // don't fit on one.
+    expect(window.getComputedStyle(third).flexWrap).toBe('wrap');
+    // The top account's short amount, with room beside its name: one line.
+    const top = within(sent).getAllByRole('button')[0];
+    const topLabel = top.parentElement?.querySelector(
+      ':scope > [aria-hidden="true"]'
+    );
+    expect(topLabel).toHaveTextContent('(2 QORT)');
+    expect(window.getComputedStyle(topLabel as HTMLElement).flexWrap).toBe(
+      'nowrap'
+    );
+    // The drawing was laid out with that second line, not only drawn with it.
+    const { calls, results } = vi.mocked(fitCircle).mock;
+    const sideLines = calls[calls.length - 1][4];
+    const fit = results[results.length - 1].value as CircleFit;
+    const placed = (address: string) =>
+      fit.layout.placed.find((node) => node.address === address) as PlacedNode;
+    expect(sideLines?.(placed(THIRD), fit.width)).toBe(2);
+    expect(sideLines?.(placed(`Q${'K'.repeat(31)}11`), fit.width)).toBe(1);
   });
 
   it('a bottom avatar’s amounts that wrap get the room under it', async () => {
