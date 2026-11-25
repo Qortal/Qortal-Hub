@@ -148,7 +148,9 @@ transactions behind it (as the Transactions tab's rows). Never a verdict.
     list stopped short);
   - names bought or sold;
   - Q-Asset trades, by the other account: its orders filled at least in part
-    (`/assets/orders/<address>`, three reads for Core's exact filters), each
+    (`/assets/orders/<address>`, three reads for Core's exact filters; none for
+    an account that never signed a transaction, which Core says it doesn't
+    know, as it finds orders by public key), each
     one's trades and who placed the other order, the newest 100 filled orders
     at most, and up to 1,000 trades an order (one more says whether an order
     had more, and the tab says how many were cut off); the two order

@@ -1001,6 +1001,35 @@ describe('Connections', () => {
     );
   });
 
+  it('an account that never signed a transaction has no Q-Asset orders: found none, never “couldn’t be read”', async () => {
+    // Core finds orders by the account's public key, and says it doesn't
+    // know an account without one.
+    routes.push(
+      viewer(LEVEL_FIVE),
+      (path) =>
+        path.startsWith(`/assets/orders/${PUBLISHER}?`)
+          ? {
+              status: 404,
+              body: { error: 124, message: 'account address unknown' },
+            }
+          : undefined,
+      ...publisherNode({ names: [], minting: [] })
+    );
+    renderWindow();
+    await lookUp(PUBLISHER);
+    const panel = await openConnections();
+    await waitFor(
+      () =>
+        expect(panel).toHaveTextContent(
+          /Also checked, nothing found: [^.]*Q-Asset trades\./
+        ),
+      T
+    );
+    expect(panel).toHaveTextContent(/its filled Q-Asset orders \(none\)/);
+    expect(panel).not.toHaveTextContent(/Couldn't read its Q-Asset trades/);
+    expect(panel).not.toHaveTextContent(/couldn't be read/);
+  });
+
   it('a list that stopped short says how far it read, claims nothing beyond it, and reads 100 older on request', async () => {
     const page = (offset: number): Answer => ({
       body: Array.from({ length: offset < 100 ? 100 : 20 }, (_, i) =>
