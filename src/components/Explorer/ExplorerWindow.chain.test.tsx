@@ -22,6 +22,7 @@ import { lightTheme } from '../../styles/theme-light';
 import { CHAIN_TYPES } from '../../lib/explorer/chainTx';
 import { executeEvent } from '../../utils/events';
 import { ExplorerWindow } from './ExplorerWindow';
+import { recentKey } from '../../lib/explorer/recent';
 
 // These tests drive the whole Explorer window against a made-up node: up to
 // about 3-5 s each on a fast machine, past Vitest's 5 s default on a busy CI
@@ -1665,6 +1666,75 @@ describe('the keyboard, from one list to another', () => {
     ).toBeInTheDocument();
     await settle();
     expect(names).toHaveFocus();
+  });
+
+  it('a page that comes in while a menu item has the keyboard leaves it there', async () => {
+    window.localStorage.setItem(recentKey(READER), JSON.stringify([READER]));
+    node.rows = range(0, 30).map((n) => payment(n));
+    await openChainStep();
+    const list = await results();
+    await waitFor(() => expect(rowButtons(list)).toHaveLength(20));
+    const slow = hold();
+    node.special = (path) =>
+      isChainSearch(path) && params(path).get('offset') === '20'
+        ? { ...(chainRoute(path) as Answer), delay: slow.until }
+        : undefined;
+    act(() => showMoreButton(list).focus());
+    fireEvent.click(showMoreButton(list));
+    await waitFor(() => expect(chainSearches()).toHaveLength(2));
+    // While the page reads, the settings menu opens and the keyboard goes down
+    // it, to an item out of the tab order.
+    fireEvent.click(
+      within(dialog()).getByRole('button', { name: 'Explorer settings' })
+    );
+    const item = await screen.findByRole('menuitem', {
+      name: /clear recent explorations/i,
+    });
+    act(() => item.focus());
+    expect(item).toHaveFocus();
+    await act(async () => {
+      slow.release();
+      await slow.until;
+    });
+    await waitFor(() => expect(rowButtons(list)).toHaveLength(30));
+    await settle();
+    expect(item).toHaveFocus();
+  });
+
+  it("a page that comes in after the waiting part's Retry leaves the keyboard on the step's heading", async () => {
+    let fail = true;
+    node.rows = range(0, 30).map((n) => payment(n));
+    const slow = hold();
+    node.special = (path) => {
+      if (path.startsWith('/transactions/unconfirmed?') && fail)
+        return { status: 503, body: { error: 1, message: 'busy' } };
+      if (isChainSearch(path) && params(path).get('offset') === '20')
+        return { ...(chainRoute(path) as Answer), delay: slow.until };
+      return undefined;
+    };
+    await openChainStep();
+    const list = await results();
+    await waitFor(() => expect(rowButtons(list)).toHaveLength(20));
+    const message = await within(dialog()).findByText(
+      "Couldn't check what waits for a block."
+    );
+    act(() => showMoreButton(list).focus());
+    fireEvent.click(showMoreButton(list));
+    await waitFor(() => expect(chainSearches()).toHaveLength(2));
+    // While the page reads, the waiting part's Retry goes once pressed and
+    // leaves the keyboard on the step's heading, to stay there.
+    fail = false;
+    fireEvent.click(
+      await findRetry(message.closest('[role="alert"]') as HTMLElement)
+    );
+    expect(stepTitle()).toHaveFocus();
+    await act(async () => {
+      slow.release();
+      await slow.until;
+    });
+    await waitFor(() => expect(rowButtons(list)).toHaveLength(30));
+    await settle();
+    expect(stepTitle()).toHaveFocus();
   });
 
   it('stays on Refresh pressed while Show older reads', async () => {
