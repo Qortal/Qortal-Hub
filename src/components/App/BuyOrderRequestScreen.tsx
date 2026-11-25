@@ -1,7 +1,12 @@
 import { Box } from '@mui/material';
 import { Trans, useTranslation } from 'react-i18next';
 import { Spacer } from '../../common/Spacer';
-import { CustomButton, TextItalic, TextP, TextSpan } from '../../styles/App-styles.ts';
+import {
+  CustomButton,
+  TextItalic,
+  TextP,
+  TextSpan,
+} from '../../styles/App-styles.ts';
 import { ErrorText } from '../index';
 
 type CrosschainInfo = {
@@ -46,7 +51,11 @@ export function BuyOrderRequestScreen({
         <Trans
           i18nKey="message.generic.buy_order_request"
           ns="core"
-          components={{ br: <br />, italic: <TextItalic />, span: <TextSpan /> }}
+          components={{
+            br: <br />,
+            italic: <TextItalic />,
+            span: <TextSpan />,
+          }}
           values={{ hostname, count: crosschainAtInfo.length }}
           tOptions={{ postProcess: ['capitalizeFirstChar'] }}
         />

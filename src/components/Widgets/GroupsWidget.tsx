@@ -51,6 +51,8 @@ import {
   joinRequestsCacheAtom,
   memberGroupsWithReticulumChatAtom,
   myGroupsWhereIAmAdminAtom,
+  notificationSettingsCacheAtom,
+  globalNotificationFormAtom,
   reticulumChatEnabledAtom,
   timestampEnterDataAtom,
   userInfoAtom,
@@ -65,6 +67,7 @@ import {
   getBlueTier1ButtonSx,
   getBlueTier1PillSurface,
 } from '../Group/groupActivityColorSystem';
+import { getGroupUnreadCountConsideringMute } from '../../utils/qChatNotificationSettings';
 import { GroupActivityEmptyStateGraphic } from '../Group/GroupActivityEmptyStateGraphic';
 import {
   orderReticulumGroups,
@@ -885,6 +888,8 @@ export const GroupsWidget = ({
   const groupInvitesCacheRef = useRef(groupInvitesCache);
   const joinRequestsCacheRef = useRef(joinRequestsCache);
   const dismissedIdsMutationVersionRef = useRef(0);
+  const muteCache = useAtomValue(notificationSettingsCacheAtom);
+  const globalNotifForm = useAtomValue(globalNotificationFormAtom);
   const [activeTab, setActiveTab] = useState<GroupsWidgetTab>('notifications');
   const [manualGroupOrder, setManualGroupOrder] = useState(
     readReticulumGroupOrder
@@ -1018,9 +1023,17 @@ export const GroupsWidget = ({
           }
           const groupId = String(numericGroupId);
           const summary = group?.reticulumChatSummary;
+          const groupSettings = muteCache[String(group?.groupId)];
           const newMessageCount = Math.max(
             0,
-            Math.trunc(Number(summary?.unreadCount) || 0)
+            Math.trunc(
+              getGroupUnreadCountConsideringMute(
+                groupSettings,
+                summary,
+                0,
+                globalNotifForm
+              )
+            )
           );
           const mentionCount = Math.max(
             0,

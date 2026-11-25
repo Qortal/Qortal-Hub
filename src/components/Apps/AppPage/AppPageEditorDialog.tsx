@@ -252,7 +252,6 @@ export const AppPageEditorDialog = ({
     setFilesProgress(null);
     setSaving(false);
     // Only on opening: later prop changes must not wipe the edits.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // The page or screenshots arrived after opening: start from them, unless

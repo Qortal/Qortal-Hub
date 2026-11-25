@@ -134,8 +134,8 @@ Never hand-edit twelve locale files; that is how a key goes missing from one
 language. The scripts live with the `i18n` agent skill in
 `.agents/skills/i18n/`, all run from the repo root and take `--help`:
 
-| Task                               | Command                                                                         |
-| ---------------------------------- | ------------------------------------------------------------------------------- |
+| Task                               | Command                                                                 |
+| ---------------------------------- | ----------------------------------------------------------------------- |
 | Find hardcoded strings             | `python3 .agents/skills/i18n/i18n_scan_hardcoded.py <path>`             |
 | Add new keys to all twelve locales | `python3 .agents/skills/i18n/i18n_add_keys.py <namespace> <patch.json>` |
 | Apply reviewed translations        | `python3 .agents/skills/i18n/i18n_apply_translations.py <file.json>`    |

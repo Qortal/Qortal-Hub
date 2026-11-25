@@ -211,7 +211,7 @@ function InviteCard({ groupId }: { groupId: string }) {
     group?.groupType === 'OPEN';
   const description = group?.description ?? group?.groupDescription ?? '';
   const memberCount = Number(group?.memberCount) || 0;
-  const groupScore = useReticulumGroupScore(groupId, isOpen);
+  const groupScore = useReticulumGroupScore(groupId);
   const groupScoreColor = groupScore
     ? getReticulumGroupScoreColor(groupScore.score)
     : 'rgba(151,161,178,0.38)';

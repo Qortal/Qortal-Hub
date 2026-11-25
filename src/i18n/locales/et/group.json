@@ -31,6 +31,7 @@
     "scroll_bottom": "keri alla",
     "scroll_unread_messages": "keri lugemata sõnumite juurde",
     "select_group": "vali rühm",
+    "update_group": "update group",
     "visit_q_mintership": "külasta Q-Vermimist"
   },
   "activity_dashboard": {
@@ -61,16 +62,19 @@
     "approval_single": "Üks",
     "approval_threshold_description": "Grupi otsuste kinnitamiseks vajalik administraatorite osakaal.",
     "approval_threshold_label": "Kinnitamise lävi",
+    "button_update": "Update Group",
     "creating": "Loomine...",
     "description_create": "Vali nimi, kirjelda oma gruppi ja alusta.",
     "description_invites": "Vaata üle saadud kutsed.",
     "description_placeholder": "Millest see grupp räägib?",
     "description_too_long": "Kirjeldus ei tohi olla pikem kui {{max}} tähemärki",
+    "description_update": "Modify group settings and update configuration.",
     "max_delay_label": "Suurim kinnitamise viivitus",
     "min_delay_label": "Vähim kinnitamise viivitus",
     "modes_aria": "Grupi haldusrežiimid",
     "name_hint": "Kasuta selget ja äratuntavat nime.",
-    "name_placeholder": "nt Qortali arendajad"
+    "name_placeholder": "nt Qortali arendajad",
+    "updating": "Updating..."
   },
   "admin_space": {
     "ask_description": "This key encrypts content visible only to admins.",
@@ -209,13 +213,22 @@
     "create_category": "Loo kategooria",
     "create_channel": "Loo kanal",
     "hidden_users": "Peidetud kasutajad",
+    "hide_muted_channels": "Hide Muted Channels",
     "invite_link_copied": "Kutselink kopeeritud",
     "invite_link_copy_failed": "Kutselinki ei õnnestunud kopeerida",
     "leave_group": "Lahku rühmast",
+    "mark_all_groups_read": "mark all groups as read",
     "mark_all_read": "Märgi kõik loetuks",
     "mark_as_read": "Märgi loetuks",
+    "mute_channel": "Mute Channel",
+    "mute_group": "Mute Group",
     "mute_push_notifications": "Summuta tõuketeavitused",
-    "unmute_push_notifications": "Lõpeta tõuketeavituste summutamine"
+    "mute_section": "Mute Section",
+    "muted_for": "Muted for {{hours}}",
+    "notification_settings": "notification settings",
+    "unmute": "Unmute",
+    "unmute_push_notifications": "Lõpeta tõuketeavituste summutamine",
+    "update_group": "Update group"
   },
   "dashboard": {
     "account_overview": "Konto ülevaade",
@@ -848,6 +861,9 @@
       "group_member_admin": "liikme administraatoriks tegemine õnnestus. Muutuste levimine võib võtta paar minutit",
       "group_promotion": "reklaami avaldamine õnnestus. Reklaami ilmumine võib võtta paar minutit",
       "group_remove_member": "liikme administraatori staatusest eemaldamine õnnestus. Muutuste levimine võib võtta paar minutit",
+      "group_update_label": "updated group {{group_name}}: success!",
+      "group_update_name": "updated group {{group_name}}: awaiting confirmation",
+      "group_updated": "successfully updated group. It may take a couple of minutes for the changes to propagate",
       "invitation_cancellation": "kutse tühistamine õnnestus. Muutuste levimine võib võtta paar minutit",
       "invitation_request": "liitumistaotluse vastuvõtmine: ootan kinnitust",
       "loading_threads": "laadin teemasid... palun oota.",
@@ -890,6 +906,26 @@
     "try_again": "Proovi uuesti",
     "unencrypted": "Krüpteerimata",
     "verification_failed": "Kontrollimine ebaõnnestus"
+  },
+  "mute": {
+    "for_15_minutes": "For 15 Minutes",
+    "for_1_hour": "For 1 Hour",
+    "for_24_hours": "For 24 Hours",
+    "for_3_hours": "For 3 Hours",
+    "for_8_hours": "For 8 Hours",
+    "until_i_turn_it_back_on": "Until I turn it back on"
+  },
+  "notification_settings": {
+    "all_messages": "all messages",
+    "all_messages_body": "New message in #{{channelName}}",
+    "all_messages_title": "New message in {{groupName}}",
+    "hide_muted_channels": "Hide Muted Channels",
+    "none": "none",
+    "notify_on_reactions": "Notify on Reactions",
+    "notify_on_replies": "notify on replies",
+    "notify_on_welcome_posts": "notify on welcome posts",
+    "only_mentions": "only @mentions",
+    "suppress_everyone_here": "suppress @everyone and @here"
   },
   "onboarding": {
     "action": {

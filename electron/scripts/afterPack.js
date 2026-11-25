@@ -20,7 +20,11 @@ module.exports = async function afterPack(context) {
   }
 
   const reticulumExecutables = ['rnsd', 'presence_bridge'];
-  if (plat.includes('linux') || plat.includes('mac') || plat.includes('darwin')) {
+  if (
+    plat.includes('linux') ||
+    plat.includes('mac') ||
+    plat.includes('darwin')
+  ) {
     for (const name of reticulumExecutables) {
       const exePath = path.join(reticulumDir, name);
       if (!fs.existsSync(exePath)) continue;

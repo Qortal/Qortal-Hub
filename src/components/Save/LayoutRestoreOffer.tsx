@@ -29,7 +29,6 @@ export const LayoutRestoreOffer = () => {
   useEffect(() => {
     if (offer.length) setOffered(offer);
     // The parts, not the array, which is new on every change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offer.join()]);
 
   // Restored: it says so for a moment, then goes.

@@ -58,6 +58,7 @@ import {
   sendChatNotification,
   sendCoin,
   setGroupData,
+  updateGroup,
   updateThreadActivity,
   walletVersion,
 } from '../background/background.ts';
@@ -667,6 +668,49 @@ export async function createGroupCase(request, event) {
       {
         requestId: request.requestId,
         action: 'createGroup',
+        error: error?.message,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  }
+}
+
+export async function updateGroupCase(request, event) {
+  try {
+    const {
+      groupId,
+      newOwner,
+      newIsOpen,
+      newDescription,
+      newApprovalThreshold,
+      newMinimumBlockDelay,
+      newMaximumBlockDelay,
+    } = request.payload;
+    const response = await updateGroup({
+      groupId,
+      newOwner,
+      newIsOpen,
+      newDescription,
+      newApprovalThreshold,
+      newMinimumBlockDelay,
+      newMaximumBlockDelay,
+    });
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'updateGroup',
+        payload: response,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'updateGroup',
         error: error?.message,
         type: 'backgroundMessageResponse',
       },

@@ -5,7 +5,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 // Initialises the shared i18n instance so useTranslation resolves real strings
 // rather than returning raw keys.
 import '../../i18n/i18n';
@@ -420,6 +420,124 @@ describe('Reticulum ChatList channel handoff', () => {
 
     expect(virtualizer.getOffsetForIndex).toHaveBeenCalledWith(4, 'start');
     expect(virtualizer.scrollToIndex).not.toHaveBeenCalled();
+  });
+
+  it('lands on the measured unread row, not the estimated one', async () => {
+    // Regression: "loading a channel scrolls days above the newest message".
+    //
+    // A channel lands on its first unread row while the viewport is hidden. The
+    // offset for that row is only the virtualizer estimate (120px per row) until
+    // the rows are measured, and a real chat row is routinely two to four times
+    // taller. Measurement arrives a few frames later through ResizeObserver.
+    //
+    // The reveal used to fire on the very next frame — the same batch as the
+    // first correction — and it called `clearScrollRetries()` on the way out.
+    // That cancelled the corrections that had not run yet, so the viewport was
+    // exposed at the estimate: on a 4,000-message channel the estimate is days
+    // of history above the unread boundary.
+    const ESTIMATE = 120;
+    const MEASURED = 320;
+    const MESSAGE_COUNT = 12;
+    // The first unread message. It is far enough from the end that the list must
+    // land on the boundary rather than take the "unread fits on screen, go to
+    // the bottom" shortcut.
+    const unreadIndex = 4;
+    const unreadCount = MESSAGE_COUNT - unreadIndex;
+    // Frames before the virtualizer knows the real row heights.
+    const MEASURED_FROM_FRAME = 4;
+
+    let frame = 0;
+    const defaultOffsetForIndex =
+      virtualizer.getOffsetForIndex.getMockImplementation();
+    virtualizer.getOffsetForIndex.mockImplementation((index, align) => {
+      const unit = frame >= MEASURED_FROM_FRAME ? MEASURED : ESTIMATE;
+      return [index * unit, align] as const;
+    });
+    onTestFinished(() => {
+      if (defaultOffsetForIndex) {
+        virtualizer.getOffsetForIndex.mockImplementation(defaultOffsetForIndex);
+      } else {
+        virtualizer.getOffsetForIndex.mockReset();
+      }
+    });
+
+    const longHistory = Array.from({ length: MESSAGE_COUNT }, (_, index) =>
+      message(`message-${index}`, index === 1 ? 'Qme' : 'Qremote')
+    );
+
+    const { container } = render(
+      <ChatList
+        {...baseProps}
+        chatId="group-1:tall-rows"
+        initialMessages={longHistory}
+        reticulumUnreadCount={unreadCount}
+      />
+    );
+
+    const viewport = container.querySelector(
+      '[data-reticulum-chat-scroll-viewport="true"]'
+    ) as HTMLDivElement;
+    const targetRow = container.querySelector(
+      `[data-index="${unreadIndex}"]`
+    ) as HTMLElement | null;
+    expect(targetRow).not.toBeNull();
+
+    let scrollTop = 0;
+    Object.defineProperties(viewport, {
+      clientHeight: { configurable: true, get: () => 300 },
+      scrollHeight: {
+        configurable: true,
+        get: () => MESSAGE_COUNT * MEASURED,
+      },
+      scrollTop: {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value: number) => {
+          scrollTop = value;
+        },
+      },
+    });
+    // The mounted row reports where it really sits for the current scroll offset,
+    // which is what makes the estimate visibly wrong.
+    targetRow!.getBoundingClientRect = () =>
+      ({
+        top: unreadIndex * MEASURED - scrollTop,
+        bottom: unreadIndex * MEASURED - scrollTop + MEASURED,
+        height: MEASURED,
+        left: 0,
+        right: 0,
+        width: 0,
+        x: 0,
+        y: unreadIndex * MEASURED - scrollTop,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    const runFrame = async () => {
+      frame += 1;
+      const callbacks = [...animationFrames.values()];
+      animationFrames.clear();
+      await act(async () => {
+        callbacks.forEach((callback) => callback(performance.now()));
+      });
+    };
+
+    // Frame 1 runs the positioning decision and starts the row walk.
+    await runFrame();
+    // The reader must not see the estimated position while correction is in
+    // flight, even though the row has not been measured yet.
+    expect(viewport).toHaveStyle({ visibility: 'hidden' });
+
+    // Keep animating until the list reveals itself.
+    for (let pass = 0; pass < 20 && animationFrames.size > 0; pass += 1) {
+      await runFrame();
+    }
+
+    expect(viewport).toHaveStyle({ visibility: 'visible' });
+    // The final position is the measured offset of the unread row, not the
+    // estimate. 4 * 120 = 480 would be ~5 viewports too high.
+    expect(scrollTop).toBe(unreadIndex * MEASURED);
+    // Exactly the first unread message sits at the top of the viewport.
+    expect(targetRow!.getBoundingClientRect().top).toBe(0);
   });
 
   it('pins an all-read channel to the real bottom as rows settle', async () => {

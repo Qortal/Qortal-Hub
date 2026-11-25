@@ -153,12 +153,14 @@ class Semaphore {
 let semaphore = new Semaphore(1);
 let reader = new FileReader();
 
-const fileToBase64 = (file) =>
-  new Promise(async (resolve, reject) => {
-    if (!reader) {
-      reader = new FileReader();
-    }
-    await semaphore.acquire();
+const fileToBase64 = async (file) => {
+  // The semaphore is awaited before the promise is built: an async executor
+  // would strand this promise if the acquire threw.
+  if (!reader) {
+    reader = new FileReader();
+  }
+  await semaphore.acquire();
+  return new Promise((resolve, reject) => {
     reader.readAsDataURL(file);
     reader.onload = () => {
       const dataUrl = reader.result;
@@ -181,6 +183,7 @@ const fileToBase64 = (file) =>
       semaphore.release();
     };
   });
+};
 
 export function openIndexedDB() {
   return new Promise((resolve, reject) => {

@@ -24,30 +24,26 @@ export const reticulumHistoryItemSpecialId = (item: ReticulumHistoryChatItem) =>
 export const buildReticulumEditReference = (
   item: ReticulumHistoryChatItem
 ): ReticulumHistoryChatItem =>
-  mergeReticulumPayloadWithVerifiedEnvelope(
-    item.decryptedData || item,
-    {
-      // Content comes from the decrypted payload, but identity and ordering
-      // metadata must come from the verified event envelope. Besides
-      // preventing spoofing, retaining senderName lets the live reducer
-      // recognize that this edit already received its name refresh.
-      id: item.id,
-      signature: item.signature,
-      groupId: item.groupId,
-      channelId: item.channelId,
-      sender: item.sender,
-      senderName: item.senderName,
-      timestamp: item.timestamp,
-      expiresAt: item.expiresAt,
-      chatReference: item.chatReference,
-      eventType: item.eventType,
-      repliedTo: item.repliedTo,
-      reticulumChat: item.reticulumChat,
-      directMentionAuthorized: item.directMentionAuthorized === true,
-      privilegedMentionAuthorized:
-        item.privilegedMentionAuthorized === true,
-    }
-  );
+  mergeReticulumPayloadWithVerifiedEnvelope(item.decryptedData || item, {
+    // Content comes from the decrypted payload, but identity and ordering
+    // metadata must come from the verified event envelope. Besides
+    // preventing spoofing, retaining senderName lets the live reducer
+    // recognize that this edit already received its name refresh.
+    id: item.id,
+    signature: item.signature,
+    groupId: item.groupId,
+    channelId: item.channelId,
+    sender: item.sender,
+    senderName: item.senderName,
+    timestamp: item.timestamp,
+    expiresAt: item.expiresAt,
+    chatReference: item.chatReference,
+    eventType: item.eventType,
+    repliedTo: item.repliedTo,
+    reticulumChat: item.reticulumChat,
+    directMentionAuthorized: item.directMentionAuthorized === true,
+    privilegedMentionAuthorized: item.privilegedMentionAuthorized === true,
+  });
 
 export const isSameReticulumEditReference = (
   left: ReticulumHistoryChatItem | null | undefined,
@@ -55,15 +51,14 @@ export const isSameReticulumEditReference = (
 ) =>
   Boolean(
     left &&
-      right &&
-      left.signature &&
-      left.signature === right.signature &&
-      left.sender === right.sender &&
-      left.senderName === right.senderName &&
-      left.timestamp === right.timestamp &&
-      left.directMentionAuthorized === right.directMentionAuthorized &&
-      left.privilegedMentionAuthorized ===
-        right.privilegedMentionAuthorized
+    right &&
+    left.signature &&
+    left.signature === right.signature &&
+    left.sender === right.sender &&
+    left.senderName === right.senderName &&
+    left.timestamp === right.timestamp &&
+    left.directMentionAuthorized === right.directMentionAuthorized &&
+    left.privilegedMentionAuthorized === right.privilegedMentionAuthorized
   );
 
 export const reticulumHistoryEnvelopeNeedsRefresh = (
@@ -73,8 +68,8 @@ export const reticulumHistoryEnvelopeNeedsRefresh = (
 ) =>
   Boolean(
     current &&
-      ((senderName && current.senderName !== senderName) ||
-        current.privilegedMentionAuthorized !== privilegedMentionAuthorized)
+    ((senderName && current.senderName !== senderName) ||
+      current.privilegedMentionAuthorized !== privilegedMentionAuthorized)
   );
 
 /**

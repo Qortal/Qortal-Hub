@@ -158,10 +158,13 @@ func startFixture() (*fixture, map[string]interface{}, error) {
 		}
 		_ = f.proxy.ProxyConnectedSocket(w, req, egress)
 	})
-	f.relayServer = &http3.Server{ConnContext: func(ctx context.Context, c *quic.Conn) context.Context {
+	relayServer := &http3.Server{ConnContext: func(ctx context.Context, c *quic.Conn) context.Context {
 		return context.WithValue(ctx, benchmarkConnectionKey{}, c)
 	}, TLSConfig: &tls.Config{Certificates: []tls.Certificate{relayCert}, NextProtos: []string{http3.NextProtoH3}}, QUICConfig: &quic.Config{EnableDatagrams: true}, EnableDatagrams: true, Handler: mux}
-	go func() { _ = f.relayServer.Serve(relayUDP) }()
+	f.relayServer = relayServer
+	// Capture the server locally. stopRelay clears f.relayServer, so a goroutine
+	// that re-read the shared field could be scheduled late and dereference nil.
+	go func() { _ = relayServer.Serve(relayUDP) }()
 	relayPin := sha256.Sum256(relayDER)
 	backendPin := sha256.Sum256(backendDER)
 	return f, map[string]interface{}{"relayAddress": relayAddress, "relayServerName": "qortal-test-relay", "relayCertSha256": hex.EncodeToString(relayPin[:]), "backendAddress": f.backendAddress, "backendServerName": "qortal-test-backend", "backendCertSha256": hex.EncodeToString(backendPin[:]), "logicalSessionId": logicalSessionID, "attachToken": attachToken, "nonce": nonce, "purpose": purpose, "ownerBindingHash": ownerBindingHash, "expiresAt": time.Now().Add(time.Minute).UnixMilli(), "backendRnsDestination": "0123456789abcdef0123456789abcdef", "transport": "quic-masque-inner-v1"}, nil

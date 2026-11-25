@@ -1,6 +1,7 @@
 // @ts-nocheck
 import '../qortal/qortal-requests.ts';
 import { getNotificationOsPushDisabled } from '../qortal/qortal-requests';
+import { NOTIFICATION_DISPLAY_DURATION_MS } from '../constants/notificationConstants';
 import { isArray } from 'lodash';
 import { uint8ArrayToObject } from '../encryption/encryption.ts';
 import Base58 from '../encryption/Base58';
@@ -45,6 +46,16 @@ import { getWalletErrorMessage } from '../utils/walletErrorMessages';
 import PhraseWallet from '../utils/generateWallet/phrase-wallet';
 import { RequestQueueWithPromise } from '../utils/queue/queue';
 import { validateAddress } from '../utils/validateAddress';
+import {
+  invalidateNotificationSession,
+  notificationQueue,
+} from '../utils/notificationSession';
+import type { NotificationSessionToken } from '../utils/notificationQueue';
+import {
+  GENERAL_NOTIFICATION_TYPE_MARKER,
+  notificationClickRoute,
+  qchatNotificationIdForEvent,
+} from '../utils/notificationClickRoute';
 import { hasInvisibleCharacters } from '../utils/hasInvisibleCharacters';
 import { joinNodeEndpoint, nodePathSegment } from '../utils/nodeEndpointPath';
 import { Sha256 } from 'asmcrypto.js';
@@ -129,6 +140,7 @@ import {
   setCustomNodesCase,
   setGroupDataCase,
   setupGroupWebsocketCase,
+  updateGroupCase,
   updateThreadActivityCase,
   updateNameCase,
   userInfoCase,
@@ -173,23 +185,24 @@ const requestQueueAnnouncements = new RequestQueueWithPromise(1);
 
 const generalNotificationPayloadById = new Map();
 
-function handleNotificationClick(notificationId) {
+export function handleNotificationClick(notificationId) {
   if (typeof window?.electronAPI?.focusWindow === 'function') {
     window.electronAPI.focusWindow();
   }
   // Decode the notificationId if it was encoded
   const decodedNotificationId = decodeURIComponent(notificationId);
 
-  // Determine the type of notification by parsing decodedNotificationId
-  const isDirect = decodedNotificationId.includes('_type=direct_');
-  const isGroup = decodedNotificationId.includes('_type=group_');
-  const isGroupAnnouncement = decodedNotificationId.includes(
-    '_type=group-announcement_'
-  );
-  const isNewThreadPost = decodedNotificationId.includes('_type=thread-post_');
-  const isGeneralNotification = decodedNotificationId.includes(
-    '_type=general-notification'
-  );
+  // Determine the type of notification by parsing decodedNotificationId.
+  // The classification lives in an import-free module so it can be tested
+  // without the Electron shell: a mis-routed id means a click that lands
+  // nowhere, and that is exactly what shipping the event-keyed id without this
+  // branch did.
+  const route = notificationClickRoute(decodedNotificationId);
+  const isGeneralNotification = route === 'general';
+  const isDirect = route === 'direct';
+  const isGroup = route === 'group';
+  const isGroupAnnouncement = route === 'group-announcement';
+  const isNewThreadPost = route === 'thread-post';
 
   // Helper function to extract parameter values safely
   function getParameterValue(id, key) {
@@ -893,7 +906,15 @@ export const getLastRef = async () => {
   return data;
 };
 
-export const sendQortFee = async (): Promise<number> => {
+/**
+ * The PAYMENT fee the node quotes, as decimal text ("0.01000000").
+ *
+ * The declaration said `Promise<number>` while the body returned `.toFixed(8)`,
+ * a string. Nothing broke, because both callers parse the value, but the lie is
+ * why a correct `const fee: string = ...` at the call site looked like a type
+ * error. Declared for what it actually returns.
+ */
+export const sendQortFee = async (): Promise<string> => {
   const validApi = await getBaseApi();
   const response = await fetch(
     validApi + '/transactions/unitfee?txType=PAYMENT'
@@ -2222,11 +2243,22 @@ export async function inviteToGroup({
 }
 
 /**
- * Signs and sends a QORT PAYMENT. Callers resolve the recipient and read the
- * fee before their confirmation, show both, and pass the resolved address as
- * `receiver` and the shown fee as `approvedFee`: a higher fee from the node is
- * then refused before anything is signed. Without `approvedFee` only the fixed
- * fee ceiling applies.
+ * Signs and sends a QORT PAYMENT.
+ *
+ * `receiver` may be an address (including an AT) or a registered name; a name is
+ * resolved here, and that resolution is the address paid.
+ *
+ * The guarantee this range adds is about the *fee*, not the recipient: a caller
+ * that showed the user a fee passes it as `approvedFee`, and a higher fee from
+ * the node is then refused before anything is signed. Without `approvedFee` only
+ * the fixed fee ceiling applies.
+ *
+ * Callers that have already resolved the name should pass the address, so the
+ * address the confirmation displayed is the address paid. `get.ts` and the Send
+ * QORT dialog both do; passing a name means this function resolves it a second
+ * time, after the confirmation, and a name whose owner changed in between would
+ * pay the new owner. The previous wording claimed every caller resolves first,
+ * which the message-channel caller does not.
  */
 export async function sendCoin(
   {
@@ -2772,6 +2804,9 @@ function setupMessageListener() {
       case 'createGroup':
         createGroupCase(request, event);
         break;
+      case 'updateGroup':
+        updateGroupCase(request, event);
+        break;
       case 'cancelInvitationToGroup':
         cancelInvitationToGroupCase(request, event);
         break;
@@ -2964,6 +2999,13 @@ function setupMessageListener() {
             const logoutFunc = async () => {
               forceCloseWebSocket();
               clearAllQueues();
+              // Ends the notification session, so anything still queued for the
+              // account being logged out is skipped rather than presented under
+              // the next one. The array clear inside it is not enough on its
+              // own: a drain already past its shift re-checks the epoch, and a
+              // Q-Chat handler still awaiting its settings finds its captured
+              // token stale when it finally tries to enqueue.
+              invalidateNotificationSession();
               if (interval) {
                 // for announcement notification
                 clearInterval(interval);
@@ -3050,6 +3092,10 @@ const checkGroupList = async () => {
 };
 
 export const checkNewMessages = async () => {
+  // This check awaits settings before it presents, exactly as the notification
+  // queue does, so it needs the same ownership check: logout can end the session
+  // while a lookup here is in flight.
+  const session = notificationQueue.captureSession();
   try {
     let mutedGroups = (await getUserSettings({ key: 'mutedGroups' })) || [];
     if (!isArray(mutedGroups)) mutedGroups = [];
@@ -3116,6 +3162,8 @@ export const checkNewMessages = async () => {
 
     const isDisableNotifications =
       (await getUserSettings({ key: 'disable-push-notifications' })) || false;
+    // Awaited above; logout may have ended the session while it was in flight.
+    if (!notificationQueue.isSessionCurrent(session)) return;
 
     if (
       newAnnouncements.length > 0 &&
@@ -3166,57 +3214,184 @@ export const checkNewMessages = async () => {
   }
 };
 
+// The queue itself lives in src/utils/notificationSession.ts, because the
+// Q-Chat handlers that submit to it need the same session epoch to prove which
+// account their work belongs to. They capture it before their first await and
+// pass it here, so an item that resumes after an account switch is dropped.
+// See src/utils/notificationQueue.ts for the ownership rules.
+
 export const fireOsNotificationPayment = async (
   notificationPayload,
   title,
   messageBody,
   icon,
   qortalLink,
-  internalPayload
+  internalPayload,
+  deliveryMethod: 'native' | 'ephemeral' = 'native',
+  groupContext?: { groupId: number; channelId: string },
+  eventId?: string,
+  /**
+   * Queue identity, independent of `eventId`.
+   *
+   * `eventId` also drives the notification id the OS routes a click by, and a
+   * Q-Chat event id routes to `general`. A direct message must keep its own
+   * routing id, so it passes a key here instead of an event id: the queue still
+   * deduplicates and can cancel it, and the click still opens the DM.
+   */
+  queueKey?: string,
+  /**
+   * The session the work that produced this notification was started under.
+   *
+   * Callers that await before calling this — every Q-Chat handler looks its
+   * settings up, and some fetch channel metadata — capture the token at the top
+   * of the handler and pass it here. Without it the item would be stamped with
+   * the *current* epoch, which after a logout/login is the new account's, and
+   * the queue's ownership guards would read it as that account's notification:
+   * the previous account's sender name, group name and preview would be shown.
+   */
+  session?: NotificationSessionToken
 ) => {
-  try {
-    const isDisableNotifications =
-      (await getUserSettings({ key: 'disable-push-notifications' })) || false;
-    if (isDisableNotifications) return;
+  // Record which account queues this item, resolved from the wallet read that
+  // starts here rather than at presentation time. The settings lookup below
+  // reads whichever account is authenticated when it runs, so this is the only
+  // way to tell whether that is still the account the notification belongs to.
+  //
+  // Started before the enqueue so the submission is stamped synchronously: the
+  // queue's session epoch is captured at that moment, not after the read settles.
+  const queuedForAddress = getSaveWallet()
+    .then((wallet) => String(wallet?.address0 || ''))
+    .catch(() => '');
 
-    if (
-      notificationPayload?.event === 'RESOURCE_PUBLISHED' &&
-      notificationPayload?.appName
-    ) {
-      const osPushDisabled = await getNotificationOsPushDisabled(
-        notificationPayload.appName
+  // Keyed on the event when one is supplied. A post that reaches two handlers
+  // calls this twice, and the queue drains one item every few seconds, so
+  // without a key both items survive the drain and the user gets two desktop
+  // notifications for one message. The id is also the cancel key, so a DM
+  // deleted while its notification waits can drop it.
+  const effectiveQueueKey =
+    queueKey ?? (eventId ? qchatNotificationIdForEvent(eventId) : null);
+
+  const presentNotification = async (isSessionCurrent: () => boolean) => {
+    try {
+      const isDisableNotifications =
+        (await getUserSettings({ key: 'disable-push-notifications' })) || false;
+      // Awaited above, so the session may have ended while it was in flight.
+      if (!isSessionCurrent()) return;
+      if (isDisableNotifications) return;
+
+      if (
+        notificationPayload?.event === 'RESOURCE_PUBLISHED' &&
+        notificationPayload?.appName
+      ) {
+        const osPushDisabled = await getNotificationOsPushDisabled(
+          notificationPayload.appName
+        );
+        if (!isSessionCurrent()) return;
+        if (osPushDisabled) return;
+      }
+
+      // A queued item outlives the account that produced it. Presenting it under
+      // a different account would show the previous account's sender name and
+      // message body, decided by the new account's settings. Compared by address
+      // as well as by session, because a session can end and a new one begin
+      // without the queue noticing if the epoch was already captured.
+      const [ownedByAddress, currentAddress] = await Promise.all([
+        queuedForAddress,
+        getSaveWallet()
+          .then((wallet) => String(wallet?.address0 || ''))
+          .catch(() => ''),
+      ]);
+      if (!isSessionCurrent()) return;
+      // An item queued while nobody was signed in has no owner. Presenting it
+      // would show it under whichever account signs in next, which is the same
+      // leak as a cross-account item — the narrow gap left when the address
+      // check only fired for a non-empty owner. Work started for an account
+      // that logged out before the wallet read settled cannot be attributed, so
+      // it is dropped rather than guessed at.
+      if (!ownedByAddress) return;
+      if (currentAddress !== ownedByAddress) return;
+
+      // Keyed on the event when one is supplied, so the main-process sink can
+      // dedupe: it replaces an entry with the same id rather than adding a
+      // second one. `Date.now()` here meant every call looked like a new
+      // notification, so a post that reached two handlers produced two desktop
+      // notifications no matter what the renderer decided.
+      //
+      // Non-Q-Chat notifications (payments, app resources) have no eventId and
+      // keep the clock-derived id.
+      const notificationId = encodeURIComponent(
+        // Event-keyed when we have an event, so the sink can replace an entry
+        // rather than stack a second notification for the same post. Otherwise
+        // a clock-derived id, which carries the type marker the router needs.
+        qchatNotificationIdForEvent(eventId) ??
+          'general_notification_' + Date.now() + GENERAL_NOTIFICATION_TYPE_MARKER
       );
-      if (osPushDisabled) return;
+
+      generalNotificationPayloadById.set(
+        notificationId,
+        internalPayload ||
+          (qortalLink ? { link: qortalLink } : { openWallets: true })
+      );
+
+      if (
+        deliveryMethod === 'native' &&
+        window.reticulumChat?.showNotification
+      ) {
+        await window.reticulumChat.showNotification({
+          title,
+          body: messageBody,
+          icon: typeof icon === 'string' ? icon : undefined,
+          notificationId,
+          data: internalPayload || {},
+          groupContext,
+          eventId,
+        });
+      } else {
+        const notification = new window.Notification(title, {
+          body: messageBody,
+          icon,
+          data: { id: notificationId },
+        });
+
+        notification.onclick = () => {
+          handleNotificationClick(notificationId);
+          notification.close();
+        };
+
+        setTimeout(() => {
+          generalNotificationPayloadById.delete(notificationId);
+          notification.close();
+        }, NOTIFICATION_DISPLAY_DURATION_MS);
+      }
+    } catch (error) {
+      console.error(error);
     }
+  };
 
-    const notificationId = encodeURIComponent(
-      'general_notification_' + Date.now() + '_type=general-notification'
-    );
+  // `session`, when supplied, is checked at submission: if the session that
+  // produced this notification has ended, the queue drops the item outright. A
+  // handler that resumed after a logout/login therefore cannot present the
+  // previous account's sender, group name and preview — it never gets queued.
+  notificationQueue.enqueue(
+    presentNotification,
+    effectiveQueueKey ?? undefined,
+    session
+  );
+};
 
-    generalNotificationPayloadById.set(
-      notificationId,
-      internalPayload ||
-        (qortalLink ? { link: qortalLink } : { openWallets: true })
-    );
-
-    const notification = new window.Notification(title, {
-      body: messageBody,
-      icon,
-      data: { id: notificationId },
-    });
-
-    notification.onclick = () => {
-      handleNotificationClick(notificationId);
-      notification.close();
-    };
-
-    setTimeout(() => {
-      generalNotificationPayloadById.delete(notificationId);
-      notification.close();
-    }, 10000);
-  } catch (error) {
-    console.error(error);
-  }
+/**
+ * Drops a queued notification that is no longer wanted.
+ *
+ * A direct message can be deleted while its notification is still waiting in the
+ * drain queue several seconds out. Without this the message pops up after the
+ * user has already removed it.
+ *
+ * Takes the queue key, not an event id: a DM is queued under
+ * `dmNotificationQueueKey`, because using its event id as the notification id
+ * would re-route a click away from the conversation.
+ */
+export const cancelQueuedNotification = (queueKey: string | null) => {
+  const key = String(queueKey ?? '').trim();
+  if (key) notificationQueue.cancel(key);
 };
 
 const checkActiveChatsForNotifications = async () => {
@@ -3228,6 +3403,8 @@ const checkActiveChatsForNotifications = async () => {
 };
 
 export const checkThreads = async (bringBack) => {
+  // See checkNewMessages: awaited lookups below can outlive the session.
+  const session = notificationQueue.captureSession();
   try {
     let myName = '';
     const userData = await getUserInfo();
@@ -3340,11 +3517,15 @@ export const checkThreads = async (bringBack) => {
       );
       const isDisableNotifications =
         (await getUserSettings({ key: 'disable-push-notifications' })) || false;
+      // `null`, not bare `return`: this function's result is posted back to the
+      // caller by getThreadActivityCase, so it must not resolve to undefined.
+      if (!notificationQueue.isSessionCurrent(session)) return null;
       if (!isDisableNotifications) {
         // Check user settings to see if notifications are disabled
         const isDisableNotifications =
           (await getUserSettings({ key: 'disable-push-notifications' })) ||
           false;
+        if (!notificationQueue.isSessionCurrent(session)) return null;
 
         if (!isDisableNotifications) {
           const title = 'New thread post!';

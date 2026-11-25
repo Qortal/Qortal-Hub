@@ -54,11 +54,13 @@ import {
   sendChatGroup,
 } from '../background/background.ts';
 import {
+  checkSignedTransactionFee,
   checkValueTransferFee,
   formatAtomicAmount,
   parseAssetId,
   parseDecimalAmount,
   type ParsedAmount,
+  InvalidRecipientError,
   RecipientInvisibleCharactersError,
   recipientDisplayLabel,
 } from '../transactions/paymentSafety';
@@ -108,7 +110,10 @@ import {
 } from './permissionPromptQueue';
 import { isHubRequest, requestingAppFromAppInfo } from './requestingApp';
 import Base58 from '../encryption/Base58.ts';
-import { assertPublicKeyForAddress } from '../encryption/addressKeyCheck';
+import {
+  assertPublicKeyForAddress,
+  isValidQortalAddress,
+} from '../encryption/addressKeyCheck';
 import ed2curve from '../encryption/ed2curve.ts';
 import nacl from '../encryption/nacl-fast.ts';
 import {
@@ -2097,7 +2102,7 @@ export const publishQDNResource = async (
     appFeePayment = prepared.payment;
     Object.assign(handleDynamicValues, prepared.dialogValues);
   }
-  if (!!data?.encrypt) {
+  if (data?.encrypt) {
     handleDynamicValues['highlightedText'] = `isEncrypted: ${!!data.encrypt}`;
   }
 
@@ -2107,9 +2112,15 @@ export const publishQDNResource = async (
     appInfo?.name &&
     hasSessionPermission(appInfo.tabId, appInfo.name, 'PUBLISH_QDN_RESOURCE');
 
-  let acceptVar = hasPermission || false;
+  // A session grant covers the publish. It does not cover the app fee, which is
+  // a separate amount of QORT leaving the wallet that the user has never been
+  // shown. Skipping the dialog on a grant meant the fee was never displayed and
+  // `checkbox1Var` stayed false, so the branch that pays the app fee was skipped
+  // too: the app was silently never paid. With an app fee the dialog is always
+  // shown.
+  let acceptVar = (hasPermission && !hasAppFee) || false;
   let checkbox1Var = false;
-  if (!hasPermission) {
+  if (!hasPermission || hasAppFee) {
     const resPermission = await getUserPermission(
       {
         text1: i18n.t('question:permission.publish_qdn', {
@@ -2161,6 +2172,12 @@ export const publishQDNResource = async (
         tag5,
         apiVersion: 2,
         withFee: true,
+        // The fee the dialog showed, in the atomic unit `publishData` sends to
+        // Core as `?fee=`. Without it publishData re-reads the ARBITRARY fee at
+        // signing time and the amount the user approved is discarded.
+        feeAmount: Number(
+          parseDecimalAmount(fee.fee, { allowZero: true }).atomic
+        ),
         encryption: isStreamedEncryption ? encryption : null,
       });
       if (resPublish?.signature && appFeePayment && checkbox1Var) {
@@ -2427,9 +2444,12 @@ export const publishMultipleQDNResources = async (
       'PUBLISH_MULTIPLE_QDN_RESOURCES'
     );
 
-  let acceptVar = hasPermission || false;
+  // As in the single-resource path: a grant covers the publish, not the app fee.
+  // Skipping the dialog on a grant hid the fee and left `checkbox1Var` false, so
+  // the app fee was never paid.
+  let acceptVar = (hasPermission && !hasAppFee) || false;
   let checkbox1Var = false;
-  if (!hasPermission) {
+  if (!hasPermission || hasAppFee) {
     const resPermission = await getUserPermission(
       {
         text1: i18n.t('question:permission.publish_qdn', {
@@ -2633,6 +2653,11 @@ export const publishMultipleQDNResources = async (
           title,
           uploadType: dataType,
           withFee: true,
+          // As in the single-resource path: pass the fee that was shown, in
+          // atomic units, so signing does not re-read it.
+          feeAmount: Number(
+            parseDecimalAmount(fee.fee, { allowZero: true }).atomic
+          ),
           appInfo,
           encryption: encryption || null,
         });
@@ -3758,13 +3783,19 @@ export const deployAt = async (data, isFromExtension, appInfo?) => {
   }
 
   try {
+    // Parsed here so the box the user ticks shows the amount the AT is funded
+    // with. `_deployAt` renders `amount` verbatim while DeployAtTransaction does
+    // Math.round(rAmount * 1e8): passing the raw value let '1e3' read as
+    // "1e3 QORT" and fund the AT with 1000 QORT. Zero is allowed because the
+    // required-fields check above treats `0` as present.
+    const parsedAmount = parseDecimalAmount(data.amount, { allowZero: true });
     const resDeployAt = await _deployAt(
       {
         name: data.name,
         description: data.description,
         tags: data.tags,
         creationBytes: data.creationBytes,
-        amount: data.amount,
+        amount: parsedAmount.value,
         assetId: data.assetId,
         atType: data.type,
       },
@@ -5889,15 +5920,21 @@ export const sendCoin = async (data, isFromExtension, appInfo?) => {
       throw new Error(errorMsg);
     }
 
-    const transformDecimals = (Number(walletBalance) * QORT_DECIMALS).toFixed(
-      0
-    );
-    const walletBalanceDecimals = Number(transformDecimals);
-    const amountDecimals = Number(amount) * QORT_DECIMALS;
+    // Compared in atomic units, all three of them. The previous form scaled the
+    // balance through toFixed(0) but left `Number(amount) * QORT_DECIMALS`
+    // unrounded, so `0.28 * 1e8` was 28000000.000000004 and a balance of exactly
+    // 0.29 with a 0.01 fee was refused as insufficient — the sum was one float
+    // ulp over the balance. `parsedAmount.atomic` is exact.
+    const walletBalanceAtomic = parseDecimalAmount(walletBalance, {
+      allowZero: true,
+    }).atomic;
     // The fee the dialog shows: no fee above the ceiling is shown, and the
-    // payment refuses a node fee higher than this one.
-    const fee: number = checkValueTransferFee(await sendQortFee());
-    if (amountDecimals + fee * QORT_DECIMALS > walletBalanceDecimals) {
+    // payment refuses a node fee higher than this one. Kept as the node's
+    // decimal text, because that is what `approvedFee` carries downstream and
+    // what the dialog renders; only the comparison is atomic.
+    const fee: string = checkValueTransferFee(await sendQortFee());
+    const feeAtomic = parseDecimalAmount(fee, { allowZero: true }).atomic;
+    if (parsedAmount.atomic + feeAtomic > walletBalanceAtomic) {
       const errorMsg = i18n.t('question:message.error.insufficient_funds', {
         postProcess: 'capitalizeFirstChar',
       });
@@ -6859,6 +6896,12 @@ export const signTransaction = async (data, isFromExtension, appInfo?) => {
       })
     );
   const decodedData = await response.json();
+  // The requester built these bytes, so no node quoted the fee and there is no
+  // approval to compare against. Bound it anyway: otherwise a Q-App can have Hub
+  // sign a PAYMENT or TRANSFER_ASSET carrying any fee it likes. Refused before
+  // the prompt, so the user is never asked to approve a fee that will not be
+  // signed.
+  checkSignedTransactionFee(decodedData);
   const resPermission = await getUserPermission(
     {
       text1: shouldProcess
@@ -8319,6 +8362,14 @@ export const multiPaymentWithPrivateData = async (
     // transfer goes to this address.
     const resolvedRecipient = await resolveRecipient(payment.recipient);
     const confirmReceiver = resolvedRecipient.address;
+    // This request encrypts to the recipient's public key, and an AT has none.
+    // `isValidPaymentAddress` admits AT addresses (Core accepts them for a plain
+    // PAYMENT), so without this check the AT passed the recipient gate and the
+    // next line threw a *public key* error: the user was told their recipient had
+    // a key problem instead of that an AT cannot receive a private payment.
+    if (!isValidQortalAddress(confirmReceiver)) {
+      throw new InvalidRecipientError();
+    }
     const receiverPublicKey = await getPublicKey(confirmReceiver);
 
     const parsedAmount = parseDecimalAmount(payment.amount);
@@ -8462,10 +8513,21 @@ export const multiPaymentWithPrivateData = async (
       })
     );
   const totalAmountText = formatAtomicAmount(totalAtomic);
-  const totalAmount = Number(totalAmountText);
   const assetBalance = await getAssetBalanceInfo(assetId);
   const assetInfo = await getAssetInfo(assetId);
-  if (assetBalance < totalAmount)
+  // `getAssetBalanceInfo` answers atomic units (it reads /assets/balances) and
+  // `totalAtomic` is atomic too, so they are compared as such. Comparing the
+  // atomic balance against the decimal text reduced this guard to
+  // `100000000 < 3.25`, which is false for every request: an under-funded
+  // multi-payment was approved and only failed at the first transfer.
+  //
+  // A balance that did not parse is treated as insufficient, not as "unknown,
+  // carry on": BigInt(NaN) would throw a RangeError here, and skipping the check
+  // would approve a payment that cannot fund itself.
+  const assetBalanceAtomic = Number.isFinite(assetBalance)
+    ? BigInt(Math.trunc(assetBalance))
+    : BigInt(0);
+  if (assetBalanceAtomic < totalAtomic)
     throw new Error(
       i18n.t('question:message.error.insufficient_balance', {
         postProcess: 'capitalizeFirstChar',

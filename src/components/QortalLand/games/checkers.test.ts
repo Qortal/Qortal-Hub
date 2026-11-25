@@ -7,7 +7,13 @@ import {
   type CheckersState,
 } from './checkers';
 
-const emptyState = (): CheckersState => ({ board: Array(64).fill(0), nextSeat: 1, ply: 0, quietPly: 0, outcome: null });
+const emptyState = (): CheckersState => ({
+  board: Array(64).fill(0),
+  nextSeat: 1,
+  ply: 0,
+  quietPly: 0,
+  outcome: null,
+});
 
 describe('Checkers rules', () => {
   it('creates twelve pieces per player on playable squares', () => {
@@ -22,7 +28,9 @@ describe('Checkers rules', () => {
     state.board[42] = 1;
     state.board[33] = 2;
     state.board[46] = 1;
-    expect(getCheckersLegalMoves(state)).toEqual([{ from: 42, path: [24], captured: [33] }]);
+    expect(getCheckersLegalMoves(state)).toEqual([
+      { from: 42, path: [24], captured: [33] },
+    ]);
   });
 
   it('requires a complete chained capture', () => {
@@ -32,7 +40,9 @@ describe('Checkers rules', () => {
     state.board[17] = 2;
     const moves = getCheckersLegalMoves(state);
     expect(moves).toEqual([{ from: 42, path: [24, 10], captured: [33, 17] }]);
-    expect(() => applyCheckersMove(state, 1, 42, [24])).toThrow('Illegal Checkers move');
+    expect(() => applyCheckersMove(state, 1, 42, [24])).toThrow(
+      'Illegal Checkers move'
+    );
     const next = applyCheckersMove(state, 1, 42, [24, 10]);
     expect(next.board[10]).toBe(1);
     expect(next.board[33]).toBe(0);
@@ -52,14 +62,20 @@ describe('Checkers rules', () => {
     const state = emptyState();
     state.board[26] = 3;
     state.board[35] = 2;
-    expect(getCheckersLegalMoves(state)).toContainEqual({ from: 26, path: [44], captured: [35] });
+    expect(getCheckersLegalMoves(state)).toContainEqual({
+      from: 26,
+      path: [44],
+      captured: [35],
+    });
     const next = applyCheckersMove(state, 1, 26, [44]);
     expect(next.board[44]).toBe(3);
     expect(next.board[35]).toBe(0);
   });
 
   it('rejects moving out of turn', () => {
-    expect(() => applyCheckersMove(createCheckersState(2), 1, 40, [33])).toThrow('not this player');
+    expect(() =>
+      applyCheckersMove(createCheckersState(2), 1, 40, [33])
+    ).toThrow('not this player');
   });
 
   it('draws after eighty quiet plies', () => {
@@ -81,10 +97,14 @@ describe('Checkers rules', () => {
 
   it('hashes identical states deterministically', async () => {
     const state = createCheckersState(2);
-    expect(await hashCheckersState(state)).toBe(await hashCheckersState({ ...state, board: [...state.board] }));
+    expect(await hashCheckersState(state)).toBe(
+      await hashCheckersState({ ...state, board: [...state.board] })
+    );
   });
 
   it('matches the Python initial-state hash fixture', async () => {
-    expect(await hashCheckersState(createCheckersState(1))).toBe('d8f380b461ea12fe5c662de0ba7c5707de3afdf36ec1f9d4222719b6b22cad7e');
+    expect(await hashCheckersState(createCheckersState(1))).toBe(
+      'd8f380b461ea12fe5c662de0ba7c5707de3afdf36ec1f9d4222719b6b22cad7e'
+    );
   });
 });

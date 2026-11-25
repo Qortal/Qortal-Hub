@@ -187,6 +187,80 @@ export function checkValueTransferFee<T>(nodeFee: T, approvedFee?: unknown): T {
   return nodeFee;
 }
 
+/** Qortal transaction types the builders use. `TransferAssetTransaction` is 12. */
+export const PAYMENT_TX_TYPE = 2;
+export const TRANSFER_ASSET_TX_TYPE = 12;
+
+/**
+ * The names `/transactions/decode` answers with for those two types. It returns
+ * `type` as a **name string** ("PAYMENT"), which is what the SIGN_TRANSACTION
+ * dialog renders — not a number.
+ */
+const VALUED_TX_TYPE_NAMES = new Set(['PAYMENT', 'TRANSFER_ASSET']);
+
+function isValuedTransaction(type: unknown): boolean {
+  if (typeof type === 'string') {
+    return VALUED_TX_TYPE_NAMES.has(type.trim().toUpperCase());
+  }
+  if (typeof type === 'number') {
+    return type === PAYMENT_TX_TYPE || type === TRANSFER_ASSET_TX_TYPE;
+  }
+  return false;
+}
+
+/**
+ * Bounds the fee of an already-built transaction that will be signed as-is.
+ *
+ * `SIGN_TRANSACTION` signs bytes the requester built, so no node quotes a fee
+ * and there is nothing to compare against an approval. Without this the only
+ * limit on a signed PAYMENT's fee was the requester's goodwill: a Q-App could
+ * have Hub sign a payment carrying 500 QORT.
+ *
+ * Two shape traps, both verified against the real payload:
+ *
+ *   - `type` is a name string ("PAYMENT"); `Number('PAYMENT')` is NaN, so a
+ *     numeric-only test silently passes everything.
+ *   - `fee` is decimal text ("0.01000000"), the same shape `getFee` produces,
+ *     not atomic units.
+ *
+ * For a valued type it fails closed: a missing or unparseable fee refuses the
+ * signature rather than passing it through. Any other type is returned as-is.
+ */
+export function checkSignedTransactionFee<
+  T extends { type?: unknown; fee?: unknown },
+>(decoded: T): T {
+  if (!isValuedTransaction(decoded?.type)) return decoded;
+  const raw = decoded?.fee;
+  if (raw === undefined || raw === null || raw === '') {
+    throw new FeeNotApprovedError(
+      i18n.t('question:message.error.fee_invalid', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+  }
+  let fee: ParsedAmount;
+  try {
+    fee = parseDecimalAmount(raw, { allowZero: true });
+  } catch {
+    throw new FeeNotApprovedError(
+      i18n.t('question:message.error.fee_invalid', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+  }
+  const ceiling = parseDecimalAmount(MAX_VALUE_TRANSFER_FEE_QORT);
+  if (fee.atomic > ceiling.atomic) {
+    throw new FeeNotApprovedError(
+      i18n.t('question:message.error.fee_above_limit', {
+        fee: fee.text,
+        limit: ceiling.text,
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+  }
+  return decoded;
+}
+
 export class InvalidAssetIdError extends Error {
   constructor() {
     super(

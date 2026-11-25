@@ -21,6 +21,16 @@
     "sign_failed": "Não foi possível assinar o evento do chat Reticulum",
     "welcome_failed": "Falha ao publicar as boas-vindas do Reticulum"
   },
+  "context_menu": {
+    "clipboard_permission_denied": "Não é possível acessar a área de transferência",
+    "copy": "Copiar",
+    "copy_shortcut": "Copiar\tCtrl+C",
+    "cut": "Recortar",
+    "cut_shortcut": "Recortar\tCtrl+X",
+    "no_suggestions": "Sem sugestões",
+    "paste": "Colar",
+    "paste_shortcut": "Colar\tCtrl+V"
+  },
   "copy_invite_link": "copiar link de convite",
   "discussion": {
     "choose_emoji": "choose emoji",
@@ -118,6 +128,13 @@
     "enter_qortal_land": "Entrar no Qortal Land",
     "return_to_chat": "Voltar ao chat"
   },
+  "notification": {
+    "mention_special_in_group": "{{sender}} mencionou {{target}} em {{groupName}}",
+    "mention_you_in_group": "{{sender}} mencionou você em {{groupName}}",
+    "reply_you_in_group": "{{sender}} respondeu a você em {{groupName}}",
+    "someone": "alguém",
+    "welcome_joined": "{{name}} entrou no grupo {{groupName}}"
+  },
   "onboarding": {
     "find_communities": "Encontrar comunidades",
     "invite_error_invalid": "Isto não parece um link de convite de grupo Qortal válido.",
@@ -203,15 +220,20 @@
     "nav": {
       "mentions": "Menções",
       "messages": "Mensagens",
+      "notifications": "Notifications",
       "text_size": "Tamanho do texto",
       "threads": "Threads"
     },
     "notifications": {
+      "apply_button": "Apply to All Groups",
+      "delivery_ephemeral_tooltip": "Ephemeral notifications are gone forever after the preview disappears.",
+      "delivery_native_tooltip": "Push notifications go into your OS Notification Manager after the preview disappears.",
       "description": "Mostrar as menções do Reticulum Q-Chat no painel de notificações do Hub. As mensagens não lidas normais não criam notificações do Hub.",
       "mentions": {
         "description": "Avisar-me quando alguém me mencionar num canal.",
         "label": "Notificações de menções"
       },
+      "revert_button": "Revert to Defaults",
       "title": "Notificações"
     },
     "text_size": {

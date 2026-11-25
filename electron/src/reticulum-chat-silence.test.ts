@@ -305,21 +305,16 @@ describe('Reticulum chat silence', () => {
     );
 
     expect(hidden.ownerAddress).toBe(OWNER);
-    expect(manager.getSilence(staleOwner, PEER, 'group', GROUP_ID)?.active).toBe(
-      true
-    );
+    expect(
+      manager.getSilence(staleOwner, PEER, 'group', GROUP_ID)?.active
+    ).toBe(true);
     expect(
       manager
         .listSilences(staleOwner, 'group', GROUP_ID)
         .map((silence) => silence.targetAddress)
     ).toEqual([PEER]);
 
-    const cleared = manager.clearSilence(
-      staleOwner,
-      PEER,
-      'group',
-      GROUP_ID
-    );
+    const cleared = manager.clearSilence(staleOwner, PEER, 'group', GROUP_ID);
     expect(cleared?.ownerAddress).toBe(OWNER);
     expect(changes).toEqual([
       { ownerAddress: OWNER, active: true },
@@ -336,7 +331,9 @@ describe('Reticulum chat silence', () => {
     const hidden = manager.setSilence(OWNER, PEER, 'group', null, GROUP_ID);
 
     expect(hidden.ownerAddress).toBe(OWNER);
-    expect(manager.getSilence(OWNER, PEER, 'group', GROUP_ID)?.active).toBe(true);
+    expect(manager.getSilence(OWNER, PEER, 'group', GROUP_ID)?.active).toBe(
+      true
+    );
   });
 
   it('keeps DM traffic stored while hiding it from history and summaries', () => {
@@ -347,10 +344,14 @@ describe('Reticulum chat silence', () => {
     const base = Date.now() - 10_000;
     db.insertDirectEvent(directEvent('own', OWNER, PEER, base + 1), true);
     manager.setSilence(OWNER, PEER, 'dm', null);
-    db.insertDirectEvent(directEvent('hidden-peer', PEER, OWNER, base + 2), false);
+    db.insertDirectEvent(
+      directEvent('hidden-peer', PEER, OWNER, base + 2),
+      false
+    );
 
-    expect(manager.getDirectHistory(OWNER, PEER, 20).map((event) => event.eventId))
-      .toEqual(['own']);
+    expect(
+      manager.getDirectHistory(OWNER, PEER, 20).map((event) => event.eventId)
+    ).toEqual(['own']);
     let summary = manager.getDirectSummaries(OWNER)[0];
     expect(summary.lastEvent?.eventId).toBe('own');
     expect(summary.updatedAt).toBe(base + 1);
@@ -402,11 +403,15 @@ describe('Reticulum chat silence', () => {
     manager.on('silenceChanged', ({ active }) => changes.push(active));
 
     manager.setSilence(OWNER, PEER, 'group', 60_000, GROUP_ID);
-    expect(manager.getSilence(OWNER, PEER, 'group', GROUP_ID)?.active).toBe(true);
+    expect(manager.getSilence(OWNER, PEER, 'group', GROUP_ID)?.active).toBe(
+      true
+    );
 
     await vi.advanceTimersByTimeAsync(60_000);
 
-    expect(manager.getSilence(OWNER, PEER, 'group', GROUP_ID)?.active).toBe(false);
+    expect(manager.getSilence(OWNER, PEER, 'group', GROUP_ID)?.active).toBe(
+      false
+    );
     expect(changes).toEqual([true, false]);
   });
 });

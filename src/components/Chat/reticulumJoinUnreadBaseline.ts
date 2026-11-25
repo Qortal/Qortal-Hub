@@ -207,7 +207,7 @@ export const applyReticulumJoinUnreadBaseline = async ({
 
   const storageKey = baselineStorageKey(groupId, normalizedAddress, joinedAt);
   const completedChannels = readStoredChannels(storageKey);
-  let changed = false;
+  const newlyBaselinedChannelIds: string[] = [];
   for (const channelId of channelIds) {
     if (completedChannels.has(channelId)) continue;
     try {
@@ -219,12 +219,28 @@ export const applyReticulumJoinUnreadBaseline = async ({
       );
       if (result?.success !== true) continue;
       completedChannels.add(channelId);
-      changed = true;
+      newlyBaselinedChannelIds.push(channelId);
     } catch {
       // A later membership/channel refresh will retry this channel.
     }
   }
-  if (changed) {
+  if (newlyBaselinedChannelIds.length > 0) {
+    // Do NOT dismiss OS notifications here.
+    //
+    // Baselining is about the read watermark: messages that predate the join
+    // must not count as unread. Dismissal is a different concern — it means
+    // "the reader has seen this channel", and only entering or reading a
+    // channel may cause it.
+    //
+    // Dismissing per channel was still wrong: this runs on the first load of
+    // every group, and it dismissed every channel it could baseline, so a
+    // notification in General was cleared while the reader was in another
+    // channel. Because the persisted baseline makes this a one-shot per
+    // membership period, the effect was invisible on later loads but reliable
+    // on the first one — including the automated welcome message.
+    //
+    // Pre-join history cannot notify anyway: notifications are generated from
+    // live events, not from backfilled messages.
     writeStoredChannels(storageKey, completedChannels);
     cleanupReticulumJoinUnreadBaselines({
       address: normalizedAddress,

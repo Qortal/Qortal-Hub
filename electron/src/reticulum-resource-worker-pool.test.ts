@@ -11,7 +11,11 @@ describe('ReticulumResourceWorkerPool', () => {
     );
 
     await expect(tasks[512]).resolves.toBeNull();
-    expect(pool.stats()).toMatchObject({ queued: 256, waiting: 256, active: 0 });
+    expect(pool.stats()).toMatchObject({
+      queued: 256,
+      waiting: 256,
+      active: 0,
+    });
 
     pool.stop();
     await expect(Promise.all(tasks)).resolves.toHaveLength(513);

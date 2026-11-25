@@ -17,6 +17,54 @@ Follow these steps:
 - `npm run dev`
 - open the browser at page `http://localhost:5173/`
 
+## Running tests
+
+```bash
+npm test             # watch mode
+npm test -- --run    # single run, as CI does
+npx vitest run <path>  # one file (also watch-free)
+```
+
+Run tests through `npm test`, not `npx vitest` directly, at least once from a
+clean checkout. The `pretest` script compiles the worker threads in
+`electron/src/*.worker.ts` into `electron/build/src/`, which is a gitignored
+build output. Several Reticulum suites spawn those workers by absolute path, so
+without the compile they fail with `Cannot find module
+'.../electron/src/reticulum-resource.worker.js'` — which surfaces as the
+misleading `Resource worker unavailable during assembly` rather than anything
+mentioning a missing build. `npx vitest run <path>` is fine once the workers
+exist.
+
+## Q-Chat scenarios
+
+Behaviour that used to be checked by hand with two accounts is covered by
+scenarios: real `ReticulumChatManager` instances over the real SQLite schema,
+with synthetic identities, no Core and no Reticulum daemon.
+
+```bash
+cd electron && npx tsc -p tsconfig.json   # scenarios load electron/build/
+npm run test:scenarios                    # every scenario
+npm run test:scenario -- notification-reply   # one scenario
+```
+
+Scenarios need `electron/build/` compiled — they load it with `require`, and
+`npm test`'s `pretest` only compiles the workers. CI does this in
+`.github/workflows/scenarios.yml`, which is separate from the Vitest job for that
+reason.
+
+Adding one: drop a file in `electron/scenarios/scenarios/` default-exporting
+`{ name, delivery, run }`, and read `electron/scenarios/readme.md` first — it
+records the failures that cost the most time (peer hashes must be hex, the full
+`signLocalFields` shape is mandatory, subscriptions must be exchanged, and an
+event body travels as a resource rather than a wire message).
+
+`delivery: 'resource'` means the event travels the full transport — publish,
+notice, resource fetch, store — which is the default for the notification
+scenarios. `delivery: 'direct'` hands an event straight to the reader's accept
+path with the transport skipped, and is used only where the transport is
+deliberately out of scope. Anything claiming delivery coverage must use
+`'resource'`.
+
 Electron development with Reticulum networking:
 
 - install root dependencies: `npm install`
