@@ -75,6 +75,29 @@ export function formatAtomicAmount(atomic: bigint): string {
 }
 
 /**
+ * Plain decimal text in 1e-8 units, digit by digit. Places beyond the eighth
+ * are dropped.
+ */
+function decimalTextToAtomic(text: string): bigint {
+  const [wholeText, fractionText = ''] = text.split('.');
+  return (
+    BigInt(wholeText || '0') * ATOMIC_PER_UNIT +
+    BigInt(fractionText.slice(0, DECIMALS).padEnd(DECIMALS, '0'))
+  );
+}
+
+/**
+ * A balance as Core answers it (decimal text) in 1e-8 units, to compare with
+ * the `atomic` of a parsed amount. Anything but plain decimal text is 0, so a
+ * balance that can't be read never funds a payment. Unlike an amount, a balance
+ * isn't signed, so it may be one the builders can't sign exactly.
+ */
+export function balanceToAtomic(balance: unknown): bigint {
+  const text = typeof balance === 'string' ? balance.trim() : '';
+  return DECIMAL_TEXT.test(text) ? decimalTextToAtomic(text) : BigInt(0);
+}
+
+/**
  * Parses an amount strictly. Strings must be plain decimals (surrounding
  * spaces are ignored); more than 8 places are rounded half-up to 8, digit by
  * digit. Numbers must be finite and are rounded as the transaction builders
@@ -97,10 +120,8 @@ export function parseDecimalAmount(
   } else if (typeof value === 'string') {
     const text = value.trim();
     if (!DECIMAL_TEXT.test(text)) throw new InvalidAmountError();
-    const [wholeText, fractionText = ''] = text.split('.');
-    atomic =
-      BigInt(wholeText || '0') * ATOMIC_PER_UNIT +
-      BigInt(fractionText.slice(0, DECIMALS).padEnd(DECIMALS, '0'));
+    atomic = decimalTextToAtomic(text);
+    const [, fractionText = ''] = text.split('.');
     // Half-up on the first dropped digit: "0.123456785" is 0.12345679.
     if (fractionText.length > DECIMALS && fractionText[DECIMALS] >= '5') {
       atomic += BigInt(1);

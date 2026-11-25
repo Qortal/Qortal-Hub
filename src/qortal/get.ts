@@ -54,6 +54,7 @@ import {
   sendChatGroup,
 } from '../background/background.ts';
 import {
+  balanceToAtomic,
   checkSignedTransactionFee,
   checkValueTransferFee,
   formatAtomicAmount,
@@ -8498,19 +8499,9 @@ export const multiPaymentWithPrivateData = async (
   const totalAmountText = formatAtomicAmount(totalAtomic);
   const assetBalance = await getAssetBalanceInfo(assetId);
   const assetInfo = await getAssetInfo(assetId);
-  // `getAssetBalanceInfo` answers atomic units (it reads /assets/balances) and
-  // `totalAtomic` is atomic too, so they are compared as such. Comparing the
-  // atomic balance against the decimal text reduced this guard to
-  // `100000000 < 3.25`, which is false for every request: an under-funded
-  // multi-payment was approved and only failed at the first transfer.
-  //
-  // A balance that did not parse is treated as insufficient, not as "unknown,
-  // carry on": BigInt(NaN) would throw a RangeError here, and skipping the check
-  // would approve a payment that cannot fund itself.
-  const assetBalanceAtomic = Number.isFinite(assetBalance)
-    ? BigInt(Math.trunc(assetBalance))
-    : BigInt(0);
-  if (assetBalanceAtomic < totalAtomic)
+  // Core answers the balance as decimal text. Both sides are compared in atomic
+  // units, and a balance that cannot be read is treated as insufficient.
+  if (balanceToAtomic(assetBalance) < totalAtomic)
     throw new Error(
       i18n.t('question:message.error.insufficient_balance', {
         postProcess: 'capitalizeFirstChar',
@@ -8746,7 +8737,7 @@ export const transferAssetRequest = async (data, isFromExtension, appInfo?) => {
       })
     );
   const assetBalance = await getAssetBalanceInfo(assetId);
-  if (assetBalance < amount)
+  if (balanceToAtomic(assetBalance) < parsedAmount.atomic)
     throw new Error(
       i18n.t('question:message.error.insufficient_balance', {
         postProcess: 'capitalizeFirstChar',

@@ -23,6 +23,7 @@ import PaymentTransactionUntyped from './PaymentTransaction';
 import TransferAssetTransactionUntyped from './TransferAssetTransaction';
 import publicKeyToAddressUntyped from '../utils/generateWallet/publicKeyToAddress';
 import {
+  balanceToAtomic,
   checkSignedTransactionFee,
   checkValueTransferFee,
   FeeNotApprovedError,
@@ -241,6 +242,53 @@ describe('parseDecimalAmount', () => {
     expect(formatAtomicAmount(BigInt(0))).toBe('0');
     expect(formatAtomicAmount(BigInt(100000000))).toBe('1');
     expect(formatAtomicAmount(BigInt(1000001))).toBe('0.01000001');
+  });
+});
+
+describe('balanceToAtomic', () => {
+  it.each([
+    ['0.00000000', BigInt(0)],
+    ['0.00000001', BigInt(1)],
+    ['3.25000000', BigInt(325000000)],
+    ['900', BigInt(90000000000)],
+    [' 2.5 ', BigInt(250000000)],
+    ['.5', BigInt(50000000)],
+    // 0.29 * 1e8 is 28999999.999999996 as a float.
+    ['0.29000000', BigInt(29000000)],
+    // No float holds these exactly, so parseDecimalAmount refuses them.
+    ['90071992.54740993', BigInt('9007199254740993')],
+    ['10000000000.00000001', BigInt('1000000000000000001')],
+    ['92233720368.54775807', BigInt('9223372036854775807')],
+    // Never rounded up to more than the account holds.
+    ['0.999999999', BigInt(99999999)],
+  ])('reads the balance %j exactly', (balance, atomic) => {
+    expect(balanceToAtomic(balance)).toBe(atomic);
+  });
+
+  it.each([
+    [undefined],
+    [null],
+    [''],
+    ['   '],
+    ['.'],
+    ['abc'],
+    ['NaN'],
+    ['Infinity'],
+    ['1e12'],
+    ['0x10'],
+    ['-1'],
+    ['+1'],
+    ['1,5'],
+    ['1.2.3'],
+    ['١٢'], // Arabic-Indic digits
+    [Number.NaN],
+    [Number.POSITIVE_INFINITY],
+    [900],
+    [{}],
+    [['900']],
+    [true],
+  ])('reads %j as nothing to spend', (balance) => {
+    expect(balanceToAtomic(balance)).toBe(BigInt(0));
   });
 });
 
