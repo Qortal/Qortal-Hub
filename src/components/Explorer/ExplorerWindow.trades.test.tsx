@@ -359,6 +359,13 @@ function tradesNode(node: Node = {}): Route {
         return { body: [BUY_ORDER, SELL_ORDER] };
       return { body: [] };
     }
+    // Core finds an account's orders by its public key, and says it doesn't
+    // know an account without one (Third).
+    if (path.startsWith(`/assets/orders/${THIRD}?`))
+      return {
+        status: 404,
+        body: { error: 124, message: 'account address unknown' },
+      };
     if (path.startsWith('/assets/orders/')) return { body: [] };
     // Its sell order came in against Second's waiting buy order; Third's sell
     // order came in against its waiting buy order. Core labels both the
@@ -1241,6 +1248,21 @@ describe('the Trades tab', () => {
           params(path).get('txType') === 'AT'
       )
     ).toBe(false);
+  });
+
+  it('an account that never made a transaction of its own, and no contract paid: “No trades yet”, and why', async () => {
+    // Its asset orders: Core doesn't know the account (no public key). That
+    // is none, never "couldn't be read".
+    routes.push(keylessBuyer([], 0));
+    await openAccount(5, THIRD);
+    const panel = await openTradesTab();
+    expect(
+      await within(panel).findByText('No trades yet.', {}, T)
+    ).toBeInTheDocument();
+    expect(panel).toHaveTextContent(
+      'It has never made a transaction of its own, and no trade contract on the Trade Portal paid it.'
+    );
+    expect(panel).not.toHaveTextContent(/couldn't be read/i);
   });
 
   it('never “No trades yet” while one of its reads failed, the first time or on a Refresh', async () => {

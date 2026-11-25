@@ -283,7 +283,19 @@ export class TestChain {
         body: { error: 401, message: 'name unknown' },
       };
     if (path.startsWith('/transactions/unconfirmed?')) return { body: [] };
-    if (path.startsWith('/assets/orders/')) return { body: [] };
+    if (path.startsWith('/assets/orders/')) {
+      // Core finds an account's orders by its public key, and says it
+      // doesn't know an account without one.
+      const owner = decodeURIComponent(
+        path.slice('/assets/orders/'.length).split(/[/?]/)[0]
+      );
+      return owner.startsWith('Q') && !this.accounts.get(owner)?.publicKey
+        ? {
+            status: 404,
+            body: { error: 124, message: 'account address unknown' },
+          }
+        : { body: [] };
+    }
     if (path === '/admin/status') return { body: { height: 2_000_500 } };
     if (path === '/admin/info')
       return { body: { currentTimestamp: 2_000_000_000_000 } };
