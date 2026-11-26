@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   TIME_DAYS_1_IN_MILLISECONDS,
   TIME_MONTHS_1_IN_MILLISECONDS,
-  TIME_WEEKS_1_IN_MILLISECONDS,
 } from '../../constants/constants';
 import { ReticulumMessageExpiryButton } from './ReticulumMessageExpiryButton';
 
@@ -140,60 +139,39 @@ describe('ReticulumMessageExpiryButton', () => {
     expect(onChange).toHaveBeenCalledWith(undefined);
   });
 
-  it('reveals preferred expiry locks with the specified tooltip', async () => {
+  it('offers and selects no expiry in group chat mode', async () => {
     const user = userEvent.setup();
-    const onPreferredExpiryChange = vi.fn();
-    render(
-      <ReticulumMessageExpiryButton
-        onChange={() => undefined}
-        onPreferredExpiryChange={onPreferredExpiryChange}
-        preferredExpiryDurationMs={TIME_WEEKS_1_IN_MILLISECONDS}
-      />
-    );
-
-    await user.click(
-      screen.getByRole('button', { name: 'Set message expiry' })
-    );
-    expect(
-      screen.getByRole('button', { name: 'Remove 1 week preferred expiry' })
-    ).toBeInTheDocument();
-
-    const lockOneDay = screen.getByRole('button', {
-      name: 'Lock 1 day as preferred expiry',
-    });
-    await user.hover(lockOneDay);
-    expect(
-      await screen.findByRole('tooltip', { name: 'Preferred locked expiry' })
-    ).toBeInTheDocument();
-
-    await user.click(lockOneDay);
-    expect(onPreferredExpiryChange).toHaveBeenCalledWith(
-      TIME_DAYS_1_IN_MILLISECONDS
-    );
-  });
-
-  it('allows locking a group preference longer than the current channel', async () => {
-    const user = userEvent.setup();
-    const onPreferredExpiryChange = vi.fn();
+    const onChange = vi.fn();
     render(
       <ReticulumMessageExpiryButton
         channelExpiryDurationMs={TIME_DAYS_1_IN_MILLISECONDS}
-        onChange={() => undefined}
-        onPreferredExpiryChange={onPreferredExpiryChange}
+        onChange={onChange}
       />
     );
 
     await user.click(
       screen.getByRole('button', { name: 'Set message expiry' })
     );
-    await user.click(
-      screen.getByRole('button', {
-        name: 'Lock 1 week as preferred expiry',
-      })
+    await user.click(screen.getByRole('menuitem', { name: /No expiry/ }));
+
+    expect(onChange).toHaveBeenCalledWith(null);
+  });
+
+  it('keeps channel default distinct from no expiry in group mode', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <ReticulumMessageExpiryButton
+        channelExpiryDurationMs={TIME_DAYS_1_IN_MILLISECONDS}
+        onChange={onChange}
+      />
     );
 
-    expect(onPreferredExpiryChange).toHaveBeenCalledWith(
-      TIME_WEEKS_1_IN_MILLISECONDS
+    await user.click(
+      screen.getByRole('button', { name: 'Set message expiry' })
     );
+    await user.click(screen.getByRole('menuitem', { name: /Channel default/ }));
+
+    expect(onChange).toHaveBeenCalledWith(undefined);
   });
 });

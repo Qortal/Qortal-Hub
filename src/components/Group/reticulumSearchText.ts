@@ -19,7 +19,10 @@ export const reticulumVisibleSearchTextFromPayload = (
 ): string => {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return typeof payload === 'string'
-      ? payload.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+      ? payload
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
       : '';
   }
 

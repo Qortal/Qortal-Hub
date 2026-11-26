@@ -34,4 +34,3 @@ export type BookmarkableAppTab = {
   path?: string;
   internal?: string;
 };
-

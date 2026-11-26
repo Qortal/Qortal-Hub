@@ -38,12 +38,18 @@ function canonicalize(value: unknown): string {
     .join(',')}}`;
 }
 
-export function hashReticulumChatAuthorTreeValue(value: Record<string, unknown>): string {
-  return nodeCrypto.createHash('sha256').update(canonicalize(value), 'utf8').digest('hex');
+export function hashReticulumChatAuthorTreeValue(
+  value: Record<string, unknown>
+): string {
+  return nodeCrypto
+    .createHash('sha256')
+    .update(canonicalize(value), 'utf8')
+    .digest('hex');
 }
 
 function normalizeAuthorStreamId(value: unknown): string {
-  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  const normalized =
+    typeof value === 'string' ? value.trim().toLowerCase() : '';
   return /^[0-9a-f]{32}$/.test(normalized) ? normalized : '';
 }
 
@@ -82,7 +88,11 @@ export function hashReticulumChatAuthorTreeBucket(
     t: 'author_bucket_v1',
     g: groupId,
     b: bucket,
-    h: heads.map((head) => [head.authorAddress, head.authorStreamId, head.maxSeq]),
+    h: heads.map((head) => [
+      head.authorAddress,
+      head.authorStreamId,
+      head.maxSeq,
+    ]),
   });
 }
 
@@ -111,7 +121,13 @@ export function buildReticulumChatAuthorTreeSnapshot(
     const authorAddress = String(candidate.authorAddress || '').trim();
     const authorStreamId = normalizeAuthorStreamId(candidate.authorStreamId);
     const maxSeq = Math.floor(Number(candidate.maxSeq || 0));
-    if (!authorAddress || !authorStreamId || !Number.isSafeInteger(maxSeq) || maxSeq <= 0) continue;
+    if (
+      !authorAddress ||
+      !authorStreamId ||
+      !Number.isSafeInteger(maxSeq) ||
+      maxSeq <= 0
+    )
+      continue;
     const head = { authorAddress, authorStreamId, maxSeq };
     const key = reticulumChatAuthorTreeHeadKey(head);
     const existing = deduped.get(key);
@@ -128,11 +144,20 @@ export function buildReticulumChatAuthorTreeSnapshot(
   const nodeCounts = new Map<string, number>();
   for (let bucket = 0; bucket < buckets.length; bucket += 1) {
     buckets[bucket].sort(compareReticulumChatAuthorTreeHeads);
-    const path = bucket.toString(2).padStart(RETICULUM_CHAT_AUTHOR_TREE_DEPTH, '0');
-    nodeHashes.set(path, hashReticulumChatAuthorTreeBucket(groupId, bucket, buckets[bucket]));
+    const path = bucket
+      .toString(2)
+      .padStart(RETICULUM_CHAT_AUTHOR_TREE_DEPTH, '0');
+    nodeHashes.set(
+      path,
+      hashReticulumChatAuthorTreeBucket(groupId, bucket, buckets[bucket])
+    );
     nodeCounts.set(path, buckets[bucket].length);
   }
-  for (let depth = RETICULUM_CHAT_AUTHOR_TREE_DEPTH - 1; depth >= 0; depth -= 1) {
+  for (
+    let depth = RETICULUM_CHAT_AUTHOR_TREE_DEPTH - 1;
+    depth >= 0;
+    depth -= 1
+  ) {
     const nodesAtDepth = 1 << depth;
     for (let index = 0; index < nodesAtDepth; index += 1) {
       const path = depth === 0 ? '' : index.toString(2).padStart(depth, '0');

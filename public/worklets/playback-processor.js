@@ -21,7 +21,7 @@ class PlaybackProcessor extends AudioWorkletProcessor {
 
     this._ring = new Float32Array(RING_CAPACITY);
     this._writePos = 0; // next write index (mod RING_CAPACITY)
-    this._readPos = 0;  // next read index (mod RING_CAPACITY)
+    this._readPos = 0; // next read index (mod RING_CAPACITY)
     this._available = 0; // samples currently buffered
 
     this.port.onmessage = (e) => {
@@ -69,7 +69,10 @@ class PlaybackProcessor extends AudioWorkletProcessor {
     let dst = 0;
     while (toRead > 0) {
       const chunk = Math.min(toRead, RING_CAPACITY - this._readPos);
-      output.set(this._ring.subarray(this._readPos, this._readPos + chunk), dst);
+      output.set(
+        this._ring.subarray(this._readPos, this._readPos + chunk),
+        dst
+      );
       this._readPos = (this._readPos + chunk) % RING_CAPACITY;
       dst += chunk;
       toRead -= chunk;

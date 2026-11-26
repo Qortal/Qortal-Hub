@@ -2,8 +2,8 @@ import { Sha256 } from 'asmcrypto.js';
 import wasmInit from './memory-pow.wasm?init';
 
 let compute; // Exported compute function from Wasm
-let memory;  // WebAssembly.Memory instance
-let heap;    // Uint8Array view of the memory buffer
+let memory; // WebAssembly.Memory instance
+let heap; // Uint8Array view of the memory buffer
 let brk = 512 * 1024; // Initial brk set to 512 KiB
 const allocations = new Map(); // Track allocations by pointer
 let workBufferPtr = null; // Reuse work buffer
@@ -18,7 +18,9 @@ async function loadWasm() {
     const importObject = {
       env: {
         memory, // Pass memory to Wasm
-        abort: () => { throw new Error('Wasm abort called'); }, // Handle abort calls from Wasm
+        abort: () => {
+          throw new Error('Wasm abort called');
+        }, // Handle abort calls from Wasm
       },
     };
 
@@ -44,13 +46,17 @@ function sbrk(size) {
 
   // Grow memory if needed
   if (brk > memory.buffer.byteLength) {
-    const pagesNeeded = Math.ceil((brk - memory.buffer.byteLength) / (64 * 1024)); // 64 KiB per page
+    const pagesNeeded = Math.ceil(
+      (brk - memory.buffer.byteLength) / (64 * 1024)
+    ); // 64 KiB per page
     try {
       memory.grow(pagesNeeded);
       heap = new Uint8Array(memory.buffer); // Update heap view
     } catch (e) {
       console.error('Failed to grow memory:', e);
-      throw new RangeError('WebAssembly.Memory.grow(): Maximum memory size exceeded');
+      throw new RangeError(
+        'WebAssembly.Memory.grow(): Maximum memory size exceeded'
+      );
     }
   }
 

@@ -15,7 +15,11 @@ import { MessageItem } from './MessageItem';
 import { DirectCallHistoryRow } from './DirectCallHistoryRow';
 import { DirectFriendEventRow } from './DirectFriendEventRow';
 import type { ReticulumChannelLinkAccess } from './MessageDisplay';
-import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
+import {
+  executeEvent,
+  subscribeToEvent,
+  unsubscribeFromEvent,
+} from '../../utils/events';
 import { Box, Button, Typography, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
@@ -356,7 +360,8 @@ export const ChatList = ({
         []
       );
       if (unreadIndexes.length > 0) {
-        return unreadIndexes[Math.max(0, unreadIndexes.length - unreadCount)];
+        if (unreadIndexes.length <= unreadCount) return messages.length - 1;
+        return unreadIndexes[unreadIndexes.length - unreadCount];
       }
     }
     return messages.length - 1;
@@ -418,10 +423,10 @@ export const ChatList = ({
     count: messages.length,
     getItemKey: (index) => getMessageKey(messages[index], index),
     getScrollElement: () => parentRef?.current,
-    estimateSize: useCallback(() => 80, []), // Provide an estimated height of items, adjust this as needed
+    estimateSize: useCallback(() => 120, []),
     initialOffset:
       reticulumChatEnabled && initialReticulumLandingIndex >= 0
-        ? initialReticulumLandingIndex * 80
+        ? initialReticulumLandingIndex * 120
         : 0,
     rangeExtractor: extractVirtualRows,
     overscan: reticulumChatEnabled ? 5 : 10,
@@ -543,44 +548,86 @@ export const ChatList = ({
     [clearScrollRetries, reticulumChatEnabled, rowVirtualizer]
   );
 
-  const scrollToIndexBeforeReveal = useCallback(
-    (index: number, targetKey: string) => {
-      if (index < 0 || !targetKey) return;
+  /**
+   * Move a virtual row into view and keep correcting the offset until the row is
+   * really mounted and aligned.
+   *
+   * A virtualizer only knows the row `estimateSize` until the rows have been
+   * measured, and a chat row is routinely two to four times taller than the
+   * estimate. A single `getOffsetForIndex` therefore lands the reader at the
+   * *estimated* offset, which can be thousands of pixels above the row it was
+   * aiming at. Every caller below walks the rows in over consecutive frames and
+   * treats the mounted DOM geometry as the authority for the final position.
+   *
+   * `onSettled` runs exactly once, on success or on the attempt cap, and is the
+   * reveal hook. A superseded walk (a reader gesture, or a newer positioning
+   * request) stops without calling it: the newer request owns the viewport and
+   * will reveal it itself, and the attempt cap guarantees chat cannot stay
+   * hidden if that request never arrives.
+   */
+  const alignReticulumRow = useCallback(
+    (
+      index: number,
+      options: {
+        /** Prime an off-window row with TanStack's own jump first. */
+        primeWithScrollToIndex: boolean;
+        /** Abort the walk when this returns true (e.g. request superseded). */
+        isStale?: () => boolean;
+        /** Called once, after the last frame the walk owns the viewport. */
+        onSettled: (scrollElement: HTMLDivElement | null) => void;
+      }
+    ) => {
+      const { primeWithScrollToIndex, isStale, onSettled } = options;
+      if (index < 0) return;
 
       clearScrollRetries();
       const sequence = scrollRetrySequenceRef.current;
       let previousOffset: number | null = null;
       let stableFrames = 0;
       let attempts = 0;
+      let settled = false;
 
-      // Let TanStack own the initial dynamic-row jump. Unlike a single
-      // getOffsetForIndex call, scrollToIndex keeps correcting its estimate as
-      // the replacement history window mounts and rows are measured. The
-      // viewport stays hidden until the target DOM row is actually aligned,
-      // so none of those measurement corrections are visible to the reader.
-      rowVirtualizer.scrollToIndex(index, { align: 'start' });
+      const settle = (
+        scrollElement: HTMLDivElement | null,
+        { superseded = false }: { superseded?: boolean } = {}
+      ) => {
+        if (settled) return;
+        settled = true;
+        scrollRetryFrameRef.current = null;
+        // A superseded walk must not touch the virtualizer or reveal: a newer
+        // positioning request owns both now, and scrollToOffset would cancel
+        // that request's own retry.
+        if (superseded) return;
+        if (scrollElement) {
+          // scrollToOffset cancels TanStack's recursive scrollToIndex retry.
+          // Keeping the current offset makes that cancellation position-neutral.
+          rowVirtualizer.scrollToOffset(scrollElement.scrollTop, {
+            align: 'start',
+          });
+        }
+        onSettled(scrollElement);
+      };
+
+      if (primeWithScrollToIndex) {
+        // Let TanStack own the initial dynamic-row jump. Unlike a single
+        // getOffsetForIndex call, scrollToIndex keeps correcting its estimate as
+        // the replacement history window mounts and rows are measured. The
+        // viewport stays hidden until the target DOM row is actually aligned,
+        // so none of those measurement corrections are visible to the reader.
+        rowVirtualizer.scrollToIndex(index, { align: 'start' });
+      }
 
       const positionAndMeasure = () => {
-        if (
-          scrollRetrySequenceRef.current !== sequence ||
-          reticulumScrollTargetKeyRef.current !== targetKey
-        ) {
+        const scrollElement = parentRef.current as HTMLDivElement | null;
+        if (scrollRetrySequenceRef.current !== sequence || isStale?.()) {
+          settle(scrollElement, { superseded: true });
           return;
         }
-        const scrollElement = parentRef.current as HTMLDivElement | null;
         const target = rowVirtualizer.getOffsetForIndex(index, 'start');
         if (!scrollElement || !target) {
           attempts += 1;
           if (attempts >= 30) {
-            scrollRetryFrameRef.current = null;
-            if (scrollElement) {
-              // Cancel any remaining private scrollToIndex measurement retry
-              // before exposing the viewport.
-              rowVirtualizer.scrollToOffset(scrollElement.scrollTop, {
-                align: 'start',
-              });
-            }
-            setPositionedReticulumScrollTargetKey(targetKey);
+            settle(scrollElement);
             return;
           }
           scrollRetryFrameRef.current =
@@ -590,7 +637,9 @@ export const ChatList = ({
 
         const nextOffset = target[0];
         // The estimated jump makes an off-window target mountable. Its actual
-        // DOM geometry below is the authority for the final position.
+        // DOM geometry below is the authority for the final position. Assigning
+        // scrollTop also lets the virtualizer mount the row when it sits outside
+        // the current range, so the next frame has geometry to correct against.
         scrollElement.scrollTop = nextOffset;
         const targetRow = scrollElement.querySelector<HTMLElement>(
           `[data-index="${index}"]`
@@ -618,17 +667,11 @@ export const ChatList = ({
         previousOffset = nextOffset;
 
         // Dynamic rows are measured through ResizeObserver.
-        // Do not reveal based only on a stable estimated offset: the real row
+        // Do not finish based only on a stable estimated offset: the real row
         // must be mounted and aligned for consecutive frames. The attempt cap
         // prevents an unexpected virtualizer failure from hiding chat forever.
         if (stableFrames >= 2 || attempts >= 30) {
-          scrollRetryFrameRef.current = null;
-          // scrollToOffset cancels TanStack's recursive scrollToIndex timeout.
-          // Keeping the current offset makes that cancellation position-neutral.
-          rowVirtualizer.scrollToOffset(scrollElement.scrollTop, {
-            align: 'start',
-          });
-          setPositionedReticulumScrollTargetKey(targetKey);
+          settle(scrollElement);
           return;
         }
         scrollRetryFrameRef.current =
@@ -638,6 +681,48 @@ export const ChatList = ({
       positionAndMeasure();
     },
     [clearScrollRetries, rowVirtualizer]
+  );
+
+  const scrollToIndexBeforeReveal = useCallback(
+    (index: number, targetKey: string) => {
+      if (index < 0 || !targetKey) return;
+      alignReticulumRow(index, {
+        primeWithScrollToIndex: true,
+        isStale: () => reticulumScrollTargetKeyRef.current !== targetKey,
+        onSettled: () => setPositionedReticulumScrollTargetKey(targetKey),
+      });
+    },
+    [alignReticulumRow]
+  );
+
+  /**
+   * Land a fresh channel on its first unread row, hidden until it is aligned.
+   *
+   * This path used to rely on `scrollToIndexAfterMeasurements` with retry
+   * timers, and the reveal frame then called `clearScrollRetries()` — cancelling
+   * those retries one frame later, while the offset was still the 120px-per-row
+   * estimate. On a channel whose rows are taller than that estimate (replies,
+   * previews, media) the reader was left thousands of pixels above the unread
+   * boundary, which reads as "it scrolled days back". Walking the row in frame
+   * by frame keeps the correction that the estimate needs, and reveals only once
+   * the real row is aligned.
+   */
+  const scrollToUnreadRowBeforeReveal = useCallback(
+    (index: number) => {
+      if (index < 0) return;
+      const identity = chatIdentity;
+      alignReticulumRow(index, {
+        primeWithScrollToIndex: false,
+        isStale: () => mountedChatIdentityRef.current !== identity,
+        onSettled: () => {
+          // A channel switch supersedes this landing; never reveal the
+          // replacement channel against the previous channel's position.
+          if (mountedChatIdentityRef.current !== identity) return;
+          setPositionedReticulumChatIdentity(identity);
+        },
+      });
+    },
+    [alignReticulumRow, chatIdentity]
   );
 
   useEffect(() => {
@@ -768,6 +853,9 @@ export const ChatList = ({
 
       reticulumPinnedToBottomRef.current =
         isPinned && !reticulumReadingPositionLockedRef.current;
+      executeEvent('chat-scroll-state', {
+        isAtBottom: distanceFromBottom <= 50,
+      });
       if (
         isPinned &&
         !hasNewerMessages &&
@@ -1101,12 +1189,11 @@ export const ChatList = ({
         initialReticulumUnreadCount > 0 &&
         initialReticulumUnreadIndexes.length > 0;
       const firstReticulumUnreadIndex = shouldAcknowledgeInitialReticulumUnread
-        ? initialReticulumUnreadIndexes[
-            Math.max(
-              0,
+        ? initialReticulumUnreadIndexes.length <= initialReticulumUnreadCount
+          ? null
+          : initialReticulumUnreadIndexes[
               initialReticulumUnreadIndexes.length - initialReticulumUnreadCount
-            )
-          ]
+            ]
         : null;
 
       if (
@@ -1174,18 +1261,41 @@ export const ChatList = ({
           // becoming visible as a sequence of scroll jumps.
           const unreadIndex = pendingInitialReticulumUnreadIndexRef.current;
           pendingInitialReticulumUnreadIndexRef.current = null;
-          const shouldLandAtBottom =
+          let shouldLandAtBottom =
             reticulumScrollTargetIndex < 0 && typeof unreadIndex !== 'number';
+          if (
+            reticulumScrollTargetIndex < 0 &&
+            typeof unreadIndex === 'number'
+          ) {
+            const scrollElement = parentRef.current as HTMLDivElement | null;
+            if (scrollElement) {
+              const viewportItems = Math.max(
+                1,
+                Math.round(scrollElement.clientHeight / 120)
+              );
+              if (totalMessages.length - unreadIndex <= viewportItems) {
+                shouldLandAtBottom = true;
+              }
+            }
+          }
           pendingInitialReticulumBottomRef.current = shouldLandAtBottom;
           reticulumPinnedToBottomRef.current = shouldLandAtBottom;
           reticulumFollowBottomRef.current = shouldLandAtBottom;
+          // Set when the unread-row walk owns both the position and the reveal.
+          let unreadWalkOwnsReveal = false;
           if (reticulumScrollTargetIndex >= 0) {
             scrollToIndexBeforeReveal(
               reticulumScrollTargetIndex,
               scrollTargetRequestKey
             );
-          } else if (typeof unreadIndex === 'number') {
-            scrollToIndexAfterMeasurements(unreadIndex, 'start', []);
+          } else if (typeof unreadIndex === 'number' && !shouldLandAtBottom) {
+            // Walk the unread row in frame by frame and reveal only once the
+            // real row is aligned. The previous timer-based retries were
+            // cancelled by the reveal frame immediately below, so the reader was
+            // left at the 120px-per-row estimate — thousands of pixels above the
+            // unread boundary on any channel with taller rows.
+            scrollToUnreadRowBeforeReveal(unreadIndex);
+            unreadWalkOwnsReveal = unreadIndex >= 0;
           }
           clearInitialReticulumReveal();
           if (shouldLandAtBottom) {
@@ -1215,7 +1325,7 @@ export const ChatList = ({
             };
             initialReticulumRevealFrameRef.current =
               window.requestAnimationFrame(pinAndRevealAtBottom);
-          } else {
+          } else if (!unreadWalkOwnsReveal) {
             initialReticulumRevealFrameRef.current =
               window.requestAnimationFrame(() => {
                 // A cross-channel search target has its own measurement loop.
@@ -1265,6 +1375,7 @@ export const ChatList = ({
     clearScrollRetries,
     scrollToIndexAfterMeasurements,
     scrollToIndexBeforeReveal,
+    scrollToUnreadRowBeforeReveal,
   ]);
 
   const scrollToBottom = (

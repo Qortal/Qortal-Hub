@@ -25,10 +25,7 @@ describe('reticulumVisibleSearchTextFromPayload', () => {
     expect(
       reticulumVisibleSearchTextFromPayload({
         message: '<p>release notes</p>',
-        attachments: [
-          { fileName: 'qortalHub.log' },
-          { name: 'report.pdf' },
-        ],
+        attachments: [{ fileName: 'qortalHub.log' }, { name: 'report.pdf' }],
       })
     ).toBe('release notes qortalHub.log report.pdf');
   });

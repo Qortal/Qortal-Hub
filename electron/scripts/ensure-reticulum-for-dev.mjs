@@ -81,7 +81,12 @@ function canImportLXMF(pythonPath) {
 
 function canImportGameWebSockets(pythonPath) {
   if (!pythonPath) return false;
-  return spawnPy(pythonPath, ['-c', 'import websockets; assert websockets.__version__ == "14.2"']).status === 0;
+  return (
+    spawnPy(pythonPath, [
+      '-c',
+      'import websockets; assert websockets.__version__ == "14.2"',
+    ]).status === 0
+  );
 }
 
 function isPython39Plus(name) {
@@ -111,17 +116,19 @@ async function ensureUserPip(name) {
 
   if (!isPython39Plus(name)) return false;
 
-  console.log(`[ensure-reticulum] No pip for ${name}; bootstrapping with get-pip.py (PyPA)…`);
+  console.log(
+    `[ensure-reticulum] No pip for ${name}; bootstrapping with get-pip.py (PyPA)…`
+  );
   progress('get_pip_download');
 
-  const tmp = path.join(
-    os.tmpdir(),
-    `qortal-get-pip-${Date.now()}.py`
-  );
+  const tmp = path.join(os.tmpdir(), `qortal-get-pip-${Date.now()}.py`);
   try {
     await downloadGetPip(tmp);
   } catch (e) {
-    console.error('[ensure-reticulum] Could not download get-pip.py:', e.message);
+    console.error(
+      '[ensure-reticulum] Could not download get-pip.py:',
+      e.message
+    );
     return false;
   }
 
@@ -147,7 +154,9 @@ async function ensureUserPip(name) {
   }
 
   if (boot.status !== 0) {
-    console.error(`[ensure-reticulum] get-pip.py failed for ${name} (exit ${boot.status}).`);
+    console.error(
+      `[ensure-reticulum] get-pip.py failed for ${name} (exit ${boot.status}).`
+    );
     return false;
   }
 
@@ -161,15 +170,28 @@ function reticulumInstallArgs({ user }) {
 }
 
 function tryPipInstallRnsAndLxmf(name, { user }) {
-  const [base, reticulumPackage, lxmfPackage, websocketsPackage] = reticulumInstallArgs({ user });
+  const [base, reticulumPackage, lxmfPackage, websocketsPackage] =
+    reticulumInstallArgs({ user });
   const attempts =
     process.platform === 'win32'
       ? [
           [...base, reticulumPackage, lxmfPackage, websocketsPackage],
-          [...base, '--break-system-packages', reticulumPackage, lxmfPackage, websocketsPackage],
+          [
+            ...base,
+            '--break-system-packages',
+            reticulumPackage,
+            lxmfPackage,
+            websocketsPackage,
+          ],
         ]
       : [
-          [...base, '--break-system-packages', reticulumPackage, lxmfPackage, websocketsPackage],
+          [
+            ...base,
+            '--break-system-packages',
+            reticulumPackage,
+            lxmfPackage,
+            websocketsPackage,
+          ],
           [...base, reticulumPackage, lxmfPackage, websocketsPackage],
         ];
   for (const args of attempts) {
@@ -177,7 +199,11 @@ function tryPipInstallRnsAndLxmf(name, { user }) {
       env: pipEnv,
     });
     if (pip.status !== 0) continue;
-    if (canImportRequiredRNS(name) && canImportLXMF(name) && canImportGameWebSockets(name)) {
+    if (
+      canImportRequiredRNS(name) &&
+      canImportLXMF(name) &&
+      canImportGameWebSockets(name)
+    ) {
       return true;
     }
   }
@@ -199,7 +225,15 @@ async function main() {
 
   const venvPythonCandidates =
     process.platform === 'win32'
-      ? [path.join(resources, 'reticulum-runtime', 'venv', 'Scripts', 'python.exe')]
+      ? [
+          path.join(
+            resources,
+            'reticulum-runtime',
+            'venv',
+            'Scripts',
+            'python.exe'
+          ),
+        ]
       : [
           path.join(resources, 'reticulum-runtime', 'venv', 'bin', 'python3'),
           path.join(resources, 'reticulum-runtime', 'venv', 'bin', 'python'),
@@ -207,7 +241,12 @@ async function main() {
 
   for (const p of venvPythonCandidates) {
     if (!fs.existsSync(p)) continue;
-    if (canImportRequiredRNS(p) && canImportLXMF(p) && canImportGameWebSockets(p)) return;
+    if (
+      canImportRequiredRNS(p) &&
+      canImportLXMF(p) &&
+      canImportGameWebSockets(p)
+    )
+      return;
     if (canImportRNS(p)) {
       console.log(
         `[ensure-reticulum] Updating dev venv Reticulum to ${RETICULUM_PIP_PACKAGE}`
@@ -217,7 +256,11 @@ async function main() {
   }
 
   for (const name of systemNames) {
-    if (canImportRequiredRNS(name) && canImportLXMF(name) && canImportGameWebSockets(name)) {
+    if (
+      canImportRequiredRNS(name) &&
+      canImportLXMF(name) &&
+      canImportGameWebSockets(name)
+    ) {
       return;
     }
   }
@@ -235,7 +278,9 @@ async function main() {
 
   progress('pip_install_rns');
   if (tryPipUserInstallRnsAndLxmf()) {
-    console.log('[ensure-reticulum] rns + lxmf + websockets 14.2 are ready (user site-packages).');
+    console.log(
+      '[ensure-reticulum] rns + lxmf + websockets 14.2 are ready (user site-packages).'
+    );
     progress('done');
     return;
   }

@@ -617,9 +617,7 @@ describe('Reticulum manager late bridge binding', () => {
         toAddress: 'Q-peer',
       })
     );
-    expect(remoteHangups).toEqual([
-      { callId: 'call-inbound-link-hangup' },
-    ]);
+    expect(remoteHangups).toEqual([{ callId: 'call-inbound-link-hangup' }]);
     expect((manager as any).activeCalls.has('call-inbound-link-hangup')).toBe(
       false
     );

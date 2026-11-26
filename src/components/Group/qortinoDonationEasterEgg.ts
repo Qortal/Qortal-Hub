@@ -3,8 +3,7 @@ export const QORTINO_DONATION_DRAG_TYPE =
 
 export const QORTINO_DONATION_PREFILL_NAME = 'Qortino';
 
-export const QORTINO_DONATION_COMPLETED_EVENT =
-  'qortinoDonationCompleted';
+export const QORTINO_DONATION_COMPLETED_EVENT = 'qortinoDonationCompleted';
 
 export const QORTINO_DONATION_BUBBLE_MESSAGE =
   'Such an astute observer, you discovered my super-secret Donation page!';

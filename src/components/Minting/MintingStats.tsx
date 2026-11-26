@@ -382,13 +382,14 @@ export const mintingStatus = (nodeStatus): string => {
     nodeStatus.isMintingPossible === false &&
     nodeStatus.isSynchronizing === true
   ) {
-    return i18n.t('core:minting.status.synchronizing', {
+    // The `?:` must be grouped: `a + b ? c : d` parses as `(a + b) ? c : d`,
+    // which threw the translated label away and returned only the percent.
+    const syncLabel = i18n.t('core:minting.status.synchronizing', {
       postProcess: 'capitalizeFirstChar',
-    }) +
-      nodeStatus.syncPercent !==
-      undefined
-      ? nodeStatus.syncPercent + '%'
-      : '';
+    });
+    return nodeStatus.syncPercent !== undefined
+      ? `${syncLabel} ${nodeStatus.syncPercent}%`
+      : syncLabel;
   } else if (
     nodeStatus.isMintingPossible === false &&
     nodeStatus.isSynchronizing === false

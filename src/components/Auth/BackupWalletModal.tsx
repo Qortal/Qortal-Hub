@@ -117,7 +117,10 @@ export const BackupWalletModal = ({
       setIsDownloading(true);
 
       let wallet = structuredClone(rawWallet);
-      const decryptedWallet = await decryptStoredWallet(currentPassword, wallet);
+      const decryptedWallet = await decryptStoredWallet(
+        currentPassword,
+        wallet
+      );
       const phraseWallet = new PhraseWallet(
         decryptedWallet,
         wallet?.version || walletVersion
@@ -215,7 +218,13 @@ export const BackupWalletModal = ({
         },
       }}
     >
-      <Box sx={{ background: modalSurface, display: 'flex', flexDirection: 'column' }}>
+      <Box
+        sx={{
+          background: modalSurface,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
         <Box
           sx={{
             alignItems: 'center',
@@ -429,7 +438,9 @@ export const BackupWalletModal = ({
             sx={{ m: 0 }}
             control={
               <Checkbox
-                onChange={(event) => setKeepCurrentPassword(event.target.checked)}
+                onChange={(event) =>
+                  setKeepCurrentPassword(event.target.checked)
+                }
                 checked={keepCurrentPassword}
                 disableRipple
                 sx={{
@@ -542,7 +553,11 @@ export const BackupWalletModal = ({
 
           <LoadingButton
             loading={isDownloading}
-            disabled={!rawWallet || !currentPassword || (!keepCurrentPassword && !newPassword)}
+            disabled={
+              !rawWallet ||
+              !currentPassword ||
+              (!keepCurrentPassword && !newPassword)
+            }
             onClick={handleDownload}
             startIcon={!isDownloading ? <FileDownloadRoundedIcon /> : null}
             variant="contained"
