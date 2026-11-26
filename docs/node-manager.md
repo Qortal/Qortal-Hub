@@ -79,10 +79,15 @@ Only for your own node.
 | Status for support | Copies a short summary for a help chat: versions, height, sync, peers, minting, memory. No addresses, names, IPs or keys | `/admin/info`, `/admin/systeminfo` |
 | Node log           | The newest 200 lines, on request; Refresh and Copy. The log can hold IP addresses and names, and the card says so        | `/admin/logs?limit=200&tail=true`  |
 
-- "Start Core" shows only once the node stopped answering, and only when Core's process on this PC is gone and Core is where Hub installs it (`isCoreRunningOnSystem`, `isCoreInstalledOnSystem`, every 10 seconds while it's down): a start while Core still runs does nothing. While its process still runs, the card says so instead.
-- It isn't offered during a restart or bootstrap asked for here: Core comes back by itself.
+- "Start Core" shows only once the node stopped answering, and only when Core's process on this PC is gone and Core is where Hub installs it (`isCoreRunningOnSystem`, `isCoreInstalledOnSystem`, every 10 seconds while it's down): a start while Core still runs does nothing. While its process still runs, wherever it runs from, the card says so instead.
+- When Core's process is gone and Core isn't where Hub looks (`~/qortal`, or the folder chosen in Core setup), the card says so and offers Core setup's own folder picker (`pickQortalDirectory`). It keeps the folder only when Core is in it; Hub then looks again at once.
+- Core restarts and bootstraps itself: `/admin/restart` and `/admin/bootstrap` answer "true", then Core starts a helper Java process from the folder it was started in (`-cp qortal.jar org.qortal.ApplyRestart`, or `ApplyBootstrap`). The helper stops the node and starts Core again: for a restart, up to about 3¼ minutes after the node stops answering. Hub's process check doesn't see the helper, and when it fails, Hub can't see why. So after a restart or bootstrap asked for here:
+  - the node still answering as before after 3 minutes (a read after that shows the node that ran when it was asked): the card says the node hasn't restarted, and that Core's own output (its terminal, or `run.log` in its folder) may say why;
+  - the node not answering for 5 minutes, with Core's process gone too: the card says the node hasn't come back and offers "Start Core" there. While a Core process runs, Core is still on its way back, and the card waits.
+  - Each wait starts again whenever the node starts or stops answering. A new restart or bootstrap replaces what the cards said about the last one.
+- A stop asked for here ends what an earlier restart or bootstrap said, so a restart that never happened doesn't keep "Start Core" from being offered after the stop.
 - Hub's start gives no answer of its own: the card says Hub asked Core to start until the node answers, or that it still isn't answering after 2 minutes.
-- Once the node answers again (or its uptime starts over), what the cards said about stopping, restarting or starting is cleared and the API key is checked again.
+- Once the node answers again, or it started again (the time it started, its uptime taken from this PC's clock, moved later than a read can explain: this also catches a restart while another section was shown), what the cards said about stopping, restarting or starting is cleared and the API key is checked again.
 - The status copy waits as long as the window's other reads (15 seconds), and nothing is copied once the window closes.
 
 ## Later

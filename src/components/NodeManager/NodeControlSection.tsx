@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { Box, Button, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import RestartAltRoundedIcon from '@mui/icons-material/RestartAltRounded';
@@ -47,6 +53,42 @@ export const LOG_LINES = 200;
 /** How long "Start Core" waits for the node to answer before saying so. */
 export const START_WAIT_MS = 120_000;
 
+/**
+ * Core restarts and bootstraps itself through a second Java process, which
+ * can fail where Hub can't see it. How long the node may go on answering as
+ * before, after a restart or bootstrap asked for here, before the window says
+ * it hasn't happened.
+ */
+export const RESTART_UP_WAIT_MS = 180_000;
+
+/**
+ * How long the node may stay away after a restart or bootstrap asked for here
+ * before the window says it hasn't come back and offers Start Core (once
+ * Core's process is gone too). Core's restart helper starts Core again up to
+ * about 3¼ minutes after the node stops answering, and Hub's process check
+ * doesn't see the helper meanwhile: so 5 minutes, as long as Core's own
+ * restart says it can take.
+ */
+export const RESTART_DOWN_WAIT_MS = 300_000;
+
+/** When the node started, by this PC's clock, from its answer to uptime. */
+const startedAtOf = (read: {
+  at: number | null;
+  status: string;
+  value: string | null;
+}) => {
+  if (read.status !== 'ok' || read.at === null || !read.value) return null;
+  const uptime = Number(read.value);
+  return Number.isFinite(uptime) ? read.at - uptime : null;
+};
+
+/**
+ * Whether the node started again: later than before by more than a read can
+ * take (a read's own delay moves the estimate that much).
+ */
+const startedLater = (now: number | null, before: number | null) =>
+  now !== null && before !== null && now > before + READ_TIMEOUT_MS;
+
 type NodeChange = 'restart' | 'stop' | 'bootstrap';
 
 const NODE_CHANGES: Record<NodeChange, { path: string; danger: boolean }> = {
@@ -70,13 +112,15 @@ const NOTHING_DONE: Record<NodeChange, boolean> = {
 /**
  * Whether Hub can start Core on this PC: `stopped` when Core is where Hub
  * installs it and its process is gone, `running` while its process still
- * runs (shutting down, say: a start then does nothing), `elsewhere` when
- * Core isn't where Hub looks.
+ * runs, wherever it runs from (shutting down, say: a start then does
+ * nothing), `elsewhere` when its process is gone and Core isn't where Hub
+ * looks. `recheck` looks again at once.
  */
 const useCoreOnThisPc = (enabled: boolean) => {
   const [state, setState] = useState<
     'unknown' | 'running' | 'stopped' | 'elsewhere'
   >('unknown');
+  const [round, setRound] = useState(0);
   useEffect(() => {
     if (!enabled) {
       setState('unknown');
@@ -94,7 +138,7 @@ const useCoreOnThisPc = (enabled: boolean) => {
           : false;
         if (alive)
           setState(
-            installed === false ? 'elsewhere' : running ? 'running' : 'stopped'
+            running ? 'running' : installed === false ? 'elsewhere' : 'stopped'
           );
       } catch {
         // Can't tell: Hub's own start still checks before it starts.
@@ -107,8 +151,9 @@ const useCoreOnThisPc = (enabled: boolean) => {
       alive = false;
       clearInterval(timer);
     };
-  }, [enabled]);
-  return state;
+  }, [enabled, round]);
+  const recheck = useCallback(() => setRound((count) => count + 1), []);
+  return { recheck, state };
 };
 
 export const NodeControlSection = ({
@@ -126,6 +171,22 @@ export const NodeControlSection = ({
   const { run, states } = useNodeActions(nodeBase);
   const [pending, setPending] = useState<NodeChange | null>(null);
   const [done, setDone] = useState<Record<NodeChange, boolean>>(NOTHING_DONE);
+  // The restart or bootstrap asked for here that the node hasn't come back
+  // from, with when the node had started by then: a new object for each one
+  // asked, so its wait starts over.
+  const [awaiting, setAwaiting] = useState<{
+    change: 'restart' | 'bootstrap';
+    startedAt: number | null;
+  } | null>(null);
+  // The wait for the node's present state (answering or not) since then.
+  const [wait, setWait] = useState<{
+    down: boolean;
+    for: object;
+    over: boolean;
+    since: number;
+  } | null>(null);
+  const [choosingFolder, setChoosingFolder] = useState(false);
+  const [noCoreInFolder, setNoCoreInFolder] = useState(false);
   // Whether the node answers at all, and how long it has run.
   const answers = useNodeRead<string>(
     nodeBase,
@@ -147,32 +208,37 @@ export const NodeControlSection = ({
   }, [run]);
   const key = states.key;
 
-  // The node is back (it answers after it didn't, or its uptime started
-  // over): what was said about stopping, restarting or starting it is over,
-  // and the key is checked again.
-  const seen = useRef<{ down: boolean; uptime: number | null }>({
+  // The node is back (it answers after it didn't, or it started again, also
+  // while this section was hidden): what was said about stopping, restarting
+  // or starting it is over, and the key is checked again. `episode` counts
+  // the times it came back.
+  const seen = useRef<{
+    down: boolean;
+    episode: number;
+    startedAt: number | null;
+  }>({
     down: false,
-    uptime: null,
+    episode: 0,
+    startedAt: null,
   });
+  const startedAt = startedAtOf(answers);
   useEffect(() => {
     if (answers.status === 'error') {
       seen.current.down = true;
       return;
     }
     if (answers.status !== 'ok') return;
-    const uptime = Number(answers.value);
-    const known = Number.isFinite(uptime) ? uptime : null;
-    const restarted =
-      known !== null &&
-      seen.current.uptime !== null &&
-      known < seen.current.uptime;
-    seen.current.uptime = known;
+    const restarted = startedLater(startedAt, seen.current.startedAt);
+    if (startedAt !== null) seen.current.startedAt = startedAt;
     if (!seen.current.down && !restarted) return;
     seen.current.down = false;
+    seen.current.episode += 1;
     setDone(NOTHING_DONE);
+    setAwaiting(null);
     setStarting('idle');
+    setNoCoreInFolder(false);
     void run('key', '/admin/apikey/test');
-  }, [answers.at, answers.status, answers.value, run]);
+  }, [answers.at, answers.status, run, startedAt]);
 
   // Hub's start gives no answer of its own: the node answering is the sign.
   useEffect(() => {
@@ -181,13 +247,42 @@ export const NodeControlSection = ({
     return () => clearTimeout(timer);
   }, [starting]);
 
+  const nodeDown = answers.status === 'error';
+
+  // A restart or bootstrap asked for here gets a wait in each state the node
+  // is in, answering as before or not answering, started again whenever that
+  // changes.
+  useEffect(() => {
+    if (!awaiting) {
+      setWait(null);
+      return;
+    }
+    const down = nodeDown;
+    const since = Date.now();
+    setWait({ down, for: awaiting, over: false, since });
+    const timer = setTimeout(
+      () => setWait({ down, for: awaiting, over: true, since }),
+      down ? RESTART_DOWN_WAIT_MS : RESTART_UP_WAIT_MS
+    );
+    return () => clearTimeout(timer);
+  }, [awaiting, nodeDown]);
+
   const confirm = async () => {
     const change = pending;
     setPending(null);
     if (!change) return;
     const result = await run(change, NODE_CHANGES[change].path);
-    if (result.status === 'done')
-      setDone((previous) => ({ ...previous, [change]: true }));
+    if (result.status !== 'done') return;
+    if (change === 'stop') {
+      // A stop ends what a restart or bootstrap asked for earlier said: one
+      // that never happened would otherwise keep Start from being offered.
+      setDone({ ...NOTHING_DONE, stop: true });
+      setAwaiting(null);
+      return;
+    }
+    // The newest restart or bootstrap is the one the cards speak of.
+    setDone({ ...NOTHING_DONE, [change]: true });
+    setAwaiting({ change, startedAt: seen.current.startedAt });
   };
 
   const startCore = async () => {
@@ -199,6 +294,56 @@ export const NodeControlSection = ({
       setStarting('failed');
     }
   };
+
+  // The wait for the node's present state since the restart or bootstrap
+  // asked for here, once it's over: never a wait for an earlier state or an
+  // earlier request, even in the render before the wait starts again.
+  const waited =
+    awaiting && wait?.over && wait.for === awaiting && wait.down === nodeDown
+      ? wait
+      : null;
+  // Offered only once the node on this PC stopped answering and isn't
+  // coming back by itself (a restart or bootstrap asked for here waits
+  // first), and not while Core's process still runs.
+  const offerStart = canStartCore && nodeDown && (!awaiting || !!waited);
+  const { recheck: recheckCore, state: coreOnPc } = useCoreOnThisPc(
+    offerStart && active
+  );
+  const canChooseFolder =
+    typeof coreSetup()?.pickQortalDirectory === 'function';
+
+  // Core setup's own folder picker: it keeps the folder only when Core is in
+  // it, and answers false when it isn't (null when nothing was chosen).
+  const chooseFolder = async () => {
+    const episode = seen.current.episode;
+    setNoCoreInFolder(false);
+    setChoosingFolder(true);
+    try {
+      const answer = await coreSetup()?.pickQortalDirectory?.();
+      if (answer === false && seen.current.episode === episode)
+        setNoCoreInFolder(true);
+    } catch {
+      // Nothing was kept: Hub looks where it did before.
+    } finally {
+      setChoosingFolder(false);
+      recheckCore();
+    }
+  };
+
+  // A restart or bootstrap asked for here that's late. Still answering: said
+  // once a read after the wait shows the node that ran when it was asked.
+  // Not answering: once Core's process is gone too (while it runs, Core is
+  // still on its way back).
+  const lateState: 'still_up' | 'not_back' | null = !waited
+    ? null
+    : !nodeDown
+      ? (answers.at ?? 0) >= waited.since + RESTART_UP_WAIT_MS &&
+        !startedLater(startedAt, awaiting?.startedAt ?? null)
+        ? 'still_up'
+        : null
+      : offerStart && (coreOnPc === 'stopped' || coreOnPc === 'elsewhere')
+        ? 'not_back'
+        : null;
 
   const changeCard = (
     change: NodeChange,
@@ -225,6 +370,10 @@ export const NodeControlSection = ({
         </Box>
         {state?.status === 'failed' ? (
           <ActionNote tone="error">{failureText(state.reason)}</ActionNote>
+        ) : lateState && awaiting?.change === change ? (
+          <ActionNote tone="error">
+            {t(`node:manager.control.${change}_${lateState}`)}
+          </ActionNote>
         ) : done[change] ? (
           <ActionNote tone="success">
             {t(`node:manager.control.${change}_done`)}
@@ -235,16 +384,31 @@ export const NodeControlSection = ({
     );
   };
 
-  // Offered only once the node on this PC stopped answering and isn't
-  // coming back by itself: not during a restart or bootstrap asked for
-  // here, and not while Core's process still runs.
-  const nodeDown = answers.status === 'error';
-  const offerStart =
-    canStartCore && nodeDown && !done.restart && !done.bootstrap;
-  const coreOnPc = useCoreOnThisPc(offerStart && active);
   const startCoreCard = !offerStart ? null : starting === 'idle' &&
     coreOnPc === 'running' ? (
-    <ActionNote>{t('node:manager.control.start_still_running')}</ActionNote>
+    // After a restart or bootstrap, a Core process means it's on its way.
+    awaiting ? null : (
+      <ActionNote>{t('node:manager.control.start_still_running')}</ActionNote>
+    )
+  ) : starting === 'idle' && coreOnPc === 'elsewhere' ? (
+    canChooseFolder ? (
+      <Box sx={{ display: 'grid', gap: 1 }}>
+        <CardText>{t('node:manager.control.start_elsewhere')}</CardText>
+        <Box>
+          <ActionButton
+            busy={choosingFolder}
+            onClick={() => void chooseFolder()}
+          >
+            {t('node:manager.control.start_choose_folder', capitalize)}
+          </ActionButton>
+        </Box>
+        {noCoreInFolder ? (
+          <ActionNote tone="error">
+            {t('node:error.noJar', capitalize)}
+          </ActionNote>
+        ) : null}
+      </Box>
+    ) : null
   ) : starting === 'idle' && coreOnPc !== 'stopped' ? null : (
     <Box sx={{ display: 'grid', gap: 1 }}>
       <CardText>{t('node:manager.control.start_body')}</CardText>
@@ -266,6 +430,9 @@ export const NodeControlSection = ({
       ) : null}
     </Box>
   );
+  // Start shows in the card of what took the node down.
+  const startIn = (change: NodeChange) =>
+    change === (awaiting?.change ?? 'stop') ? startCoreCard : null;
 
   return (
     <Box
@@ -275,9 +442,13 @@ export const NodeControlSection = ({
         gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 330px), 1fr))',
       }}
     >
-      {changeCard('restart', <RestartAltRoundedIcon />)}
-      {changeCard('stop', <PowerSettingsNewRoundedIcon />, startCoreCard)}
-      {changeCard('bootstrap', <CloudDownloadRoundedIcon />)}
+      {changeCard('restart', <RestartAltRoundedIcon />, startIn('restart'))}
+      {changeCard('stop', <PowerSettingsNewRoundedIcon />, startIn('stop'))}
+      {changeCard(
+        'bootstrap',
+        <CloudDownloadRoundedIcon />,
+        startIn('bootstrap')
+      )}
 
       <OverviewCard
         action={
