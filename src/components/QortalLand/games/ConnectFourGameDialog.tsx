@@ -800,13 +800,13 @@ export function ConnectFourGameDialog({
                         sx={{
                           border: 0,
                           clip: 'rect(0 0 0 0)',
-                          height: 1,
-                          margin: -1,
+                          height: '1px',
+                          margin: '-1px',
                           overflow: 'hidden',
                           padding: 0,
                           position: 'absolute',
                           whiteSpace: 'nowrap',
-                          width: 1,
+                          width: '1px',
                         }}
                       >
                         Game paused
@@ -1116,15 +1116,15 @@ export function ConnectFourGameDialog({
                       sx={{
                         border: 0,
                         clip: 'rect(0 0 0 0)',
-                        height: 1,
+                        height: '1px',
                         lineHeight: '15px',
-                        margin: -1,
+                        margin: '-1px',
                         minHeight: '15px',
                         overflow: 'hidden',
                         padding: 0,
                         position: 'absolute',
                         whiteSpace: 'nowrap',
-                        width: 1,
+                        width: '1px',
                       }}
                     >
                       {match.pendingMoveId
@@ -1240,13 +1240,13 @@ export function ConnectFourGameDialog({
                           sx={{
                             border: 0,
                             clip: 'rect(0 0 0 0)',
-                            height: 1,
-                            margin: -1,
+                            height: '1px',
+                            margin: '-1px',
                             overflow: 'hidden',
                             padding: 0,
                             position: 'absolute',
                             whiteSpace: 'nowrap',
-                            width: 1,
+                            width: '1px',
                           }}
                         >
                           {state.ply} moves against {opponentName}
