@@ -125,9 +125,17 @@ beforeEach(() => {
   );
 });
 
-afterEach(() => {
+// AppsDesktop sends a tab it switches to its page 200 ms later. That has to
+// come while the page is still there, not after the file is done.
+const LATE_PAGE_UPDATE_MS = 200;
+
+afterEach(async () => {
   unsubscribeFromEvent('setTabsToNav', recordNav);
   unsubscribeFromEvent('openGlobalSnackBar', recordSnack);
+  // Timers fire in order, so this one comes after any late update.
+  await new Promise((resolve) =>
+    setTimeout(resolve, LATE_PAGE_UPDATE_MS + 100)
+  );
   vi.unstubAllGlobals();
 });
 
