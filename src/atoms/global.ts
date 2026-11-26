@@ -15,6 +15,10 @@ import { defaultPinnedApps } from '../components/Apps/config/officialApps';
 import { getElectronPersistentStorage } from '../utils/electronPersistentStorage';
 import type { QuitterDashboardFeedCache } from '../components/Widgets/quitter/quitterFeedTypes';
 import type { P2pHealthLevel } from '../lib/p2pHealth';
+import {
+  isScopeMuted,
+  groupHasUnreadConsideringMute,
+} from '../utils/qChatNotificationSettings';
 
 export const sortablePinnedAppsAtom = atomWithReset(defaultPinnedApps);
 
@@ -40,6 +44,17 @@ export const fullScreenAtom = atomWithReset(false);
 export const p2pHealthAtom = atom<P2pHealthLevel | 'unknown'>('unknown');
 export const groupAnnouncementsAtom = atomWithReset({});
 export const groupChatTimestampsAtom = atomWithReset({});
+
+/**
+ * Ephemeral map of `groupId → bump timestamp` set when a user joins a group.
+ * The sort in `memberGroupsWithReticulumChatAtom` uses
+ * `Math.max(group.timestamp, bumpTimestamp)` so newly-joined groups
+ * (which have `timestamp: 0`) sort to the top of the sidebar, as if a
+ * new post was made there. Cleared on reload (not persisted).
+ */
+export const groupJoinBumpTimestampsAtom = atomWithReset<
+  Record<string, number>
+>({});
 export type ReticulumChatSummaryAtomEntry = {
   groupId: number;
   channelId?: string;
@@ -66,6 +81,53 @@ export const reticulumDirectSummariesAtom = atomWithReset<Record<string, any>>(
 );
 export const reticulumChatEnabledAtom = atomWithReset(true);
 export const reticulumEnabledAtom = atomWithReset(true);
+
+/**
+ * Cache of per-group notification settings (including mute state).
+ * Keyed by group ID (string). Populated on app load and updated via
+ * NOTIFICATION_SETTINGS_UPDATED_EVENT. Derived unread atoms read this
+ * to exclude muted channels from their computation.
+ *
+ * Each entry is a flat channel-override store: channels that inherit the
+ * global defaults exactly have no entry in `channels{}`.
+ */
+export const notificationSettingsCacheAtom = atomWithReset<
+  Record<
+    string,
+    import('../utils/qChatNotificationSettings').GroupNotificationStore
+  >
+>({});
+
+/**
+ * Cache of the global notification settings (the source of truth for all
+ * channels). Populated alongside notificationSettingsCacheAtom. Channels
+ * with no override in their group store inherit these values.
+ */
+export const globalNotificationSettingsAtom = atomWithReset<
+  import('../utils/qChatNotificationSettings').GlobalNotificationSettings | null
+>(null);
+
+/**
+ * Version of the global notification settings currently reflected in
+ * notificationSettingsCacheAtom. Increments whenever the global defaults
+ * change; consumers can watch this to invalidate derived state.
+ */
+export const globalNotificationVersionAtom = atom((get) => {
+  const global = get(globalNotificationSettingsAtom);
+  return global?.version ?? 0;
+});
+
+/** Monotonic tick that increments every ~30s (or on visibility change) to trigger re-evaluation of mute expiry in derived atoms. */
+export const muteExpiryTickAtom = atom(0);
+
+/**
+ * Tracks unread welcome-post event IDs per group (groupId → Set<eventId>).
+ * Populated in processReticulumBackgroundEvent when qchatSystem.type ===
+ * 'group-welcome' is detected. Used by derived red-dot atoms to subtract
+ * welcome-post unreads when notifyOnWelcomePosts is false. Cleared when
+ * a group's summary drops to zero unread.
+ */
+export const unreadWelcomeEventIdsAtom = atom<Record<string, Set<string>>>({});
 export const groupsOwnerNamesAtom = atomWithReset({});
 export const groupsPropertiesAtom = atomWithReset({});
 export const hasSettingsChangedAtom = atomWithReset(false);
@@ -76,7 +138,6 @@ export const isUsingImportExportSettingsAtom = atomWithReset(null);
 export const memberGroupsAtom = atomWithReset([]);
 /** Address whose complete group-membership list has been loaded into memberGroupsAtom. */
 export const memberGroupsLoadedAddressAtom = atomWithReset('');
-export const mutedGroupsAtom = atomWithReset([]);
 export const myGroupsWhereIAmAdminAtom = atomWithReset([]);
 
 export const navigationControllerAtom = atomWithReset({});
@@ -125,6 +186,7 @@ export const memberGroupsWithReticulumChatAtom = atom((get) => {
   const groups = get(memberGroupsAtom);
   const reticulumSummaries = get(reticulumChatSummariesAtom);
   const reticulumChatEnabled = get(reticulumChatEnabledAtom);
+  const joinBumpTimestamps = get(groupJoinBumpTimestampsAtom);
   if (!Array.isArray(groups) || !reticulumSummaries) return groups;
   return groups
     .map((group: any) => {
@@ -142,6 +204,8 @@ export const memberGroupsWithReticulumChatAtom = atom((get) => {
             ? lastEvent.timestamp
             : 0;
       if (reticulumChatEnabled) {
+        const coreTimestamp =
+          typeof group?.timestamp === 'number' ? group.timestamp : 0;
         return {
           ...group,
           data: reticulumTimestamp
@@ -149,7 +213,7 @@ export const memberGroupsWithReticulumChatAtom = atom((get) => {
             : undefined,
           reticulumChatSummary: summary,
           sender: reticulumTimestamp ? lastEvent?.authorAddress : undefined,
-          timestamp: reticulumTimestamp || undefined,
+          timestamp: reticulumTimestamp || coreTimestamp || undefined,
         };
       }
       const coreTimestamp =
@@ -166,8 +230,12 @@ export const memberGroupsWithReticulumChatAtom = atom((get) => {
       };
     })
     .sort((a: any, b: any) => {
-      const timestampA = typeof a?.timestamp === 'number' ? a.timestamp : 0;
-      const timestampB = typeof b?.timestamp === 'number' ? b.timestamp : 0;
+      const rawTimestampA = typeof a?.timestamp === 'number' ? a.timestamp : 0;
+      const rawTimestampB = typeof b?.timestamp === 'number' ? b.timestamp : 0;
+      const bumpA = joinBumpTimestamps[String(a?.groupId)] || 0;
+      const bumpB = joinBumpTimestamps[String(b?.groupId)] || 0;
+      const timestampA = Math.max(rawTimestampA, bumpA);
+      const timestampB = Math.max(rawTimestampB, bumpB);
       if (timestampA !== timestampB) return timestampB - timestampA;
       return String(a?.groupName || '').localeCompare(
         String(b?.groupName || '')
@@ -200,6 +268,31 @@ export const reticulumLegacyThreadsEnabledAtom = atomWithStorage<boolean>(
   false,
   electronStorage as any
 );
+
+export interface GlobalNotificationFormState {
+  pushLevel: 'all' | 'mentions' | 'none';
+  suppressEveryoneHere: boolean;
+  notifyOnReplies: boolean;
+  notifyOnReactions: boolean;
+  notifyOnWelcomePosts: boolean;
+  hideMutedChannels: boolean;
+}
+
+export const DEFAULT_GLOBAL_NOTIF_FORM: GlobalNotificationFormState = {
+  pushLevel: 'mentions',
+  suppressEveryoneHere: false,
+  notifyOnReplies: true,
+  notifyOnReactions: true,
+  notifyOnWelcomePosts: true,
+  hideMutedChannels: false,
+};
+
+export const globalNotificationFormAtom =
+  atomWithStorage<GlobalNotificationFormState>(
+    'qortal_global_notification_form',
+    DEFAULT_GLOBAL_NOTIF_FORM,
+    electronStorage as any
+  );
 
 /** Persisted: true = Q-Wallets embedded workspace opens edge-to-edge. */
 export const qWalletsWorkspaceFullScreenAtom = atomWithStorage<boolean>(
@@ -837,20 +930,27 @@ const TIME_DIFF_UNREAD_CHATS_MS = 900000;
 
 /** Derived: any group chat has unread. Subscribe here instead of memberGroupsAtom to avoid re-renders on list change. */
 export const groupChatHasUnreadAtom = atom((get) => {
+  get(muteExpiryTickAtom);
   const groups = get(memberGroupsWithReticulumChatAtom);
   const myAddress = get(userInfoAtom)?.address;
   const groupChatTimestamps = get(groupChatTimestampsAtom);
   const timestampEnterData = get(timestampEnterDataAtom) || {};
   const reticulumChatEnabled = get(reticulumChatEnabledAtom);
-  if (!groups?.length || !myAddress) return false;
+  const muteCache = get(notificationSettingsCacheAtom);
+  if (!groups?.length || !myAddress) {
+    return false;
+  }
   return groups.some((group: any) => {
     if (group?.groupId === '0') return false;
     if (reticulumChatEnabled) {
-      return (
-        group?.reticulumChatSummary?.hasUnreadMention === true ||
-        (group?.reticulumChatSummary?.mentionCount ?? 0) > 0 ||
-        (group?.reticulumChatSummary?.unreadCount ?? 0) > 0
+      const groupSettings = muteCache[String(group?.groupId)];
+      const result = groupHasUnreadConsideringMute(
+        groupSettings,
+        group?.reticulumChatSummary,
+        0,
+        get(globalNotificationFormAtom)
       );
+      return result;
     }
     return (
       group?.data &&
@@ -886,17 +986,23 @@ export const hasUnreadGroupsAtom = atom((get) => {
 export const isUnreadChatAtomFamily = atomFamily((selectedGroupId: string) =>
   atom((get) => {
     if (!selectedGroupId) return false;
+    get(muteExpiryTickAtom);
     const groups = get(memberGroupsWithReticulumChatAtom);
     const myAddress = get(userInfoAtom)?.address;
     const groupChatTimestamps = get(groupChatTimestampsAtom);
     const timestampEnterData = get(timestampEnterDataAtom) || {};
     const reticulumChatEnabled = get(reticulumChatEnabledAtom);
-    const findGroup = groups?.find((g: any) => g?.groupId === selectedGroupId);
+    const muteCache = get(notificationSettingsCacheAtom);
+    const findGroup = groups?.find(
+      (g: any) => String(g?.groupId) === String(selectedGroupId)
+    );
     if (reticulumChatEnabled) {
-      return (
-        findGroup?.reticulumChatSummary?.hasUnreadMention === true ||
-        (findGroup?.reticulumChatSummary?.mentionCount ?? 0) > 0 ||
-        (findGroup?.reticulumChatSummary?.unreadCount ?? 0) > 0
+      const groupSettings = muteCache[String(selectedGroupId)];
+      return groupHasUnreadConsideringMute(
+        groupSettings,
+        findGroup?.reticulumChatSummary,
+        0,
+        get(globalNotificationFormAtom)
       );
     }
     if (!findGroup?.data || !findGroup?.timestamp) return false;
@@ -980,6 +1086,14 @@ export const qortalGroupSelfGcallRoomIdAtom = atom<string | null>(null);
 
 /** UI-only address → primaryName cache for active Qortal group call participants. */
 export const qortalGroupCallPrimaryNamesAtom = atom<Record<string, string>>({});
+
+/** Tracks the currently viewed chat context for notification suppression.
+ *  `{ groupId, channelId, isAtBottom }` — updated by ChatList on scroll/switch. */
+export const chatViewContextAtom = atom<{
+  groupId: number;
+  channelId: string;
+  isAtBottom: boolean;
+}>({ groupId: -1, channelId: '', isAtBottom: false });
 
 /**
  * Qortino AI's panel (src/components/Group/QortinoAgent/QortinoAgentPanel).

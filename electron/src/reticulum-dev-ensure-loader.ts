@@ -16,11 +16,7 @@ function resourcesDir(): string {
   return path.join(__dirname, '..', '..', 'resources');
 }
 
-function canImportModule(
-  py: string,
-  module: string,
-  shell: boolean
-): boolean {
+function canImportModule(py: string, module: string, shell: boolean): boolean {
   const r = spawnSync(py, ['-c', `import ${module}`], {
     encoding: 'utf8',
     windowsHide: true,
@@ -92,7 +88,9 @@ export function needsDevReticulumEnsure(): boolean {
   }
 
   const names =
-    process.platform === 'win32' ? ['python', 'python3'] : ['python3', 'python'];
+    process.platform === 'win32'
+      ? ['python', 'python3']
+      : ['python3', 'python'];
   const shell = process.platform === 'win32';
   for (const name of names) {
     if (!canImportRequiredReticulum(name, shell)) continue;
@@ -139,7 +137,8 @@ const STATUS_MAP: Record<string, string> = {
   get_pip_check: 'Checking Python environment…',
   get_pip_download: 'Downloading Python tooling…',
   get_pip_run: 'Installing pip…',
-  pip_install_rns: 'Installing Qortal Reticulum runtime, LXMF, and game transport…',
+  pip_install_rns:
+    'Installing Qortal Reticulum runtime, LXMF, and game transport…',
   done: 'Done.',
 };
 
@@ -172,7 +171,11 @@ export async function runDevReticulumEnsureIfNeeded(): Promise<boolean> {
   });
 
   const electronRoot = path.join(__dirname, '..', '..');
-  const script = path.join(electronRoot, 'scripts', 'ensure-reticulum-for-dev.mjs');
+  const script = path.join(
+    electronRoot,
+    'scripts',
+    'ensure-reticulum-for-dev.mjs'
+  );
 
   let stderrBuf = '';
 
@@ -235,7 +238,8 @@ export async function runDevReticulumEnsureIfNeeded(): Promise<boolean> {
         await dialog.showMessageBox({
           type: 'error',
           title: 'Reticulum setup failed',
-        message: 'Could not install Reticulum, LXMF, and the game transport automatically.',
+          message:
+            'Could not install Reticulum, LXMF, and the game transport automatically.',
           detail: `${stderrBuf.trim().slice(-1800) || `Process exited with code ${code}.`}
 
 You need Python 3.9+ on PATH and a working internet connection.

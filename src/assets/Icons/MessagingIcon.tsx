@@ -1,10 +1,10 @@
-import { useTheme } from "@mui/material";
+import { useTheme } from '@mui/material';
 
 export const MessagingIcon = ({ color, height = 31, width = 31 }) => {
   const theme = useTheme();
 
-  const setColor = color ? color : theme.palette.text.primary
-  
+  const setColor = color ? color : theme.palette.text.primary;
+
   return (
     <svg
       width={width}

@@ -27,8 +27,7 @@ export function buildImageEmbedLink(image?: {
 export const messageHasImage = (message) => {
   return (
     Array.isArray(message?.images) &&
-    ((message.images[0]?.reticulumResource &&
-      message.images[0]?.fileHash) ||
+    ((message.images[0]?.reticulumResource && message.images[0]?.fileHash) ||
       message.images[0]?.dataUrl ||
       message.images[0]?.base64 ||
       (message.images[0]?.identifier &&

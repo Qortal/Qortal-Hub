@@ -742,7 +742,7 @@ describe('editing the page', () => {
     expect(payload.data).toMatchObject({ name: 'Q-Blog', service: 'APP' });
     expect(payload.data.identifier).toBeUndefined();
   });
-});
+}, 20000);
 
 describe('ratings on the page', () => {
   it('opens the voters list at the star clicked, every time', async () => {

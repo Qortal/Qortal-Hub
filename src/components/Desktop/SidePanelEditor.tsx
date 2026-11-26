@@ -128,7 +128,6 @@ export const SidePanelEditor = ({
             .slice(0, ADD_SUGGESTIONS)
         : [],
     // addedKeys follows settings.items.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [availableQapps, query, settings.items]
   );
 

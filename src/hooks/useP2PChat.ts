@@ -490,15 +490,18 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
         });
 
         // Typing indicators.
-        unsubTyping = window.chat!.onTypingForChat(chatId, ({ authorAddress, active }) => {
-          if (authorAddress === userInfo.address) return;
-          setTypingUsers((prev) => {
-            const next = new Set(prev);
-            if (active) next.add(authorAddress);
-            else next.delete(authorAddress);
-            return next;
-          });
-        });
+        unsubTyping = window.chat!.onTypingForChat(
+          chatId,
+          ({ authorAddress, active }) => {
+            if (authorAddress === userInfo.address) return;
+            setTypingUsers((prev) => {
+              const next = new Set(prev);
+              if (active) next.add(authorAddress);
+              else next.delete(authorAddress);
+              return next;
+            });
+          }
+        );
 
         // Live read receipts.
         unsubRead = window.chat!.onReadForChat(
@@ -543,9 +546,7 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
   // ── Internal helper: build, sign, and dispatch any chat event ────────────
 
   const dispatchEvent = useCallback(
-    async (
-      fields: Omit<P2PChatEvent, 'signature'>
-    ): Promise<void> => {
+    async (fields: Omit<P2PChatEvent, 'signature'>): Promise<void> => {
       const signedFields: Record<string, unknown> = {
         authorAddress: fields.authorAddress,
         authorPublicKey: fields.authorPublicKey,
@@ -558,21 +559,26 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
       };
       // Include optional fields in the signed payload only when present, so
       // they match what buildChatSignedData() in electron/src/chat.ts produces.
-      if (fields.targetId !== undefined) signedFields.targetId = fields.targetId;
+      if (fields.targetId !== undefined)
+        signedFields.targetId = fields.targetId;
       if (fields.replyTo !== undefined) signedFields.replyTo = fields.replyTo;
-      if (fields.attachmentMeta !== undefined) signedFields.attachmentMeta = fields.attachmentMeta;
-      if (fields.attachmentDataHash !== undefined) signedFields.attachmentDataHash = fields.attachmentDataHash;
+      if (fields.attachmentMeta !== undefined)
+        signedFields.attachmentMeta = fields.attachmentMeta;
+      if (fields.attachmentDataHash !== undefined)
+        signedFields.attachmentDataHash = fields.attachmentDataHash;
 
       const signature = await signChatFields(signedFields);
       const event: P2PChatEvent = { ...fields, signature };
 
-      const result = await window.chat!.sendEvent({ type: 'CHAT_EVENT', event });
+      const result = await window.chat!.sendEvent({
+        type: 'CHAT_EVENT',
+        event,
+      });
       if (!result.success) {
         console.error('[useP2PChat] sendEvent rejected:', result.error);
       }
     },
     // chatId is not a dep here — callers pass it explicitly via `fields`.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 
@@ -583,7 +589,9 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
       const trimmed = text.trim();
       if (!trimmed) return;
       if (!window.chat || !userInfo?.address || !userInfo?.publicKey) {
-        console.warn('[useP2PChat] Cannot send: chat API or userInfo not ready');
+        console.warn(
+          '[useP2PChat] Cannot send: chat API or userInfo not ready'
+        );
         return;
       }
 
@@ -616,7 +624,12 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
   const sendEdit = useCallback(
     async (targetId: string, newContent: string): Promise<void> => {
       const trimmed = newContent.trim();
-      if (!trimmed || !window.chat || !userInfo?.address || !userInfo?.publicKey)
+      if (
+        !trimmed ||
+        !window.chat ||
+        !userInfo?.address ||
+        !userInfo?.publicKey
+      )
         return;
 
       setIsSending(true);
@@ -712,7 +725,12 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
   const sendReply = useCallback(
     async (parentId: string, text: string): Promise<void> => {
       const trimmed = text.trim();
-      if (!trimmed || !window.chat || !userInfo?.address || !userInfo?.publicKey)
+      if (
+        !trimmed ||
+        !window.chat ||
+        !userInfo?.address ||
+        !userInfo?.publicKey
+      )
         return;
 
       setIsSending(true);
@@ -769,52 +787,54 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
         return next;
       });
 
-    window.chat
-      .sendReadReceipt(chatId, eventIds, userInfo.address)
-      .catch(() => {});
-  },
-  [chatId, userInfo?.address]
-);
+      window.chat
+        .sendReadReceipt(chatId, eventIds, userInfo.address)
+        .catch(() => {});
+    },
+    [chatId, userInfo?.address]
+  );
 
-// ── sendImageData ─────────────────────────────────────────────────────────
+  // ── sendImageData ─────────────────────────────────────────────────────────
 
-const sendImageData = useCallback(
-  async (params: {
-    attachmentData: string;
-    attachmentDataHash: string;
-    attachmentMeta: AttachmentMeta;
-    caption?: string;
-  }): Promise<void> => {
-    if (!window.chat || !userInfo?.address || !userInfo?.publicKey) {
-      console.warn('[useP2PChat] Cannot send image: chat API or userInfo not ready');
-      return;
-    }
-    setIsSending(true);
-    try {
-      const seq = nextSeqRef.current;
-      nextSeqRef.current = seq + 1;
+  const sendImageData = useCallback(
+    async (params: {
+      attachmentData: string;
+      attachmentDataHash: string;
+      attachmentMeta: AttachmentMeta;
+      caption?: string;
+    }): Promise<void> => {
+      if (!window.chat || !userInfo?.address || !userInfo?.publicKey) {
+        console.warn(
+          '[useP2PChat] Cannot send image: chat API or userInfo not ready'
+        );
+        return;
+      }
+      setIsSending(true);
+      try {
+        const seq = nextSeqRef.current;
+        nextSeqRef.current = seq + 1;
 
-      await dispatchEvent({
-        id: crypto.randomUUID(),
-        chatId,
-        eventType: 'message',
-        authorAddress: userInfo.address,
-        authorPublicKey: userInfo.publicKey,
-        seq,
-        timestamp: Date.now(),
-        content: params.caption ?? '',
-        attachmentMeta: params.attachmentMeta,
-        attachmentDataHash: params.attachmentDataHash,
-        attachmentData: params.attachmentData,
-      });
-    } catch (err) {
-      console.error('[useP2PChat] sendImageData error:', err);
-    } finally {
-      setIsSending(false);
-    }
-  },
-  [chatId, userInfo?.address, userInfo?.publicKey, dispatchEvent]
-);
+        await dispatchEvent({
+          id: crypto.randomUUID(),
+          chatId,
+          eventType: 'message',
+          authorAddress: userInfo.address,
+          authorPublicKey: userInfo.publicKey,
+          seq,
+          timestamp: Date.now(),
+          content: params.caption ?? '',
+          attachmentMeta: params.attachmentMeta,
+          attachmentDataHash: params.attachmentDataHash,
+          attachmentData: params.attachmentData,
+        });
+      } catch (err) {
+        console.error('[useP2PChat] sendImageData error:', err);
+      } finally {
+        setIsSending(false);
+      }
+    },
+    [chatId, userInfo?.address, userInfo?.publicKey, dispatchEvent]
+  );
 
   return {
     messages,

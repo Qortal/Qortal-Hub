@@ -14,9 +14,9 @@ describe('native Ed25519 verification', () => {
     );
     const signature = nacl.sign.detached(message, keyPair.secretKey);
 
-    expect(
-      verifyEd25519Detached(message, signature, keyPair.publicKey)
-    ).toBe(true);
+    expect(verifyEd25519Detached(message, signature, keyPair.publicKey)).toBe(
+      true
+    );
     expect(
       verifyEd25519Detached(
         Uint8Array.from(
@@ -51,11 +51,11 @@ describe('native Ed25519 verification', () => {
 
     expect(keyPair.publicKey).toHaveLength(nacl.sign.publicKeyLength);
     expect(signature).toHaveLength(nacl.sign.signatureLength);
-    expect(nacl.sign.detached.verify(message, signature, keyPair.publicKey)).toBe(
+    expect(
+      nacl.sign.detached.verify(message, signature, keyPair.publicKey)
+    ).toBe(true);
+    expect(verifyEd25519Detached(message, signature, keyPair.publicKey)).toBe(
       true
     );
-    expect(
-      verifyEd25519Detached(message, signature, keyPair.publicKey)
-    ).toBe(true);
   });
 });

@@ -55,38 +55,65 @@ const INBOUND_MICROBATCH_WAIT_MS = 6;
 
 const isExpectedCapability = (
   value: unknown,
-  expected: { address: string; publicKey: string; groupId: number; sessionId: string; destinationHash: string }
+  expected: {
+    address: string;
+    publicKey: string;
+    groupId: number;
+    sessionId: string;
+    destinationHash: string;
+  }
 ): value is Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const fields = value as Record<string, unknown>;
   const keys = Object.keys(fields).sort();
   const expectedKeys = [
-    'address', 'createdAt', 'ephemeralPublicKey', 'expiresAt', 'groupId',
-    'destinationHash', 'instanceId', 'landSessionId', 'nonce', 'protocolVersion',
-    'signerPublicKey', 'type',
+    'address',
+    'createdAt',
+    'ephemeralPublicKey',
+    'expiresAt',
+    'groupId',
+    'destinationHash',
+    'instanceId',
+    'landSessionId',
+    'nonce',
+    'protocolVersion',
+    'signerPublicKey',
+    'type',
   ].sort();
-  if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index])) return false;
+  if (
+    keys.length !== expectedKeys.length ||
+    keys.some((key, index) => key !== expectedKeys[index])
+  )
+    return false;
   const now = Date.now();
-  return fields.type === 'QORTAL_LAND_PROXIMITY_VOICE_SESSION'
-    && fields.protocolVersion === 1
-    && fields.address === expected.address
-    && fields.signerPublicKey === expected.publicKey
-    && String(fields.groupId) === String(expected.groupId)
-    && fields.landSessionId === expected.sessionId
-    && fields.destinationHash === expected.destinationHash
-    && fields.instanceId === qortalLandRealtime.getInstanceId()
-    && typeof fields.ephemeralPublicKey === 'string' && /^[0-9a-f]{64}$/i.test(fields.ephemeralPublicKey)
-    && typeof fields.nonce === 'string' && /^[0-9a-f]{64}$/i.test(fields.nonce)
-    && typeof fields.createdAt === 'number' && Math.abs(now - fields.createdAt) <= 120_000
-    && typeof fields.expiresAt === 'number' && fields.expiresAt > now
-    && fields.expiresAt - fields.createdAt <= 4 * 60 * 60 * 1_000;
+  return (
+    fields.type === 'QORTAL_LAND_PROXIMITY_VOICE_SESSION' &&
+    fields.protocolVersion === 1 &&
+    fields.address === expected.address &&
+    fields.signerPublicKey === expected.publicKey &&
+    String(fields.groupId) === String(expected.groupId) &&
+    fields.landSessionId === expected.sessionId &&
+    fields.destinationHash === expected.destinationHash &&
+    fields.instanceId === qortalLandRealtime.getInstanceId() &&
+    typeof fields.ephemeralPublicKey === 'string' &&
+    /^[0-9a-f]{64}$/i.test(fields.ephemeralPublicKey) &&
+    typeof fields.nonce === 'string' &&
+    /^[0-9a-f]{64}$/i.test(fields.nonce) &&
+    typeof fields.createdAt === 'number' &&
+    Math.abs(now - fields.createdAt) <= 120_000 &&
+    typeof fields.expiresAt === 'number' &&
+    fields.expiresAt > now &&
+    fields.expiresAt - fields.createdAt <= 4 * 60 * 60 * 1_000
+  );
 };
 
 const isTypingTarget = (target: EventTarget | null): boolean => {
   const element = target instanceof HTMLElement ? target : null;
   return Boolean(
     element?.isContentEditable ||
-    element?.closest('input, textarea, select, [contenteditable="true"], [role="textbox"]')
+    element?.closest(
+      'input, textarea, select, [contenteditable="true"], [role="textbox"]'
+    )
   );
 };
 
@@ -110,11 +137,19 @@ const encodeLocalAudio = (
 };
 
 const parseInboundAudio = (buffer: ArrayBuffer) => {
-  if (buffer.byteLength < HEADER_BYTES || buffer.byteLength > 2_048) return null;
+  if (buffer.byteLength < HEADER_BYTES || buffer.byteLength > 2_048)
+    return null;
   const view = new DataView(buffer);
   if (MAGIC.some((byte, index) => view.getUint8(index) !== byte)) return null;
   const length = view.getUint16(24);
-  if (view.getUint8(4) !== 1 || view.getUint8(5) !== 1 || length <= 0 || length > 320 || HEADER_BYTES + length !== buffer.byteLength) return null;
+  if (
+    view.getUint8(4) !== 1 ||
+    view.getUint8(5) !== 1 ||
+    length <= 0 ||
+    length > 320 ||
+    HEADER_BYTES + length !== buffer.byteLength
+  )
+    return null;
   return {
     sourceId: view.getUint16(6),
     generation: view.getUint32(8),
@@ -125,24 +160,45 @@ const parseInboundAudio = (buffer: ArrayBuffer) => {
 };
 
 export function useQortalLandProximityVoice(options: Options) {
-  const { address, publicKey, groupId, sessionId, enabled, suspended, getPosition } = options;
+  const {
+    address,
+    publicKey,
+    groupId,
+    sessionId,
+    enabled,
+    suspended,
+    getPosition,
+  } = options;
   const blockedAddresses = useAtomValue(blockedAddressesAtom);
   const [state, setState] = useState<ProximityVoiceState>('off');
   const [localDestinationHash, setLocalDestinationHash] = useState('');
   const [mode, setModeState] = useState<ProximityVoiceMode>(() =>
-    localStorage.getItem(`qortalland:proximity:mode:${address}`) === 'open-mic' ? 'open-mic' : 'push-to-talk'
+    localStorage.getItem(`qortalland:proximity:mode:${address}`) === 'open-mic'
+      ? 'open-mic'
+      : 'push-to-talk'
   );
-  const [pttKey, setPttKeyState] = useState(() => localStorage.getItem(`qortalland:proximity:key:${address}`) || 'v');
+  const [pttKey, setPttKeyState] = useState(
+    () => localStorage.getItem(`qortalland:proximity:key:${address}`) || 'v'
+  );
   const [peers, setPeers] = useState<Record<string, ProximityPeer>>({});
   const [error, setError] = useState('');
   const [transmitting, setTransmitting] = useState(false);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
-  const [inputDeviceId, setInputDeviceIdState] = useState(() => localStorage.getItem(`qortalland:proximity:input-v2:${address}`) || '');
-  const [outputDeviceId, setOutputDeviceIdState] = useState(() => localStorage.getItem(`qortalland:proximity:output-v2:${address}`) || '');
+  const [inputDeviceId, setInputDeviceIdState] = useState(
+    () => localStorage.getItem(`qortalland:proximity:input-v2:${address}`) || ''
+  );
+  const [outputDeviceId, setOutputDeviceIdState] = useState(
+    () =>
+      localStorage.getItem(`qortalland:proximity:output-v2:${address}`) || ''
+  );
   const [masterVolume, setMasterVolumeState] = useState(() => {
-    const storedValue = localStorage.getItem(`qortalland:proximity:volume-v2:${address}`);
+    const storedValue = localStorage.getItem(
+      `qortalland:proximity:volume-v2:${address}`
+    );
     const stored = storedValue === null ? Number.NaN : Number(storedValue);
-    return Number.isFinite(stored) && stored >= 0 && stored <= 1 ? stored : 0.75;
+    return Number.isFinite(stored) && stored >= 0 && stored <= 1
+      ? stored
+      : 0.75;
   });
   const optedInRef = useRef(false);
   const modeRef = useRef(mode);
@@ -153,34 +209,52 @@ export function useQortalLandProximityVoice(options: Options) {
   const suspendedRef = useRef(suspended);
   const generationRef = useRef(1);
   const sequenceRef = useRef(0);
-  const sourcePeerRef = useRef(new Map<number, { key: string; address: string }>());
+  const sourcePeerRef = useRef(
+    new Map<number, { key: string; address: string }>()
+  );
   const sourceGenerationRef = useRef(new Map<number, number>());
   const senderRef = useRef<GroupCallAudioSenderEngine | null>(null);
   const receiverRef = useRef<GroupCallAudioReceiveEngine | null>(null);
-  const audioFailureStateRef = useRef<Extract<ProximityVoiceState, 'permission-denied' | 'unavailable'> | null>(null);
+  const audioFailureStateRef = useRef<Extract<
+    ProximityVoiceState,
+    'permission-denied' | 'unavailable'
+  > | null>(null);
   const positionSequenceRef = useRef(0);
   const pythonRestartedRef = useRef(false);
   const blockedRef = useRef<Set<string>>(new Set());
   const blockedAddressesRef = useRef(blockedAddresses);
   const pendingCommandsRef = useRef(new Map<string, string>());
 
-  useEffect(() => { modeRef.current = mode; }, [mode]);
-  useEffect(() => { suspendedRef.current = suspended; }, [suspended]);
-  useEffect(() => { blockedAddressesRef.current = blockedAddresses; }, [blockedAddresses]);
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+  useEffect(() => {
+    suspendedRef.current = suspended;
+  }, [suspended]);
+  useEffect(() => {
+    blockedAddressesRef.current = blockedAddresses;
+  }, [blockedAddresses]);
   useEffect(() => {
     let cancelled = false;
     let retryTimer: number | null = null;
     if (!enabled) {
       setLocalDestinationHash('');
-      return () => { cancelled = true; };
+      return () => {
+        cancelled = true;
+      };
     }
     const loadDestination = async () => {
       let hash = '';
       try {
-        const result = await window.electronAPI?.reticulumGetLocalDestinationHash?.();
-        const candidate = String(result?.destinationHash || '').trim().toLowerCase();
+        const result =
+          await window.electronAPI?.reticulumGetLocalDestinationHash?.();
+        const candidate = String(result?.destinationHash || '')
+          .trim()
+          .toLowerCase();
         if (/^[0-9a-f]{32}$/.test(candidate)) hash = candidate;
-      } catch { hash = ''; }
+      } catch {
+        hash = '';
+      }
       if (cancelled) return;
       setLocalDestinationHash(hash);
       if (!hash) retryTimer = window.setTimeout(loadDestination, 1_000);
@@ -192,29 +266,48 @@ export function useQortalLandProximityVoice(options: Options) {
     };
   }, [enabled]);
 
-  const send = useCallback((type: string, payload: Record<string, unknown> = {}) => {
-    const requestId = crypto.randomUUID();
-    pendingCommandsRef.current.set(requestId, type);
-    try {
-      qortalLandRealtime.send({ type, requestId, ...payload });
-    } catch (error) {
-      pendingCommandsRef.current.delete(requestId);
-      throw error;
-    }
-    return requestId;
-  }, []);
+  const send = useCallback(
+    (type: string, payload: Record<string, unknown> = {}) => {
+      const requestId = crypto.randomUUID();
+      pendingCommandsRef.current.set(requestId, type);
+      try {
+        qortalLandRealtime.send({ type, requestId, ...payload });
+      } catch (error) {
+        pendingCommandsRef.current.delete(requestId);
+        throw error;
+      }
+      return requestId;
+    },
+    []
+  );
 
-  const updateTransmit = useCallback((next: boolean) => {
-    const allowed = next && optedInRef.current && !suspendedRef.current && qortalLandRealtime.isReady();
-    if (advertisedTransmitRef.current === allowed) return;
-    advertisedTransmitRef.current = allowed;
-    setTransmitting(allowed);
-    try { send('SET_PROXIMITY_TRANSMIT', { transmitting: allowed, mode: modeRef.current }); } catch { /* reconnecting */ }
-  }, [send]);
+  const updateTransmit = useCallback(
+    (next: boolean) => {
+      const allowed =
+        next &&
+        optedInRef.current &&
+        !suspendedRef.current &&
+        qortalLandRealtime.isReady();
+      if (advertisedTransmitRef.current === allowed) return;
+      advertisedTransmitRef.current = allowed;
+      setTransmitting(allowed);
+      try {
+        send('SET_PROXIMITY_TRANSMIT', {
+          transmitting: allowed,
+          mode: modeRef.current,
+        });
+      } catch {
+        /* reconnecting */
+      }
+    },
+    [send]
+  );
 
   const startAudio = useCallback(async () => {
-    if (!senderRef.current) senderRef.current = new GroupCallAudioSenderEngine();
-    if (!receiverRef.current) receiverRef.current = new GroupCallAudioReceiveEngine(() => {});
+    if (!senderRef.current)
+      senderRef.current = new GroupCallAudioSenderEngine();
+    if (!receiverRef.current)
+      receiverRef.current = new GroupCallAudioReceiveEngine(() => {});
     const sender = senderRef.current;
     try {
       await receiverRef.current.configure({
@@ -232,40 +325,67 @@ export function useQortalLandProximityVoice(options: Options) {
         profile: PROXIMITY_AUDIO_PROFILE,
         onVadChanged: (vad) => {
           vadRef.current = vad;
-          if (vad) vadHangoverUntilRef.current = Date.now() + OPEN_MIC_VAD_HANGOVER_MS;
+          if (vad)
+            vadHangoverUntilRef.current = Date.now() + OPEN_MIC_VAD_HANGOVER_MS;
           // PTT is already an explicit speech gate. Applying frame-level VAD on top
           // clips quiet syllables and consonants and repeatedly starves the jitter buffer.
-          const wantsAudio = modeRef.current === 'open-mic'
-            ? vad || Date.now() < vadHangoverUntilRef.current
-            : pttHeldRef.current;
+          const wantsAudio =
+            modeRef.current === 'open-mic'
+              ? vad || Date.now() < vadHangoverUntilRef.current
+              : pttHeldRef.current;
           updateTransmit(wantsAudio);
         },
         onEncodedFrame: ({ opusFrame, vad }) => {
-          if (vad) vadHangoverUntilRef.current = Date.now() + OPEN_MIC_VAD_HANGOVER_MS;
-          const wantsAudio = modeRef.current === 'open-mic'
-            ? vad || Date.now() < vadHangoverUntilRef.current
-            : pttHeldRef.current;
+          if (vad)
+            vadHangoverUntilRef.current = Date.now() + OPEN_MIC_VAD_HANGOVER_MS;
+          const wantsAudio =
+            modeRef.current === 'open-mic'
+              ? vad || Date.now() < vadHangoverUntilRef.current
+              : pttHeldRef.current;
           updateTransmit(wantsAudio);
-          if (!wantsAudio || !optedInRef.current || suspendedRef.current || opusFrame.byteLength > 320) return;
+          if (
+            !wantsAudio ||
+            !optedInRef.current ||
+            suspendedRef.current ||
+            opusFrame.byteLength > 320
+          )
+            return;
           try {
             sequenceRef.current = (sequenceRef.current + 1) >>> 0;
-            qortalLandRealtime.sendBinary(encodeLocalAudio(generationRef.current, sequenceRef.current, opusFrame));
-          } catch { /* realtime reconnect owns recovery */ }
+            qortalLandRealtime.sendBinary(
+              encodeLocalAudio(
+                generationRef.current,
+                sequenceRef.current,
+                opusFrame
+              )
+            );
+          } catch {
+            /* realtime reconnect owns recovery */
+          }
         },
       });
       // startOrUpdate resets encoder overrides when it rebuilds capture, so apply
       // the proximity budget only after the new encoder is live.
       sender.setOpusBitrate(PROXIMITY_OPUS_BITRATE);
       audioFailureStateRef.current = null;
-      const available = await navigator.mediaDevices.enumerateDevices().catch(() => [] as MediaDeviceInfo[]);
-      setDevices(available.filter((device) => device.kind === 'audioinput' || device.kind === 'audiooutput'));
+      const available = await navigator.mediaDevices
+        .enumerateDevices()
+        .catch(() => [] as MediaDeviceInfo[]);
+      setDevices(
+        available.filter(
+          (device) =>
+            device.kind === 'audioinput' || device.kind === 'audiooutput'
+        )
+      );
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
       await sender.stop().catch(() => {});
       await receiverRef.current?.dispose().catch(() => {});
       senderRef.current = null;
       receiverRef.current = null;
-      const failureState = /permission|denied|notallowed/i.test(message) ? 'permission-denied' : 'unavailable';
+      const failureState = /permission|denied|notallowed/i.test(message)
+        ? 'permission-denied'
+        : 'unavailable';
       audioFailureStateRef.current = failureState;
       setError(message);
       setState(failureState);
@@ -274,14 +394,25 @@ export function useQortalLandProximityVoice(options: Options) {
     }
   }, [inputDeviceId, masterVolume, outputDeviceId, updateTransmit]);
   const startAudioRef = useRef(startAudio);
-  useEffect(() => { startAudioRef.current = startAudio; }, [startAudio]);
+  useEffect(() => {
+    startAudioRef.current = startAudio;
+  }, [startAudio]);
 
   const handleBackgroundAudioFailure = useCallback(() => {
-    try { send('DISABLE_PROXIMITY_VOICE'); } catch { /* transport already unavailable */ }
+    try {
+      send('DISABLE_PROXIMITY_VOICE');
+    } catch {
+      /* transport already unavailable */
+    }
   }, [send]);
 
   const enable = useCallback(async () => {
-    if (!enabled || !publicKey || !localDestinationHash || !qortalLandRealtime.isReady()) {
+    if (
+      !enabled ||
+      !publicKey ||
+      !localDestinationHash ||
+      !qortalLandRealtime.isReady()
+    ) {
       setState('unavailable');
       return;
     }
@@ -298,13 +429,29 @@ export function useQortalLandProximityVoice(options: Options) {
       roomId: position.roomId,
       localDestinationHash,
     });
-    const blocked = Object.keys(blockedAddresses).filter((item) => blockedAddresses[item]);
+    const blocked = Object.keys(blockedAddresses).filter(
+      (item) => blockedAddresses[item]
+    );
     for (const blockedAddress of blocked) {
-      send('SET_PROXIMITY_PEER_POLICY', { address: blockedAddress, blocked: true });
+      send('SET_PROXIMITY_PEER_POLICY', {
+        address: blockedAddress,
+        blocked: true,
+      });
     }
     blockedRef.current = new Set(blocked);
     send('ENABLE_PROXIMITY_VOICE', { mode: modeRef.current });
-  }, [address, blockedAddresses, enabled, getPosition, groupId, localDestinationHash, publicKey, send, sessionId, startAudio]);
+  }, [
+    address,
+    blockedAddresses,
+    enabled,
+    getPosition,
+    groupId,
+    localDestinationHash,
+    publicKey,
+    send,
+    sessionId,
+    startAudio,
+  ]);
 
   const disable = useCallback(async () => {
     audioFailureStateRef.current = null;
@@ -312,7 +459,11 @@ export function useQortalLandProximityVoice(options: Options) {
     pttHeldRef.current = false;
     vadHangoverUntilRef.current = 0;
     updateTransmit(false);
-    try { send('DISABLE_PROXIMITY_VOICE'); } catch { /* already disconnected */ }
+    try {
+      send('DISABLE_PROXIMITY_VOICE');
+    } catch {
+      /* already disconnected */
+    }
     await senderRef.current?.stop();
     await receiverRef.current?.dispose();
     senderRef.current = null;
@@ -327,36 +478,63 @@ export function useQortalLandProximityVoice(options: Options) {
     if (!enabled && optedInRef.current) void disable();
   }, [disable, enabled]);
 
-  const setMode = useCallback((next: ProximityVoiceMode) => {
-    modeRef.current = next;
-    setModeState(next);
-    localStorage.setItem(`qortalland:proximity:mode:${address}`, next);
-    if (next === 'push-to-talk') updateTransmit(false);
-    else updateTransmit(vadRef.current || Date.now() < vadHangoverUntilRef.current);
-  }, [address, updateTransmit]);
+  const setMode = useCallback(
+    (next: ProximityVoiceMode) => {
+      modeRef.current = next;
+      setModeState(next);
+      localStorage.setItem(`qortalland:proximity:mode:${address}`, next);
+      if (next === 'push-to-talk') updateTransmit(false);
+      else
+        updateTransmit(
+          vadRef.current || Date.now() < vadHangoverUntilRef.current
+        );
+    },
+    [address, updateTransmit]
+  );
 
-  const setPttKey = useCallback((key: string) => {
-    const normalized = key.trim().toLowerCase().slice(0, 20) || 'v';
-    setPttKeyState(normalized);
-    localStorage.setItem(`qortalland:proximity:key:${address}`, normalized);
-  }, [address]);
+  const setPttKey = useCallback(
+    (key: string) => {
+      const normalized = key.trim().toLowerCase().slice(0, 20) || 'v';
+      setPttKeyState(normalized);
+      localStorage.setItem(`qortalland:proximity:key:${address}`, normalized);
+    },
+    [address]
+  );
 
-  const setInputDeviceId = useCallback((deviceId: string) => {
-    setInputDeviceIdState(deviceId);
-    localStorage.setItem(`qortalland:proximity:input-v2:${address}`, deviceId);
-  }, [address]);
+  const setInputDeviceId = useCallback(
+    (deviceId: string) => {
+      setInputDeviceIdState(deviceId);
+      localStorage.setItem(
+        `qortalland:proximity:input-v2:${address}`,
+        deviceId
+      );
+    },
+    [address]
+  );
 
-  const setOutputDeviceId = useCallback((deviceId: string) => {
-    setOutputDeviceIdState(deviceId);
-    localStorage.setItem(`qortalland:proximity:output-v2:${address}`, deviceId);
-  }, [address]);
+  const setOutputDeviceId = useCallback(
+    (deviceId: string) => {
+      setOutputDeviceIdState(deviceId);
+      localStorage.setItem(
+        `qortalland:proximity:output-v2:${address}`,
+        deviceId
+      );
+    },
+    [address]
+  );
 
-  const setMasterVolume = useCallback((volume: number) => {
-    const next = Math.max(0, Math.min(1, volume));
-    setMasterVolumeState(next);
-    localStorage.setItem(`qortalland:proximity:volume-v2:${address}`, String(next));
-    receiverRef.current?.setMasterVolume(next);
-  }, [address]);
+  const setMasterVolume = useCallback(
+    (volume: number) => {
+      const next = Math.max(0, Math.min(1, volume));
+      setMasterVolumeState(next);
+      localStorage.setItem(
+        `qortalland:proximity:volume-v2:${address}`,
+        String(next)
+      );
+      receiverRef.current?.setMasterVolume(next);
+    },
+    [address]
+  );
 
   useEffect(() => {
     if (optedInRef.current && !suspendedRef.current) {
@@ -365,7 +543,12 @@ export function useQortalLandProximityVoice(options: Options) {
   }, [handleBackgroundAudioFailure, inputDeviceId, outputDeviceId, startAudio]);
 
   useEffect(() => {
-    if (!enabled || !publicKey || !localDestinationHash || !(window.qortalLandRealtime || window.qortalLandGames)) {
+    if (
+      !enabled ||
+      !publicKey ||
+      !localDestinationHash ||
+      !(window.qortalLandRealtime || window.qortalLandGames)
+    ) {
       setState('unavailable');
       return;
     }
@@ -380,7 +563,8 @@ export function useQortalLandProximityVoice(options: Options) {
         return;
       }
       if (optedInRef.current) {
-        if (!suspendedRef.current) void startAudioRef.current().catch(handleBackgroundAudioFailure);
+        if (!suspendedRef.current)
+          void startAudioRef.current().catch(handleBackgroundAudioFailure);
         else void receiverRef.current?.configure({ hearCall: false });
         const position = getPosition();
         send('SET_LAND_CONTEXT', {
@@ -392,9 +576,14 @@ export function useQortalLandProximityVoice(options: Options) {
           localDestinationHash,
         });
         const currentBlocked = blockedAddressesRef.current;
-        const blocked = Object.keys(currentBlocked).filter((item) => currentBlocked[item]);
+        const blocked = Object.keys(currentBlocked).filter(
+          (item) => currentBlocked[item]
+        );
         for (const blockedAddress of blocked) {
-          send('SET_PROXIMITY_PEER_POLICY', { address: blockedAddress, blocked: true });
+          send('SET_PROXIMITY_PEER_POLICY', {
+            address: blockedAddress,
+            blocked: true,
+          });
         }
         blockedRef.current = new Set(blocked);
         if (pythonRestartedRef.current) {
@@ -412,9 +601,17 @@ export function useQortalLandProximityVoice(options: Options) {
         const command = pendingCommandsRef.current.get(requestId);
         if (!command) return;
         pendingCommandsRef.current.delete(requestId);
-        if (event.ok === false && !['UPDATE_PROXIMITY_POSITION', 'SET_PROXIMITY_TRANSMIT'].includes(command)) {
+        if (
+          event.ok === false &&
+          !['UPDATE_PROXIMITY_POSITION', 'SET_PROXIMITY_TRANSMIT'].includes(
+            command
+          )
+        ) {
           setError(String(event.error || 'Proximity voice command failed'));
-          if (command === 'ENABLE_PROXIMITY_VOICE' || command === 'SUBMIT_PROXIMITY_SESSION_SIGNATURE') {
+          if (
+            command === 'ENABLE_PROXIMITY_VOICE' ||
+            command === 'SUBMIT_PROXIMITY_SESSION_SIGNATURE'
+          ) {
             void disable();
           }
         }
@@ -430,45 +627,82 @@ export function useQortalLandProximityVoice(options: Options) {
       }
       if (event.type === 'PROXIMITY_SIGNATURE_REQUIRED') {
         const fields = event.fields;
-        if (!isExpectedCapability(fields, { address, publicKey, groupId, sessionId, destinationHash: localDestinationHash })) {
-          setError('Python returned an invalid proximity voice signing request');
+        if (
+          !isExpectedCapability(fields, {
+            address,
+            publicKey,
+            groupId,
+            sessionId,
+            destinationHash: localDestinationHash,
+          })
+        ) {
+          setError(
+            'Python returned an invalid proximity voice signing request'
+          );
           void disable();
           return;
         }
-        void window.sendMessage?.('signPresenceMessage', fields, 10_000).then((result: { signature?: string; error?: string }) => {
-          if (!result?.signature || result.error) throw new Error(result?.error || 'Wallet signature failed');
-          send('SUBMIT_PROXIMITY_SESSION_SIGNATURE', { signature: result.signature, publicKey });
-        }).catch((cause: unknown) => {
-          setError(cause instanceof Error ? cause.message : String(cause));
-          void disable();
-        });
+        void window
+          .sendMessage?.('signPresenceMessage', fields, 10_000)
+          .then((result: { signature?: string; error?: string }) => {
+            if (!result?.signature || result.error)
+              throw new Error(result?.error || 'Wallet signature failed');
+            send('SUBMIT_PROXIMITY_SESSION_SIGNATURE', {
+              signature: result.signature,
+              publicKey,
+            });
+          })
+          .catch((cause: unknown) => {
+            setError(cause instanceof Error ? cause.message : String(cause));
+            void disable();
+          });
         return;
       }
       if (event.type === 'PROXIMITY_STATE') {
         const rawState = String(event.state || 'off');
-        const next: ProximityVoiceState = ['off', 'authorizing', 'ready', 'suspended', 'reconnecting', 'permission-denied', 'unavailable'].includes(rawState)
-          ? rawState as ProximityVoiceState
+        const next: ProximityVoiceState = [
+          'off',
+          'authorizing',
+          'ready',
+          'suspended',
+          'reconnecting',
+          'permission-denied',
+          'unavailable',
+        ].includes(rawState)
+          ? (rawState as ProximityVoiceState)
           : 'unavailable';
-        if (typeof event.streamGeneration === 'number') generationRef.current = event.streamGeneration;
-        setState(next === 'off' && audioFailureStateRef.current ? audioFailureStateRef.current : next);
+        if (typeof event.streamGeneration === 'number')
+          generationRef.current = event.streamGeneration;
+        setState(
+          next === 'off' && audioFailureStateRef.current
+            ? audioFailureStateRef.current
+            : next
+        );
         if (next === 'ready') {
-          updateTransmit(modeRef.current === 'open-mic'
-            ? vadRef.current || Date.now() < vadHangoverUntilRef.current
-            : pttHeldRef.current);
+          updateTransmit(
+            modeRef.current === 'open-mic'
+              ? vadRef.current || Date.now() < vadHangoverUntilRef.current
+              : pttHeldRef.current
+          );
         }
         return;
       }
       if (event.type === 'PROXIMITY_TRANSPORT_STATS') {
         senderRef.current?.setOpusBitrate(
-          event.capacityReduced === true ? PROXIMITY_CONGESTED_OPUS_BITRATE : PROXIMITY_OPUS_BITRATE
+          event.capacityReduced === true
+            ? PROXIMITY_CONGESTED_OPUS_BITRATE
+            : PROXIMITY_OPUS_BITRATE
         );
         return;
       }
       if (event.type === 'PROXIMITY_SNAPSHOT') {
-        if (typeof event.streamGeneration === 'number') generationRef.current = event.streamGeneration;
+        if (typeof event.streamGeneration === 'number')
+          generationRef.current = event.streamGeneration;
         if (Array.isArray(event.peers)) {
           const restored: Record<string, ProximityPeer> = {};
-          const previousPeerKeys = new Set(Array.from(sourcePeerRef.current.values(), (peer) => peer.key));
+          const previousPeerKeys = new Set(
+            Array.from(sourcePeerRef.current.values(), (peer) => peer.key)
+          );
           sourcePeerRef.current.clear();
           sourceGenerationRef.current.clear();
           for (const raw of event.peers) {
@@ -478,20 +712,36 @@ export function useQortalLandProximityVoice(options: Options) {
             const peerSessionId = String(peer.sessionId || '');
             const peerKey = String(peer.peerKey || '');
             const sourceId = Number(peer.sourceId || 0);
-            if (!peerAddress || !peerSessionId || peerKey !== `${peerAddress}:${peerSessionId}` || blockedAddressesRef.current[peerAddress] || !Number.isInteger(sourceId) || sourceId <= 0) continue;
+            if (
+              !peerAddress ||
+              !peerSessionId ||
+              peerKey !== `${peerAddress}:${peerSessionId}` ||
+              blockedAddressesRef.current[peerAddress] ||
+              !Number.isInteger(sourceId) ||
+              sourceId <= 0
+            )
+              continue;
             const gain = Number(peer.gain ?? 0);
             const pan = Number(peer.pan ?? 0);
             const volume = Number(peer.volume ?? 1);
-            sourcePeerRef.current.set(sourceId, { key: peerKey, address: peerAddress });
+            sourcePeerRef.current.set(sourceId, {
+              key: peerKey,
+              address: peerAddress,
+            });
             previousPeerKeys.delete(peerKey);
-            receiverRef.current?.setSourceSpatial(peerKey, peer.muted === true ? 0 : gain * volume, pan);
+            receiverRef.current?.setSourceSpatial(
+              peerKey,
+              peer.muted === true ? 0 : gain * volume,
+              pan
+            );
             restored[peerKey] = {
               key: peerKey,
               address: peerAddress,
               sessionId: peerSessionId,
               sourceId,
               state: String(peer.state || 'nearby'),
-              distance: typeof peer.distance === 'number' ? peer.distance : null,
+              distance:
+                typeof peer.distance === 'number' ? peer.distance : null,
               gain,
               pan,
               volume,
@@ -500,10 +750,15 @@ export function useQortalLandProximityVoice(options: Options) {
               speaking: false,
             };
           }
-          for (const stalePeerKey of previousPeerKeys) void receiverRef.current?.removeSource(stalePeerKey);
+          for (const stalePeerKey of previousPeerKeys)
+            void receiverRef.current?.removeSource(stalePeerKey);
           setPeers(restored);
         }
-        if (optedInRef.current && event.enabled === false && qortalLandRealtime.isReady()) {
+        if (
+          optedInRef.current &&
+          event.enabled === false &&
+          qortalLandRealtime.isReady()
+        ) {
           setState('authorizing');
           send('ENABLE_PROXIMITY_VOICE', { mode: modeRef.current });
         }
@@ -514,15 +769,33 @@ export function useQortalLandProximityVoice(options: Options) {
         const peerSessionId = String(event.sessionId || '');
         const peerKey = String(event.peerKey || '');
         const sourceId = Number(event.sourceId || 0);
-        if (!peerAddress || !peerSessionId || peerKey !== `${peerAddress}:${peerSessionId}` || !Number.isInteger(sourceId) || sourceId <= 0) return;
+        if (
+          !peerAddress ||
+          !peerSessionId ||
+          peerKey !== `${peerAddress}:${peerSessionId}` ||
+          !Number.isInteger(sourceId) ||
+          sourceId <= 0
+        )
+          return;
         if (blockedAddressesRef.current[peerAddress]) {
-          send('SET_PROXIMITY_PEER_POLICY', { address: peerAddress, blocked: true, muted: true, volume: 0 });
+          send('SET_PROXIMITY_PEER_POLICY', {
+            address: peerAddress,
+            blocked: true,
+            muted: true,
+            volume: 0,
+          });
           return;
         }
-        sourcePeerRef.current.set(sourceId, { key: peerKey, address: peerAddress });
+        sourcePeerRef.current.set(sourceId, {
+          key: peerKey,
+          address: peerAddress,
+        });
         const disconnected = event.state === 'disconnected';
         if (disconnected) {
-          for (const [mappedSourceId, mappedPeer] of sourcePeerRef.current.entries()) {
+          for (const [
+            mappedSourceId,
+            mappedPeer,
+          ] of sourcePeerRef.current.entries()) {
             if (mappedPeer.key === peerKey) {
               sourcePeerRef.current.delete(mappedSourceId);
               sourceGenerationRef.current.delete(mappedSourceId);
@@ -548,8 +821,11 @@ export function useQortalLandProximityVoice(options: Options) {
             sessionId: peerSessionId,
             sourceId,
             state: String(event.state || 'nearby'),
-            distance: typeof event.distance === 'number' ? event.distance : null,
-            gain, pan, volume,
+            distance:
+              typeof event.distance === 'number' ? event.distance : null,
+            gain,
+            pan,
+            volume,
             audible: event.audible === true,
             muted: event.muted === true,
             speaking: current[peerKey]?.speaking ?? false,
@@ -561,10 +837,17 @@ export function useQortalLandProximityVoice(options: Options) {
         const peerAddress = String(event.address || '');
         const peerKey = String(event.peerKey || '');
         if (!peerAddress || !peerKey || peerAddress === address) return;
-        setPeers((current) => current[peerKey] ? {
-          ...current,
-          [peerKey]: { ...current[peerKey], speaking: event.speaking === true },
-        } : current);
+        setPeers((current) =>
+          current[peerKey]
+            ? {
+                ...current,
+                [peerKey]: {
+                  ...current[peerKey],
+                  speaking: event.speaking === true,
+                },
+              }
+            : current
+        );
       }
     });
     type InboundPlayoutPacket = {
@@ -597,11 +880,19 @@ export function useQortalLandProximityVoice(options: Options) {
       const frame = parseInboundAudio(buffer);
       if (!frame) return;
       const sourcePeer = sourcePeerRef.current.get(frame.sourceId);
-      if (!sourcePeer || blockedAddressesRef.current[sourcePeer.address]) return;
+      if (!sourcePeer || blockedAddressesRef.current[sourcePeer.address])
+        return;
       const peerKey = sourcePeer.key;
-      const previousGeneration = sourceGenerationRef.current.get(frame.sourceId);
-      if (previousGeneration !== undefined && previousGeneration !== frame.generation) {
-        inboundPackets = inboundPackets.filter((packet) => packet.sourceAddr !== peerKey);
+      const previousGeneration = sourceGenerationRef.current.get(
+        frame.sourceId
+      );
+      if (
+        previousGeneration !== undefined &&
+        previousGeneration !== frame.generation
+      ) {
+        inboundPackets = inboundPackets.filter(
+          (packet) => packet.sourceAddr !== peerKey
+        );
         void receiverRef.current?.removeSource(peerKey);
       }
       sourceGenerationRef.current.set(frame.sourceId, frame.generation);
@@ -616,7 +907,10 @@ export function useQortalLandProximityVoice(options: Options) {
       if (inboundPackets.length >= INBOUND_MICROBATCH_MAX_FRAMES) {
         flushInboundPackets();
       } else if (inboundFlushTimer === null) {
-        inboundFlushTimer = window.setTimeout(flushInboundPackets, INBOUND_MICROBATCH_WAIT_MS);
+        inboundFlushTimer = window.setTimeout(
+          flushInboundPackets,
+          INBOUND_MICROBATCH_WAIT_MS
+        );
       }
     });
     return () => {
@@ -627,17 +921,39 @@ export function useQortalLandProximityVoice(options: Options) {
       disposeBinary();
       release();
     };
-  }, [address, disable, enabled, getPosition, groupId, handleBackgroundAudioFailure, localDestinationHash, publicKey, send, sessionId, updateTransmit]);
+  }, [
+    address,
+    disable,
+    enabled,
+    getPosition,
+    groupId,
+    handleBackgroundAudioFailure,
+    localDestinationHash,
+    publicKey,
+    send,
+    sessionId,
+    updateTransmit,
+  ]);
 
   useEffect(() => {
-    const next = new Set(Object.keys(blockedAddresses).filter((item) => blockedAddresses[item]));
+    const next = new Set(
+      Object.keys(blockedAddresses).filter((item) => blockedAddresses[item])
+    );
     if (!qortalLandRealtime.isReady()) return;
     for (const peerAddress of next) {
       if (!blockedRef.current.has(peerAddress)) {
-        try { send('SET_PROXIMITY_PEER_POLICY', { address: peerAddress, blocked: true }); } catch { /* reconnecting */ }
+        try {
+          send('SET_PROXIMITY_PEER_POLICY', {
+            address: peerAddress,
+            blocked: true,
+          });
+        } catch {
+          /* reconnecting */
+        }
       }
       for (const sourcePeer of sourcePeerRef.current.values()) {
-        if (sourcePeer.address === peerAddress) void receiverRef.current?.removeSource(sourcePeer.key);
+        if (sourcePeer.address === peerAddress)
+          void receiverRef.current?.removeSource(sourcePeer.key);
       }
       for (const [sourceId, sourcePeer] of sourcePeerRef.current.entries()) {
         if (sourcePeer.address === peerAddress) {
@@ -646,13 +962,24 @@ export function useQortalLandProximityVoice(options: Options) {
         }
       }
       setPeers((current) => {
-        const entries = Object.entries(current).filter(([, peer]) => peer.address !== peerAddress);
-        return entries.length === Object.keys(current).length ? current : Object.fromEntries(entries);
+        const entries = Object.entries(current).filter(
+          ([, peer]) => peer.address !== peerAddress
+        );
+        return entries.length === Object.keys(current).length
+          ? current
+          : Object.fromEntries(entries);
       });
     }
     for (const peerAddress of blockedRef.current) {
       if (!next.has(peerAddress)) {
-        try { send('SET_PROXIMITY_PEER_POLICY', { address: peerAddress, blocked: false }); } catch { /* reconnecting */ }
+        try {
+          send('SET_PROXIMITY_PEER_POLICY', {
+            address: peerAddress,
+            blocked: false,
+          });
+        } catch {
+          /* reconnecting */
+        }
       }
     }
     blockedRef.current = next;
@@ -669,7 +996,9 @@ export function useQortalLandProximityVoice(options: Options) {
           sequence: positionSequenceRef.current,
           ...position,
         });
-      } catch { /* reconnecting */ }
+      } catch {
+        /* reconnecting */
+      }
     };
     publish();
     const timer = window.setInterval(publish, 200);
@@ -678,21 +1007,40 @@ export function useQortalLandProximityVoice(options: Options) {
 
   useEffect(() => {
     if (!optedInRef.current) return;
-    try { send('SET_PROXIMITY_SUSPENDED', { suspended }); } catch { /* reconnecting */ }
+    try {
+      send('SET_PROXIMITY_SUSPENDED', { suspended });
+    } catch {
+      /* reconnecting */
+    }
     if (suspended) {
       pttHeldRef.current = false;
       updateTransmit(false);
       void senderRef.current?.stop();
       void receiverRef.current?.configure({ hearCall: false });
     } else if (state === 'suspended') {
-      void receiverRef.current?.configure({ hearCall: true }).then(() => receiverRef.current?.setMasterVolume(masterVolume));
+      void receiverRef.current
+        ?.configure({ hearCall: true })
+        .then(() => receiverRef.current?.setMasterVolume(masterVolume));
       void startAudio().catch(handleBackgroundAudioFailure);
     }
-  }, [handleBackgroundAudioFailure, masterVolume, send, startAudio, state, suspended, updateTransmit]);
+  }, [
+    handleBackgroundAudioFailure,
+    masterVolume,
+    send,
+    startAudio,
+    state,
+    suspended,
+    updateTransmit,
+  ]);
 
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
-      if (modeRef.current !== 'push-to-talk' || event.repeat || isTypingTarget(event.target)) return;
+      if (
+        modeRef.current !== 'push-to-talk' ||
+        event.repeat ||
+        isTypingTarget(event.target)
+      )
+        return;
       if (event.key.toLowerCase() !== pttKey) return;
       pttHeldRef.current = true;
       updateTransmit(true);
@@ -724,41 +1072,88 @@ export function useQortalLandProximityVoice(options: Options) {
   }, [pttKey, updateTransmit]);
 
   const disableRef = useRef(disable);
-  useEffect(() => { disableRef.current = disable; }, [disable]);
-  useEffect(() => () => { void disableRef.current(); }, []);
+  useEffect(() => {
+    disableRef.current = disable;
+  }, [disable]);
+  useEffect(
+    () => () => {
+      void disableRef.current();
+    },
+    []
+  );
 
-  const setPeerPolicy = useCallback((peerKey: string, muted: boolean, volume: number) => {
-    const normalizedVolume = Math.max(0, Math.min(1, volume));
-    const peer = peers[peerKey];
-    if (!peer) return;
-    send('SET_PROXIMITY_PEER_POLICY', {
-      address: peer.address,
-      sessionId: peer.sessionId,
-      muted,
-      volume: normalizedVolume,
-    });
-    setPeers((current) => {
-      const currentPeer = current[peerKey];
-      if (!currentPeer) return current;
-      receiverRef.current?.setSourceSpatial(
-        peerKey,
-        muted ? 0 : currentPeer.gain * normalizedVolume,
-        currentPeer.pan
-      );
-      return {
-        ...current,
-        [peerKey]: {
-          ...currentPeer,
-          muted,
-          volume: normalizedVolume,
-        },
-      };
-    });
-  }, [peers, send]);
+  const setPeerPolicy = useCallback(
+    (peerKey: string, muted: boolean, volume: number) => {
+      const normalizedVolume = Math.max(0, Math.min(1, volume));
+      const peer = peers[peerKey];
+      if (!peer) return;
+      send('SET_PROXIMITY_PEER_POLICY', {
+        address: peer.address,
+        sessionId: peer.sessionId,
+        muted,
+        volume: normalizedVolume,
+      });
+      setPeers((current) => {
+        const currentPeer = current[peerKey];
+        if (!currentPeer) return current;
+        receiverRef.current?.setSourceSpatial(
+          peerKey,
+          muted ? 0 : currentPeer.gain * normalizedVolume,
+          currentPeer.pan
+        );
+        return {
+          ...current,
+          [peerKey]: {
+            ...currentPeer,
+            muted,
+            volume: normalizedVolume,
+          },
+        };
+      });
+    },
+    [peers, send]
+  );
 
-  return useMemo(() => ({
-    state, mode, pttKey, peers: Object.values(peers), error, transmitting,
-    devices, inputDeviceId, outputDeviceId, masterVolume,
-    enable, disable, setMode, setPttKey, setPeerPolicy, setInputDeviceId, setOutputDeviceId, setMasterVolume,
-  }), [devices, disable, enable, error, inputDeviceId, masterVolume, mode, outputDeviceId, peers, pttKey, setInputDeviceId, setMasterVolume, setMode, setOutputDeviceId, setPeerPolicy, setPttKey, state, transmitting]);
+  return useMemo(
+    () => ({
+      state,
+      mode,
+      pttKey,
+      peers: Object.values(peers),
+      error,
+      transmitting,
+      devices,
+      inputDeviceId,
+      outputDeviceId,
+      masterVolume,
+      enable,
+      disable,
+      setMode,
+      setPttKey,
+      setPeerPolicy,
+      setInputDeviceId,
+      setOutputDeviceId,
+      setMasterVolume,
+    }),
+    [
+      devices,
+      disable,
+      enable,
+      error,
+      inputDeviceId,
+      masterVolume,
+      mode,
+      outputDeviceId,
+      peers,
+      pttKey,
+      setInputDeviceId,
+      setMasterVolume,
+      setMode,
+      setOutputDeviceId,
+      setPeerPolicy,
+      setPttKey,
+      state,
+      transmitting,
+    ]
+  );
 }

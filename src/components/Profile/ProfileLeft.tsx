@@ -1,5 +1,11 @@
 import { memo } from 'react';
-import { Box, Button, ButtonBase, CircularProgress, useTheme } from '@mui/material';
+import {
+  Box,
+  Button,
+  ButtonBase,
+  CircularProgress,
+  useTheme,
+} from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Spacer } from '../../common/Spacer';
 import {
@@ -84,11 +90,9 @@ export const ProfileLeft = memo(function ProfileLeft({
         <ButtonBase
           onClick={() => {
             if (rawWallet?.address0) {
-              navigator.clipboard
-                .writeText(rawWallet.address0)
-                .catch((err) => {
-                  console.error('Failed to copy address:', err);
-                });
+              navigator.clipboard.writeText(rawWallet.address0).catch((err) => {
+                console.error('Failed to copy address:', err);
+              });
             }
           }}
         >

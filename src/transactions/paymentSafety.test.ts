@@ -23,6 +23,7 @@ import PaymentTransactionUntyped from './PaymentTransaction';
 import TransferAssetTransactionUntyped from './TransferAssetTransaction';
 import publicKeyToAddressUntyped from '../utils/generateWallet/publicKeyToAddress';
 import {
+  checkSignedTransactionFee,
   checkValueTransferFee,
   FeeNotApprovedError,
   formatAtomicAmount,
@@ -36,6 +37,7 @@ import {
   parseDecimalAmount,
   recipientDisplayLabel,
   recipientFromNameRecord,
+  TRANSFER_ASSET_TX_TYPE,
 } from './paymentSafety';
 
 const Base58 = Base58Untyped as any;
@@ -519,5 +521,68 @@ describe('parseDecimalAmount and the transaction builders', () => {
       if (again?.atomic !== parsed.atomic) changed.push(parsed.text);
     }
     expect(changed.slice(0, 5)).toEqual([]);
+  });
+});
+
+describe('checkSignedTransactionFee', () => {
+  // The shape Core's /transactions/decode actually answers with: `type` is a
+  // NAME STRING and `fee` is DECIMAL text. A guard written against a numeric
+  // type and an atomic fee returns early on every real payload — that was the
+  // first version, and 5 of its 9 tests still passed.
+  it('refuses a decoded PAYMENT whose fee is above the ceiling', () => {
+    expect(() =>
+      checkSignedTransactionFee({ type: 'PAYMENT', fee: '500.00000000' })
+    ).toThrow(FeeNotApprovedError);
+  });
+
+  it('refuses a decoded TRANSFER_ASSET above the ceiling', () => {
+    expect(() =>
+      checkSignedTransactionFee({ type: 'TRANSFER_ASSET', fee: '1.00000001' })
+    ).toThrow(FeeNotApprovedError);
+  });
+
+  it('accepts a decoded PAYMENT at a normal fee', () => {
+    const tx = { type: 'PAYMENT', fee: '0.01000000' };
+    expect(checkSignedTransactionFee(tx)).toBe(tx);
+  });
+
+  it('accepts a fee exactly at the ceiling and a zero fee', () => {
+    for (const fee of ['1.00000000', '0.00000000']) {
+      const tx = { type: 'PAYMENT', fee };
+      expect(checkSignedTransactionFee(tx)).toBe(tx);
+    }
+  });
+
+  it('also accepts the numeric type the builders use', () => {
+    expect(() => checkSignedTransactionFee({ type: 2, fee: '9.00' })).toThrow(
+      FeeNotApprovedError
+    );
+    expect(checkSignedTransactionFee({ type: 2, fee: '0.01' })).toEqual({
+      type: 2,
+      fee: '0.01',
+    });
+  });
+
+  it('leaves a transaction that is not a valued transfer alone', () => {
+    for (const type of ['DEPLOY_AT', 'ISSUE_ASSET', 16, 1]) {
+      const tx = { type, fee: '999.00000000' };
+      expect(checkSignedTransactionFee(tx)).toBe(tx);
+    }
+  });
+
+  it('fails closed on a valued transaction whose fee it cannot read', () => {
+    for (const fee of ['', 'abc', '-1', undefined, null]) {
+      expect(() => checkSignedTransactionFee({ type: 'PAYMENT', fee })).toThrow(
+        FeeNotApprovedError
+      );
+    }
+  });
+
+  it('uses 12 for TRANSFER_ASSET, not the AT neighbour 21', () => {
+    // TRANSFER_ASSET is 12. If the constant drifts to 21, an AT's fee would be
+    // refused by a guard that has no business there.
+    expect(TRANSFER_ASSET_TX_TYPE).toBe(12);
+    const atTx = { type: 21, fee: '999.00000000' };
+    expect(checkSignedTransactionFee(atTx)).toBe(atTx);
   });
 });

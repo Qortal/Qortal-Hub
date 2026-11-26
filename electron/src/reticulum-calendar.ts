@@ -141,7 +141,9 @@ function normalizeCoverImage(
     input.metadata && typeof input.metadata === 'object'
       ? (input.metadata as Record<string, unknown>)
       : null;
-  const fileHash = String(input.fileHash || '').trim().toLowerCase();
+  const fileHash = String(input.fileHash || '')
+    .trim()
+    .toLowerCase();
   const sizeBytes = Number(input.sizeBytes);
   const createdAt = Number(input.createdAt);
   const width = Number(metadata?.width);

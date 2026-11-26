@@ -37,14 +37,14 @@ export function shouldNotifyForReticulumDm({
 
   return Boolean(
     eventId &&
-      event.eventType === 'message' &&
-      senderAddress &&
-      senderAddress !== myAddress &&
-      recipientAddress === myAddress &&
-      friendsByAddress?.[senderAddress] &&
-      event.readByOwner !== true &&
-      !hubIsBeingViewed &&
-      Number.isFinite(timestamp) &&
-      timestamp >= listeningSince - RETICULUM_DM_NOTIFICATION_CLOCK_SKEW_MS
+    event.eventType === 'message' &&
+    senderAddress &&
+    senderAddress !== myAddress &&
+    recipientAddress === myAddress &&
+    friendsByAddress?.[senderAddress] &&
+    event.readByOwner !== true &&
+    !hubIsBeingViewed &&
+    Number.isFinite(timestamp) &&
+    timestamp >= listeningSince - RETICULUM_DM_NOTIFICATION_CLOCK_SKEW_MS
   );
 }

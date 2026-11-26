@@ -58,8 +58,11 @@ const isAddressLikeLabel = (value?: string, walletAddress?: string) => {
   const trimmedValue = value?.trim();
   const trimmedWalletAddress = walletAddress?.trim();
   if (!trimmedValue) return false;
-  if (trimmedWalletAddress && trimmedValue === trimmedWalletAddress) return true;
-  return /^Q[a-zA-Z0-9]{24,}$/.test(trimmedValue) && !trimmedValue.includes(' ');
+  if (trimmedWalletAddress && trimmedValue === trimmedWalletAddress)
+    return true;
+  return (
+    /^Q[a-zA-Z0-9]{24,}$/.test(trimmedValue) && !trimmedValue.includes(' ')
+  );
 };
 
 const parsefilenameQortal = (filename?: string) => {
@@ -183,11 +186,7 @@ export const AuthenticationForm = ({
         window.matchMedia('(prefers-reduced-motion: reduce)').matches));
 
   useLayoutEffect(() => {
-    if (
-      !unlockTransition ||
-      shouldReduceMotion ||
-      !avatarRef.current
-    ) {
+    if (!unlockTransition || shouldReduceMotion || !avatarRef.current) {
       return;
     }
 
@@ -257,7 +256,13 @@ export const AuthenticationForm = ({
             },
           }}
         >
-          <Box sx={{ display: 'flex', justifyContent: 'flex-start', width: '100%' }}>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'flex-start',
+              width: '100%',
+            }}
+          >
             <ButtonBase
               onClick={onBack}
               sx={{
@@ -308,9 +313,7 @@ export const AuthenticationForm = ({
                 mt: 1.25,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                textShadow: isLight
-                  ? 'none'
-                  : '0 1px 8px rgba(0,0,0,0.16)',
+                textShadow: isLight ? 'none' : '0 1px 8px rgba(0,0,0,0.16)',
                 whiteSpace: 'nowrap',
               }}
             >
@@ -342,7 +345,9 @@ export const AuthenticationForm = ({
               <ButtonBase
                 onClick={() => {
                   if (rawWallet?.address0) {
-                    void navigator.clipboard?.writeText(rawWallet.address0).catch(() => {});
+                    void navigator.clipboard
+                      ?.writeText(rawWallet.address0)
+                      .catch(() => {});
                   }
                 }}
                 sx={{
@@ -394,7 +399,9 @@ export const AuthenticationForm = ({
                   textTransform: 'uppercase',
                 }}
               >
-                {t('auth:wallet.password', { postProcess: 'capitalizeFirstChar' })}
+                {t('auth:wallet.password', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </Typography>
               <PasswordField
                 id="wallet-unlock-password"
@@ -406,9 +413,12 @@ export const AuthenticationForm = ({
                   }
                 }}
                 ref={passwordRef}
-                placeholder={t('auth:authentication_form.password_placeholder', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
+                placeholder={t(
+                  'auth:authentication_form.password_placeholder',
+                  {
+                    postProcess: 'capitalizeFirstChar',
+                  }
+                )}
                 sx={authPasswordFieldSx(theme)}
               />
             </Box>
@@ -459,12 +469,12 @@ export const AuthenticationForm = ({
                     : 'rgba(148,186,255,0.96)',
                 },
               }}
-              >
-                {t('auth:authentication_form.choose_another_account', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-                <ChevronRightRoundedIcon sx={{ fontSize: 15 }} />
-              </ButtonBase>
+            >
+              {t('auth:authentication_form.choose_another_account', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              <ChevronRightRoundedIcon sx={{ fontSize: 15 }} />
+            </ButtonBase>
 
             <Divider
               sx={{

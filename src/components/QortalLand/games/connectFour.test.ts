@@ -50,8 +50,8 @@ describe('Qonnect Four rules', () => {
 
   it('detects a full-board draw', () => {
     const state = play([
-      1, 2, 4, 4, 4, 3, 2, 2, 5, 2, 5, 1, 1, 6, 6, 2, 3, 3, 0, 1, 4,
-      3, 0, 3, 2, 0, 1, 6, 0, 1, 3, 0, 6, 5, 5, 5, 5, 0, 4, 6, 6, 4,
+      1, 2, 4, 4, 4, 3, 2, 2, 5, 2, 5, 1, 1, 6, 6, 2, 3, 3, 0, 1, 4, 3, 0, 3, 2,
+      0, 1, 6, 0, 1, 3, 0, 6, 5, 5, 5, 5, 0, 4, 6, 6, 4,
     ]);
     expect(state.ply).toBe(42);
     expect(state.outcome).toEqual({ type: 'draw' });

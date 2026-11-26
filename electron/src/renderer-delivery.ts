@@ -35,7 +35,9 @@ export function sendToRenderer(
     return 'sent';
   } catch {
     try {
-      return webContents.isDestroyed() ? 'destroyed' : 'temporarily-unavailable';
+      return webContents.isDestroyed()
+        ? 'destroyed'
+        : 'temporarily-unavailable';
     } catch {
       return 'destroyed';
     }

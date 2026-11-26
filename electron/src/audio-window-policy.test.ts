@@ -33,9 +33,9 @@ describe('audio window policy', () => {
     const isolatedIds = new Set([42]);
     expect(shouldApplyAudioSurfaceIsolationHeaders(42, isolatedIds)).toBe(true);
     expect(shouldApplyAudioSurfaceIsolationHeaders(7, isolatedIds)).toBe(false);
-    expect(shouldApplyAudioSurfaceIsolationHeaders(undefined, isolatedIds)).toBe(
-      false
-    );
+    expect(
+      shouldApplyAudioSurfaceIsolationHeaders(undefined, isolatedIds)
+    ).toBe(false);
   });
 
   it('adds COOP/COEP/CORP to the top-level audio-surface document', () => {
