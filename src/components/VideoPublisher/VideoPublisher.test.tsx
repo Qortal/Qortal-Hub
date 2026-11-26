@@ -982,6 +982,16 @@ describe('VideoPublisher', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/^Trip: Published/);
   });
 
+  // In sx, 1 means 100 %: a box as big as the window around it, not 1 px.
+  it('keeps its announcements for screen readers in a 1 px box', () => {
+    renderWindow();
+
+    const style = getComputedStyle(screen.getByRole('status'));
+    expect(style.position).toBe('absolute');
+    expect(style.width).toBe('1px');
+    expect(style.height).toBe('1px');
+  });
+
   it('holds Publish while a title is longer than the app takes', async () => {
     renderWindow();
     await addVideos(file('Trip.mp4'));

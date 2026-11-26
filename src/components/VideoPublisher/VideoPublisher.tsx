@@ -718,11 +718,12 @@ export const VideoPublisher = () => {
           role="status"
           sx={{
             clip: 'rect(0 0 0 0)',
-            height: 1,
+            // In px: in sx, 1 would be 100 % of the window.
+            height: '1px',
             overflow: 'hidden',
             position: 'absolute',
             whiteSpace: 'nowrap',
-            width: 1,
+            width: '1px',
           }}
         >
           {announcement}
