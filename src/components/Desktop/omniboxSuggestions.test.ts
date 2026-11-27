@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildQortalResourceLink } from '../../utils/qortalLink';
 import type { AppBookmark } from '../Apps/AppBookmarks/bookmarkTypes';
 import {
   MAX_APP_SUGGESTIONS,
@@ -551,5 +552,20 @@ describe('omniboxTabPage', () => {
     expect(omniboxTabPage(tab, 'qortal://APP/Q Blogs/post')).toBe('');
     expect(omniboxTabPage(tab, 'qortal://APP/Other/x')).toBe('');
     expect(omniboxTabPage(tab, undefined)).toBe('');
+  });
+
+  it('reads the link Hub builds for a name with punctuation in it', () => {
+    const named = { name: 'Publisher (QORT)', service: 'APP', tabId: 't' };
+    const link = (path?: string) =>
+      buildQortalResourceLink({ name: named.name, path, service: 'APP' });
+    expect(link('/post/abc')).toBe(
+      'qortal://APP/Publisher%20%28QORT%29/post/abc'
+    );
+    expect(omniboxTabPage(named, link('/post/abc'))).toBe('post/abc');
+    expect(omniboxTabPage(named, link())).toBe('');
+    for (const name of ['Publisher v2.', "Publisher's"]) {
+      const at = buildQortalResourceLink({ name, path: '/a', service: 'APP' });
+      expect(omniboxTabPage({ ...named, name }, at)).toBe('a');
+    }
   });
 });
