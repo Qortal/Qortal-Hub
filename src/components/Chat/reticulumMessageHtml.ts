@@ -51,7 +51,8 @@ function cacheReticulumMessageHtml(key: string, html: string): void {
     return;
   }
   const oldestKey = reticulumMessageHtmlCache.keys().next().value;
-  if (typeof oldestKey === 'string') reticulumMessageHtmlCache.delete(oldestKey);
+  if (typeof oldestKey === 'string')
+    reticulumMessageHtmlCache.delete(oldestKey);
 }
 
 export function normalizeReticulumChatHtmlContent(raw: unknown): string {

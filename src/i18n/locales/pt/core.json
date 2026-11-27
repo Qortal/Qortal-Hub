@@ -1181,7 +1181,14 @@
       "name": "Nome",
       "website": "Site"
     },
-    "suggestions": "Sugestões"
+    "suggestions": "Sugestões",
+    "zoom": {
+      "button": "zoom: {{percent}}",
+      "kept": "guardado para {{name}} neste computador",
+      "same_as_hub": "igual ao Hub",
+      "zoom_in": "aumentar",
+      "zoom_out": "diminuir"
+    }
   },
   "new_post_in": "nova postagem em {{ title }}",
   "node_state": {
@@ -1965,6 +1972,7 @@
       "image_metadata_unremovable": "a imagem {{index}} não pode ser postada: não é possível remover a localização e os dados da câmera deste formato. Salve-a como JPEG ou PNG e tente novamente.",
       "images_too_large": "estas imagens são grandes demais para postar juntas. Remova uma imagem e tente novamente.",
       "name_required": "é necessário um nome Qortal para publicar",
+      "not_posted_left_home": "não publicado: você saiu do Início antes do envio. Publique novamente quando quiser.",
       "post_too_large": "esta postagem tem mais de 5 MB, então o {{app}} não a mostraria. Encurte-a ou remova uma imagem.",
       "publish_failed": "falha ao publicar",
       "too_many_images": "máximo de {{count}} imagens por postagem"

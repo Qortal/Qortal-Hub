@@ -1,8 +1,6 @@
 import { memo } from 'react';
 import { useTheme } from '@mui/material';
-import {
-  AuthenticatedContainer,
-} from '../../styles/App-styles.ts';
+import { AuthenticatedContainer } from '../../styles/App-styles.ts';
 import { ProfileLeft, ProfileLeftProps } from './ProfileLeft';
 
 export type AuthenticatedProfileProps = ProfileLeftProps & {

@@ -608,7 +608,7 @@ export const QuitterFeedWidget = ({
         showNow?: boolean;
       } = {}
     ) => {
-      if (isInitialLoading || itemsRef.current.length === 0) {
+      if (isInitialLoading) {
         return;
       }
 
@@ -665,7 +665,9 @@ export const QuitterFeedWidget = ({
           .slice(0, cutoffIndex)
           .filter((item) => !knownIds.has(item.id));
 
-        if (options.showNow) {
+        // A feed that shows nothing has no "N new posts" above its posts:
+        // what comes in shows at once.
+        if (options.showNow || items.length === 0) {
           const freshItems = prependUniqueFeedItems(
             nextPendingItems,
             pendingItemsRef.current
@@ -779,8 +781,9 @@ export const QuitterFeedWidget = ({
     };
   }, [feedMode, initialFeedState, isInitialLoading, refreshToken]);
 
+  // Every 90 s, also while the feed is empty: a first post shows up too.
   useEffect(() => {
-    if (initialFeedState !== 'success' || feedItems.length === 0) {
+    if (initialFeedState !== 'success') {
       return undefined;
     }
 
@@ -831,7 +834,7 @@ export const QuitterFeedWidget = ({
 
       activeController?.abort();
     };
-  }, [feedMode, feedKey, initialFeedState, feedItems.length]);
+  }, [feedMode, feedKey, initialFeedState]);
 
   const handleOpenPost = useCallback((item: QuitterFeedItem) => {
     openTorqPost(item.author, item.identifier);

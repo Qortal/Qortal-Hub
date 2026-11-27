@@ -1,7 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import { Worker } from 'worker_threads';
-import { error as loggerError, log as loggerLog, warn as loggerWarn } from './logger';
+import {
+  error as loggerError,
+  log as loggerLog,
+  warn as loggerWarn,
+} from './logger';
 import type {
   ReticulumChatWorkerResult,
   ReticulumChatWorkerTask,
@@ -17,13 +21,22 @@ const MAX_RESTART_ATTEMPTS = 3;
 export function resolveReticulumChatWorkerPath(): string {
   const inAsar = __dirname.includes('app.asar');
   if (inAsar) {
-    const unpackedDir = __dirname.replace(/app\.asar(\/|\\)/, 'app.asar.unpacked$1');
+    const unpackedDir = __dirname.replace(
+      /app\.asar(\/|\\)/,
+      'app.asar.unpacked$1'
+    );
     const unpackedPath = path.join(unpackedDir, WORKER_FILENAME);
     if (fs.existsSync(unpackedPath)) return unpackedPath;
   }
   const adjacentPath = path.join(__dirname, WORKER_FILENAME);
   if (fs.existsSync(adjacentPath)) return adjacentPath;
-  const developmentBuildPath = path.join(__dirname, '..', 'build', 'src', WORKER_FILENAME);
+  const developmentBuildPath = path.join(
+    __dirname,
+    '..',
+    'build',
+    'src',
+    WORKER_FILENAME
+  );
   if (fs.existsSync(developmentBuildPath)) return developmentBuildPath;
   return adjacentPath;
 }
@@ -63,7 +76,9 @@ export class ReticulumChatWorkerPool {
       this.spawnWorker(workerPath);
     }
     if (this.workers.length > 0) {
-      loggerLog(`[ReticulumChatWorker:${this.label}] Started ${this.workers.length} worker(s).`);
+      loggerLog(
+        `[ReticulumChatWorker:${this.label}] Started ${this.workers.length} worker(s).`
+      );
     }
   }
 
@@ -91,9 +106,15 @@ export class ReticulumChatWorkerPool {
     this.restartAttempts = 0;
   }
 
-  run(task: ReticulumChatWorkerTaskInput): Promise<ReticulumChatWorkerResult | null> {
+  run(
+    task: ReticulumChatWorkerTaskInput
+  ): Promise<ReticulumChatWorkerResult | null> {
     if (!this.started) this.start();
-    if (this.stopping || this.workers.length === 0 || this.pending.size >= this.maxPending) {
+    if (
+      this.stopping ||
+      this.workers.length === 0 ||
+      this.pending.size >= this.maxPending
+    ) {
       this.fallbackCount += 1;
       if (this.pending.size >= this.maxPending) {
         loggerWarn(
@@ -121,7 +142,12 @@ export class ReticulumChatWorkerPool {
     });
   }
 
-  stats(): { pending: number; workers: number; fallbackCount: number; crashCount: number } {
+  stats(): {
+    pending: number;
+    workers: number;
+    fallbackCount: number;
+    crashCount: number;
+  } {
     return {
       pending: this.pending.size,
       workers: this.workers.length,
@@ -175,7 +201,9 @@ export class ReticulumChatWorkerPool {
     if (index >= 0) this.workers.splice(index, 1);
     if (code !== 0) {
       this.crashCount += 1;
-      loggerError(`[ReticulumChatWorker:${this.label}] Worker exited abnormally code=${code}`);
+      loggerError(
+        `[ReticulumChatWorker:${this.label}] Worker exited abnormally code=${code}`
+      );
     }
     // Resolve only work assigned to the worker that exited. With a pool of
     // multiple workers, leaving those entries pending until every worker dies
@@ -199,7 +227,12 @@ export class ReticulumChatWorkerPool {
       const delayMs = this.restartAttempts * 1_000;
       this.restartTimer = setTimeout(() => {
         this.restartTimer = null;
-        if (this.stopping || !this.started || this.workers.length >= this.workerCount) return;
+        if (
+          this.stopping ||
+          !this.started ||
+          this.workers.length >= this.workerCount
+        )
+          return;
         this.spawnWorker();
         if (this.workers.length > 0) {
           loggerWarn(

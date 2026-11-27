@@ -122,7 +122,8 @@ export const SidePanelArc = ({
   }, [maxTurn]);
 
   const onWheel = (event: WheelEvent<HTMLElement>) => {
-    if (maxTurn <= 0) return;
+    // Ctrl+wheel zooms.
+    if (maxTurn <= 0 || event.ctrlKey) return;
     wheelRef.current += event.deltaY;
     const steps = Math.trunc(wheelRef.current / WHEEL_STEP_PX);
     if (!steps) return;

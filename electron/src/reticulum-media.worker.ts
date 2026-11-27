@@ -8,13 +8,9 @@ const path = require('path') as typeof import('path');
 function loadSharp(): typeof import('sharp') {
   if (__dirname.includes('app.asar.unpacked')) {
     const packedBuildDir = __dirname.replace('app.asar.unpacked', 'app.asar');
-    return require(path.join(
-      packedBuildDir,
-      '..',
-      '..',
-      'node_modules',
-      'sharp'
-    )) as typeof import('sharp');
+    return require(
+      path.join(packedBuildDir, '..', '..', 'node_modules', 'sharp')
+    ) as typeof import('sharp');
   }
   return require('sharp') as typeof import('sharp');
 }

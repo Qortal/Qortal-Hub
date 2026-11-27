@@ -17,7 +17,7 @@ describe('QApp render URL compatibility with guest isolation', () => {
     }
   );
 
-  it.each(['+', '$', '&', ',', ':', ';', '=', '@', '[', ']', '^', '|'])(
+  it.each(['+', '$', '&', ',', ':', ';', '=', '@', '[', ']', '|'])(
     'preserves %s for existing routers and Core navigation reports',
     (punctuation) => {
       const name = `Q-App${punctuation}Test`;
@@ -38,6 +38,21 @@ describe('QApp render URL compatibility with guest isolation', () => {
       ).toBe(true);
     }
   );
+
+  it("keeps '^' encoded because the URL parser always re-encodes it", () => {
+    const name = 'Q-App^Test';
+    const owner = { tabId: 'tab', service: 'APP', name };
+    const root = buildAppRenderRoot(base, owner.service, name);
+    // WHATWG URL serialises '^' in a path as '%5E', so emitting a literal one
+    // would make root and new URL(root).pathname disagree. Pin the encoded form.
+    expect(root).toBe(`${base}/render/APP/Q-App%5ETest`);
+    const url = new URL(`${root}/inbox?theme=dark`);
+    expect(url.pathname).toBe('/render/APP/Q-App%5ETest/inbox');
+    expect(qappGuestUrlAllowed(root, url.href, owner, false)).toBe(true);
+    // The name still reaches the app once decoded.
+    expect(decodeURIComponent(url.pathname.split('/')[3])).toBe(name);
+    expect(owner.name).toBe('Q-App^Test');
+  });
 
   it.each([
     'Q-Shop+',

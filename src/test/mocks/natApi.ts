@@ -10,4 +10,3 @@ export async function createClient() {
 export default {
   createClient,
 };
-

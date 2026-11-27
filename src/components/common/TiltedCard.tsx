@@ -92,7 +92,9 @@ export default function TiltedCard({
         ...(containerWidth ? { width: containerWidth } : null),
       }}
       onMouseMove={handleMouseMove}
-      onPointerMove={handleMouseMove as unknown as React.PointerEventHandler<HTMLElement>}
+      onPointerMove={
+        handleMouseMove as unknown as React.PointerEventHandler<HTMLElement>
+      }
       onMouseEnter={handleMouseEnter}
       onPointerEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}

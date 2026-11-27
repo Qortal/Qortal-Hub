@@ -42,6 +42,7 @@
     "error": {
       "add_to_list": "impossibile aggiungere alla lista",
       "app_fee_not_sent": "la pubblicazione è riuscita, ma la commissione dell'app non è stata inviata: {{ error }}",
+      "app_fee_outcome_unknown": "la pubblicazione è riuscita, ma Hub non è riuscito a stabilire se la commissione dell'app è stata pagata. Controllalo nelle tue transazioni.",
       "at_info": "impossibile trovare informazioni sull'AT",
       "buy_order": "invio ordine di scambio fallito",
       "cancel_sell_order": "annullamento ordine di vendita fallito. Riprova!",
@@ -104,6 +105,7 @@
       "node_info": "recupero info nodo fallito",
       "node_status": "recupero stato nodo fallito",
       "only_encrypted_data": "solo dati criptati possono essere usati nei servizi privati",
+      "payment_outcome_unknown": "Hub non è riuscito a stabilire se questo pagamento è andato a buon fine. Controlla le tue transazioni prima di riprovare.",
       "payments_partially_sent": "pagamenti andati a buon fine prima di questo errore: {{ sent }} su {{ total }}. Controlla le tue transazioni prima di riprovare. {{ error }}",
       "perform_request": "richiesta fallita",
       "poll_create": "creazione sondaggio fallita",

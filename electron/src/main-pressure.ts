@@ -37,7 +37,9 @@ const PROFILE_COOLDOWN_MS = readNumberEnv(
   60_000
 );
 const PROFILER_ENABLED = ['1', 'true', 'yes', 'on'].includes(
-  String(process.env.QORTAL_MAIN_PRESSURE_PROFILER ?? '0').trim().toLowerCase()
+  String(process.env.QORTAL_MAIN_PRESSURE_PROFILER ?? '0')
+    .trim()
+    .toLowerCase()
 );
 const RECENT_SLOW_LIMIT = 12;
 
@@ -65,7 +67,11 @@ function metadataToLog(metadata?: MainPressureMetadata): string {
   const parts: string[] = [];
   for (const [key, value] of Object.entries(metadata)) {
     if (value === undefined || value === null) continue;
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
       parts.push(`${key}=${String(value).slice(0, 120)}`);
     }
   }

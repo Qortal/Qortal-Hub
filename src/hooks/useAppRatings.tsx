@@ -216,16 +216,15 @@ const fetchAllRatingsFromAPI = async (): Promise<Map<
     let rawItems: unknown[] = Array.isArray(rawData)
       ? rawData
       : Array.isArray((rawData as any)?.ratings)
-      ? (rawData as any).ratings
-      : (rawData as any)?.ratings != null
-      ? Object.values((rawData as any).ratings)
-      : [];
+        ? (rawData as any).ratings
+        : (rawData as any)?.ratings != null
+          ? Object.values((rawData as any).ratings)
+          : [];
 
     // Flatten one extra nesting level if the first element is itself an array
     if (rawItems.length > 0 && Array.isArray(rawItems[0])) {
       rawItems = rawItems.flat(1);
     }
-
 
     if (rawItems.length === 0) {
       // Could not extract any items — endpoint exists but format is unrecognised;
@@ -238,7 +237,12 @@ const fetchAllRatingsFromAPI = async (): Promise<Map<
     for (const rawItem of rawItems) {
       // Each item may be a direct BulkRatingEntry or a {key, value} wrapper
       const entry: any = (rawItem as any)?.value ?? rawItem;
-      if (!entry?.appName || !entry?.service || !Array.isArray(entry?.voteCounts)) continue;
+      if (
+        !entry?.appName ||
+        !entry?.service ||
+        !Array.isArray(entry?.voteCounts)
+      )
+        continue;
 
       const key = getCacheKey(entry.appName, entry.service);
       const { averageRating, totalVotes } = calculateRating(entry.voteCounts);

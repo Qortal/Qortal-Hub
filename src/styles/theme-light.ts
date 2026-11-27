@@ -47,8 +47,7 @@ export const lightThemeOptions: ThemeOptions = {
     MuiCard: {
       styleOverrides: {
         root: {
-          boxShadow:
-            '0 12px 28px rgba(44, 38, 28, 0.07)',
+          boxShadow: '0 12px 28px rgba(44, 38, 28, 0.07)',
           borderRadius: '8px',
           border: '1px solid rgba(15, 23, 42, 0.1)',
           transition:

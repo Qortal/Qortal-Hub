@@ -206,8 +206,7 @@ export function AuthButton({
 }: AuthButtonProps) {
   const theme = useTheme();
   const isSubtlePrimary = primary && prominence === 'subtle';
-  const lightSecondaryOutline =
-    theme.palette.mode === 'light' && !primary;
+  const lightSecondaryOutline = theme.palette.mode === 'light' && !primary;
 
   return (
     <ButtonBase
@@ -223,7 +222,8 @@ export function AuthButton({
               borderRadius: '8px',
               color: theme.palette.text.primary,
               display: 'inline-flex',
-              fontFamily: 'Inter, Segoe UI, ui-sans-serif, system-ui, sans-serif',
+              fontFamily:
+                'Inter, Segoe UI, ui-sans-serif, system-ui, sans-serif',
               fontSize: '0.92rem',
               fontSynthesis: 'none',
               fontWeight: 500,
@@ -266,7 +266,8 @@ export function AuthButton({
                   : '#f6f8fc'
                 : 'rgba(230,236,247,0.88)',
               display: 'inline-flex',
-              fontFamily: 'Inter, Segoe UI, ui-sans-serif, system-ui, sans-serif',
+              fontFamily:
+                'Inter, Segoe UI, ui-sans-serif, system-ui, sans-serif',
               fontSize: isSubtlePrimary ? '0.88rem' : '0.92rem',
               fontSynthesis: 'none',
               fontWeight: 500,
@@ -320,7 +321,8 @@ export function AuthInput(props: TextFieldProps) {
               borderRadius: '8px',
               color: theme.palette.text.primary,
               minHeight: 44,
-              transition: 'background-color 160ms ease, border-color 160ms ease',
+              transition:
+                'background-color 160ms ease, border-color 160ms ease',
               '& fieldset': {
                 borderColor: theme.palette.border.main,
               },
@@ -342,7 +344,8 @@ export function AuthInput(props: TextFieldProps) {
               borderRadius: '8px',
               color: theme.palette.text.primary,
               minHeight: 44,
-              transition: 'background-color 160ms ease, border-color 160ms ease',
+              transition:
+                'background-color 160ms ease, border-color 160ms ease',
               '& fieldset': {
                 borderColor: 'rgba(255,255,255,0.08)',
               },
@@ -522,7 +525,9 @@ export function AuthStepDots({
                     : 'rgba(255,255,255,0.12)'
               }`,
               borderRadius: '999px',
-              color: complete ? 'rgba(174,235,191,0.82)' : 'rgba(230,236,247,0.82)',
+              color: complete
+                ? 'rgba(174,235,191,0.82)'
+                : 'rgba(230,236,247,0.82)',
               display: 'inline-flex',
               fontSize: '0.74rem',
               fontWeight: 700,

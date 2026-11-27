@@ -99,13 +99,23 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
       return url;
     }, [url, isDevMode]);
 
+    // A private app's own resource, so main keeps its zoom apart from the
+    // publisher's other private apps (electron/src/app-zoom.ts). A string,
+    // so the owner below keeps its identity: a new owner releases the guest.
+    const privateIdentifier =
+      !isDevMode &&
+      (app?.isPrivate || app?.privateAppProperties) &&
+      typeof app?.identifier === 'string'
+        ? app.identifier
+        : '';
     const guestOwner = useMemo(
       () => ({
         tabId: String(app?.tabId ?? ''),
         name: isDevMode ? 'devapp' : String(app?.name ?? ''),
         service: isDevMode ? 'APP' : String(app?.service ?? ''),
+        ...(privateIdentifier ? { identifier: privateIdentifier } : {}),
       }),
-      [app?.tabId, app?.name, app?.service, isDevMode]
+      [app?.tabId, app?.name, app?.service, privateIdentifier, isDevMode]
     );
 
     useEffect(() => {

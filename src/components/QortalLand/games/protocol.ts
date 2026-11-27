@@ -77,7 +77,11 @@ export type GameSocketEvent = {
 };
 
 export type QortalLandGameWireMessage =
-  | ({ type: 'MOVE' | 'SYNC_MOVE'; matchId: string } & (ConnectFourMove | CheckersMove | ChessMove))
+  | ({ type: 'MOVE' | 'SYNC_MOVE'; matchId: string } & (
+      | ConnectFourMove
+      | CheckersMove
+      | ChessMove
+    ))
   | {
       type: 'MOVE_ACK';
       matchId: string;
@@ -105,8 +109,18 @@ export type QortalLandGameWireMessage =
       ply: number;
       stateHash: string;
     }
-  | { type: 'SYNC_REQUEST'; matchId: string; messageId: string; fromPly: number }
-  | { type: 'PROTOCOL_ERROR'; matchId: string; messageId: string; reason: string };
+  | {
+      type: 'SYNC_REQUEST';
+      matchId: string;
+      messageId: string;
+      fromPly: number;
+    }
+  | {
+      type: 'PROTOCOL_ERROR';
+      matchId: string;
+      messageId: string;
+      reason: string;
+    };
 
 /** @deprecated Use QortalLandGameWireMessage for all supported games. */
 export type ConnectFourWireMessage = QortalLandGameWireMessage;

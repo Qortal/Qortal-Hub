@@ -5,6 +5,7 @@ import {
 } from '../background/background.ts';
 import { listOfAllQortalRequests } from '../hooks/useQortalMessageListener.tsx';
 import { isQAppFileReference } from './qapp-file-reference';
+import { isPdfReaderPayload } from './pdf-reader';
 import {
   addForeignServer,
   addGroupAdminRequest,
@@ -92,7 +93,6 @@ import { refuseWhileHubLocked } from './hubLocked';
 import { triggerMemberGroupsFetch } from '../subscriptions/useInitializeMySubscriptions.ts';
 import { getData, storeData } from '../utils/chromeStorage.ts';
 import { executeEvent } from '../utils/events.ts';
-import { triggerMemberGroupsFetch } from '../subscriptions/useInitializeMySubscriptions.ts';
 
 function getLocalStorage(key) {
   return getData(key).catch((error) => {
@@ -2861,13 +2861,24 @@ function setupMessageListenerQortalRequest() {
       case 'SHOW_PDF_READER': {
         try {
           refuseWhileHubLocked();
-          if (!request.payload?.blob) {
+          const file = request.payload?.blob;
+          if (!file) {
             throw new Error('Missing blob');
           }
-          if (request.payload?.blob?.type !== 'application/pdf')
+          // Q-Apps frequently hand over a Blob whose declared type is empty or
+          // generic (QDN responses, `new Blob([bytes])`, file pickers). Only a
+          // declaration that rules PDF out is rejected; PDF.js validates the
+          // actual bytes.
+          if (
+            !isPdfReaderPayload(
+              [file.type, request.payload?.mimeType],
+              request.payload?.filename ?? file.name
+            )
+          )
             throw new Error('blob type must be application/pdf');
-          const file = request.payload.blob;
-          const blob = isQAppFileReference(file) ? await file.readableBlob() : file;
+          const blob = isQAppFileReference(file)
+            ? await file.readableBlob()
+            : file;
           executeEvent('openPdf', { blob });
           event.source.postMessage(
             {

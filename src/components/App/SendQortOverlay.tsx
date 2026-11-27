@@ -226,7 +226,9 @@ export function SendQortOverlay({
                 py: 1.45,
               }}
             >
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <Box
+                sx={{ display: 'flex', flexDirection: 'column', gap: '4px' }}
+              >
                 <Typography
                   sx={{
                     color: theme.palette.text.primary,
@@ -259,7 +261,10 @@ export function SendQortOverlay({
                   height: 30,
                   width: 30,
                   '&:hover': {
-                    backgroundColor: alpha(theme.palette.common.white, isDarkMode ? 0.05 : 0.55),
+                    backgroundColor: alpha(
+                      theme.palette.common.white,
+                      isDarkMode ? 0.05 : 0.55
+                    ),
                     color: theme.palette.text.primary,
                   },
                 }}

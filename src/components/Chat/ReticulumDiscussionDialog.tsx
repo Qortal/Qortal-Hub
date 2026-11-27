@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Editor } from '@tiptap/core';
 import {
@@ -24,7 +24,11 @@ import { MessageItem } from './MessageItem';
 import type { ReticulumChannelLinkAccess } from './MessageDisplay';
 import { ReticulumGifCompressionStatus } from './ReticulumGifCompressionStatus';
 import { ReticulumMessageExpiryButton } from './ReticulumMessageExpiryButton';
-import { resolveReticulumPreferredMessageExpiryDurationMs } from './reticulumMessageExpiry';
+import {
+  loadReticulumMessageExpiryPreference,
+  resolveReticulumPreferredMessageExpiryDurationMs,
+  saveReticulumMessageExpiryPreference,
+} from './reticulumMessageExpiry';
 import { ReactionPicker } from '../ReactionPicker';
 import { MessageSizeLimitLip } from './MessageSizeLimitLip';
 
@@ -44,7 +48,7 @@ export type ReticulumDiscussionFile = {
 };
 
 export type ReticulumDiscussionDraft = {
-  expiryDurationMs?: number;
+  expiryDurationMs?: number | null;
   htmlContent: string;
   messageText: Record<string, unknown>;
 };
@@ -52,6 +56,7 @@ export type ReticulumDiscussionDraft = {
 type ReticulumDiscussionDialogProps = {
   canWrite: boolean;
   channelExpiryDurationMs?: number;
+  channelId: string;
   compressingGif: boolean;
   files: ReticulumDiscussionFile[];
   loading: boolean;
@@ -60,7 +65,6 @@ type ReticulumDiscussionDialogProps = {
   messages: any[];
   myAddress: string;
   onClose: () => void;
-  onPreferredExpiryChange: (durationMs: number | undefined) => void;
   onRemoveFile: (index: number) => void;
   onSelectFiles: (files: File[]) => void | Promise<void>;
   onSend: (draft: ReticulumDiscussionDraft) => Promise<boolean>;
@@ -78,13 +82,13 @@ type ReticulumDiscussionDialogProps = {
   >;
   reticulumChannelLinkAccess?: ReticulumChannelLinkAccess;
   preparingFile: boolean;
-  preferredExpiryDurationMs?: number;
   selectedGroup: number | string;
 };
 
 export const ReticulumDiscussionDialog = ({
   canWrite,
   channelExpiryDurationMs,
+  channelId,
   compressingGif,
   files,
   loading,
@@ -93,7 +97,6 @@ export const ReticulumDiscussionDialog = ({
   messages,
   myAddress,
   onClose,
-  onPreferredExpiryChange,
   onRemoveFile,
   onSelectFiles,
   onSend,
@@ -108,14 +111,13 @@ export const ReticulumDiscussionDialog = ({
   reticulumMentionUsers,
   reticulumChannelLinkAccess,
   preparingFile,
-  preferredExpiryDurationMs,
   selectedGroup,
 }: ReticulumDiscussionDialogProps) => {
   const theme = useTheme();
   const { t } = useTranslation(['core', 'reticulum']);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [expiryDurationMs, setExpiryDurationMs] = useState<
-    number | undefined
+    number | null | undefined
   >();
   const [formattingResetKey, setFormattingResetKey] = useState(0);
   const [focused, setFocused] = useState(false);
@@ -148,13 +150,38 @@ export const ReticulumDiscussionDialog = ({
       setFormattingResetKey((key) => key + 1);
       return;
     }
+    const preferred = loadReticulumMessageExpiryPreference(
+      myAddress,
+      selectedGroup,
+      channelId
+    );
     setExpiryDurationMs(
       resolveReticulumPreferredMessageExpiryDurationMs(
-        preferredExpiryDurationMs,
+        preferred,
         channelExpiryDurationMs
       )
     );
-  }, [channelExpiryDurationMs, editor, open, preferredExpiryDurationMs]);
+  }, [
+    channelExpiryDurationMs,
+    channelId,
+    editor,
+    myAddress,
+    open,
+    selectedGroup,
+  ]);
+
+  const handleExpiryChange = useCallback(
+    (durationMs: number | null | undefined) => {
+      saveReticulumMessageExpiryPreference(
+        myAddress,
+        selectedGroup,
+        durationMs,
+        channelId
+      );
+      setExpiryDurationMs(durationMs);
+    },
+    [myAddress, selectedGroup, channelId]
+  );
 
   useEffect(() => {
     if (!open || messages.length === 0) return;
@@ -193,7 +220,11 @@ export const ReticulumDiscussionDialog = ({
         editor.commands.clearContent();
         setExpiryDurationMs(
           resolveReticulumPreferredMessageExpiryDurationMs(
-            preferredExpiryDurationMs,
+            loadReticulumMessageExpiryPreference(
+              myAddress,
+              selectedGroup,
+              channelId
+            ),
             channelExpiryDurationMs
           )
         );
@@ -657,9 +688,7 @@ export const ReticulumDiscussionDialog = ({
               disabledReason={t('reticulum:discussion.wait_until_ready', {
                 postProcess: 'capitalizeFirstChar',
               })}
-              onChange={setExpiryDurationMs}
-              onPreferredExpiryChange={onPreferredExpiryChange}
-              preferredExpiryDurationMs={preferredExpiryDurationMs}
+              onChange={handleExpiryChange}
               segmented
               value={expiryDurationMs}
             />

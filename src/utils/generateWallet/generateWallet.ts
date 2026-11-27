@@ -118,10 +118,7 @@ export const saveFileToDisk = async (data, qortAddress) => {
   }
 
   // Web: File System Access API for a real file picker when supported
-  if (
-    typeof window !== 'undefined' &&
-    'showSaveFilePicker' in window
-  ) {
+  if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
     try {
       const handle = await window.showSaveFilePicker({
         suggestedName: fileName,

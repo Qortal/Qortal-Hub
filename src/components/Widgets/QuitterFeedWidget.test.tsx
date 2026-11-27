@@ -1,6 +1,13 @@
 import { ThemeProvider } from '@mui/material/styles';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
+import { Activity } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Initialises the shared i18n instance so useTranslation resolves real strings.
 import '../../i18n/i18n';
@@ -98,6 +105,33 @@ const renderWidget = (
   const view = render(ui(refreshToken));
   return { ...view, refresh: (token: number) => view.rerender(ui(token)) };
 };
+
+/**
+ * The feed as Home has it: inside <Activity>, which hides Home (and does not
+ * unmount it) while an app tab is on screen.
+ */
+const renderOnHome = (store: ReturnType<typeof createStore>) => {
+  const ui = (homeShown: boolean) => (
+    <Provider store={store}>
+      <ThemeProvider theme={lightTheme}>
+        <Activity mode={homeShown ? 'visible' : 'hidden'}>
+          <QuitterFeedWidget />
+        </Activity>
+      </ThemeProvider>
+    </Provider>
+  );
+  const view = render(ui(true));
+  return {
+    leaveHome: () => act(() => view.rerender(ui(false))),
+    backToHome: () => act(() => view.rerender(ui(true))),
+  };
+};
+
+const feedPage = (items: QuitterFeedItem[]) => ({
+  hasMore: false,
+  items,
+  nextOffset: 0,
+});
 
 const openedApps = () =>
   vi
@@ -339,6 +373,131 @@ describe('QuitterFeedWidget as the Torq feed', () => {
 
       expect(await screen.findByText('posted from Torq')).toBeInTheDocument();
       expect(followingAuthors().slice(-1)[0]).toEqual(['Viewer']);
+    });
+  });
+
+  describe('checking for new posts', () => {
+    // FEED_POLL_INTERVAL_MS in QuitterFeedWidget.tsx.
+    const POLL_MS = 90_000;
+    const waitPoll = () =>
+      act(() => vi.advanceTimersByTimeAsync(POLL_MS + 1_000));
+
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      vi.mocked(fetchQuitterFollowedNames).mockResolvedValue(['Alice']);
+      // The accounts the reader follows haven't posted yet.
+      vi.mocked(fetchQuitterFeedPage).mockResolvedValue(feedPage([]));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('checks an empty feed too, and shows the first post that comes in', async () => {
+      renderWidget(makeStore());
+      expect(
+        await screen.findByText('No followed posts available')
+      ).toBeInTheDocument();
+      expect(fetchQuitterFeedPage).toHaveBeenCalledTimes(1);
+
+      vi.mocked(fetchQuitterFeedPage).mockResolvedValue(
+        feedPage([post('Alice', 'p1', 'first post from Alice')])
+      );
+      await waitPoll();
+
+      expect(screen.getByText('first post from Alice')).toBeInTheDocument();
+      // There is no list to show "1 new post" above: it is there at once.
+      expect(screen.queryByText('1 new post')).toBeNull();
+    });
+
+    it('shows a first post made while Home was hidden at its next check', async () => {
+      const home = renderOnHome(makeStore());
+      expect(
+        await screen.findByText('No followed posts available')
+      ).toBeInTheDocument();
+
+      home.leaveHome();
+      vi.mocked(fetchQuitterFeedPage).mockResolvedValue(
+        feedPage([post('Alice', 'p1', 'first post from Alice')])
+      );
+      // Ten minutes in an app tab.
+      await act(() => vi.advanceTimersByTimeAsync(10 * 60_000));
+      home.backToHome();
+      await waitPoll();
+
+      expect(screen.getByText('first post from Alice')).toBeInTheDocument();
+    });
+
+    it('shows a new post when all it had are from users hidden in Torq', async () => {
+      vi.mocked(fetchQuitterFeedPage).mockResolvedValue(
+        feedPage([post('Spammer', 'p2', 'buy now')])
+      );
+      renderWidget(makeStore());
+      expect(
+        await screen.findByText('No followed posts available')
+      ).toBeInTheDocument();
+
+      vi.mocked(fetchQuitterFeedPage).mockResolvedValue(
+        feedPage([
+          post('Alice', 'p1', 'first post from Alice'),
+          post('Spammer', 'p2', 'buy now'),
+        ])
+      );
+      await waitPoll();
+
+      expect(screen.getByText('first post from Alice')).toBeInTheDocument();
+      expect(screen.queryByText('buy now')).toBeNull();
+    });
+
+    it('keeps "N new posts" above a feed that shows posts', async () => {
+      vi.mocked(fetchQuitterFeedPage).mockResolvedValue(
+        feedPage([post('Alice', 'p1', 'older post')])
+      );
+      renderWidget(makeStore());
+      expect(await screen.findByText('older post')).toBeInTheDocument();
+
+      vi.mocked(fetchQuitterFeedPage).mockResolvedValue(
+        feedPage([
+          post('Alice', 'p2', 'newer post'),
+          post('Alice', 'p1', 'older post'),
+        ])
+      );
+      await waitPoll();
+
+      expect(screen.getByText('1 new post')).toBeInTheDocument();
+      expect(screen.queryByText('newer post')).toBeNull();
+    });
+  });
+
+  describe('a post that went through while Home was hidden', () => {
+    it('shows at the top when Home is back', async () => {
+      let answer: (value: unknown) => void = () => undefined;
+      const sendMessage = vi.fn(
+        () => new Promise((resolve) => (answer = resolve))
+      );
+      window.sendMessage = sendMessage;
+      const home = renderOnHome(makeStore());
+      await screen.findByText('hello from alice');
+      fireEvent.click(screen.getByRole('button', { name: 'Post to Torq' }));
+      fireEvent.change(screen.getByRole('textbox', { name: 'Post text' }), {
+        target: { value: 'my new post' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Publish' }));
+      await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+      vi.mocked(fetchQuitterFeedPage).mockResolvedValue(
+        feedPage([
+          post('Viewer', 'mine', 'my new post'),
+          post('Alice', 'p1', 'hello from alice'),
+        ])
+      );
+
+      home.leaveHome();
+      await act(async () => answer([{ signature: 'sig' }]));
+      home.backToHome();
+
+      expect(await screen.findByText('my new post')).toBeInTheDocument();
+      expect(screen.getByText('Published to Torq')).toBeInTheDocument();
+      expect(screen.queryByText('1 new post')).toBeNull();
     });
   });
 });

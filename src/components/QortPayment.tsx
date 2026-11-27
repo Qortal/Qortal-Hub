@@ -11,7 +11,7 @@ import {
 } from '@mui/material';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getFee, resolveRecipient } from '../background/background.ts';
 import { useTranslation } from 'react-i18next';
 import BoundedNumericTextField from '../common/BoundedNumericTextField.tsx';
@@ -25,6 +25,7 @@ import {
   parseDecimalAmount,
   recipientDisplayLabel,
 } from '../transactions/paymentSafety';
+import { PAYMENT_OUTCOME_UNKNOWN_CODE } from '../transactions/paymentAnswer';
 
 export const QortPayment = ({
   balance,
@@ -59,6 +60,16 @@ export const QortPayment = ({
     setPaymentTo(defaultPaymentTo || '');
   }, [defaultPaymentTo]);
 
+  // The overlay can close while a payment is in flight; how it ended is then
+  // told in Hub's notification.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const fieldLabelSx = {
     color: secondaryTextColor,
     fontSize: compact ? '0.75rem' : '0.77rem',
@@ -88,6 +99,17 @@ export const QortPayment = ({
     }
 
     return rawMessage;
+  };
+  const showSendError = (message: string, outcomeUnknown: boolean) => {
+    if (isMountedRef.current) {
+      setSendPaymentError(message);
+      return;
+    }
+    executeEvent('openGlobalSnackBar', {
+      message,
+      type: outcomeUnknown ? 'warning' : 'error',
+      duration: 8000,
+    });
   };
 
   const textFieldSurfaceSx = {
@@ -202,8 +224,20 @@ export const QortPayment = ({
           approvedFee: fee,
         })
         .then((response) => {
-          if (response?.error) {
-            setSendPaymentError(formatSendPaymentError(response.error));
+          // Only `true` says the payment was sent. After signing every answer
+          // gives a reason, so one without a reason failed before signing.
+          if (response !== true) {
+            const { error, code } = (response ?? {}) as {
+              error?: unknown;
+              code?: unknown;
+            };
+            showSendError(
+              formatSendPaymentError(error) ||
+                t('question:message.error.send', {
+                  postProcess: 'capitalizeFirstChar',
+                }),
+              code === PAYMENT_OUTCOME_UNKNOWN_CODE
+            );
           } else {
             executeEvent(QORTINO_DONATION_COMPLETED_EVENT, {
               recipient: paymentTo.trim(),
@@ -213,8 +247,14 @@ export const QortPayment = ({
           setIsLoadingSendCoin(false);
         })
         .catch((error) => {
+          // No answer in time: the payment may still have gone through.
           console.error('Failed to send coin:', error);
-          setSendPaymentError(formatSendPaymentError(error));
+          showSendError(
+            t('question:message.error.payment_outcome_unknown', {
+              postProcess: 'capitalizeFirstChar',
+            }),
+            true
+          );
           setIsLoadingSendCoin(false);
         });
     } catch (error) {

@@ -1181,7 +1181,14 @@
       "name": "Nimi",
       "website": "Verkkosivusto"
     },
-    "suggestions": "Ehdotukset"
+    "suggestions": "Ehdotukset",
+    "zoom": {
+      "button": "zoomaus: {{percent}}",
+      "kept": "tallennettu sovellukselle {{name}} tällä tietokoneella",
+      "same_as_hub": "sama kuin Hubissa",
+      "zoom_in": "lähennä",
+      "zoom_out": "loitonna"
+    }
   },
   "new_post_in": "uusi julkaisu kohteessa {{ title }}",
   "node_state": {
@@ -1965,6 +1972,7 @@
       "image_metadata_unremovable": "kuvaa {{index}} ei voi julkaista: sijainti- ja kameratietoja ei voi poistaa tästä muodosta. Tallenna se JPEG- tai PNG-muodossa ja yritä uudelleen.",
       "images_too_large": "nämä kuvat ovat liian suuria julkaistavaksi yhdessä. Poista yksi kuva ja yritä uudelleen.",
       "name_required": "julkaiseminen vaatii Qortal-nimen",
+      "not_posted_left_home": "ei julkaistu: poistuit etusivulta ennen kuin julkaisu lähetettiin. Julkaise se uudelleen, kun olet valmis.",
       "post_too_large": "tämä julkaisu on yli 5 Mt, joten {{app}} ei näyttäisi sitä. Lyhennä sitä tai poista kuva.",
       "publish_failed": "julkaisu epäonnistui",
       "too_many_images": "enintään {{count}} kuvaa julkaisua kohden"

@@ -39,6 +39,9 @@ import { PresenceStatusBadge } from '../common/PresenceStatusBadge';
 import { hasInvisibleCharacters } from '../../utils/hasInvisibleCharacters';
 import qortalWhiteLogo from '../../assets/sidebar/qortal-logo-white.png';
 
+const RETICULUM_ACTIVE_BLUE_DARK = '#2563eb';
+const RETICULUM_ACTIVE_BLUE_LIGHT = '#5090e1';
+
 /** Renders only the presence badge for a single DM address.
  * Subscribes to per-address atoms so a change to any other peer
  * does NOT trigger a re-render of this component.
@@ -482,25 +485,17 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
                   position: 'relative',
                   width: '100%',
                   backgroundColor: isSelected
-                    ? theme.palette.action.selected
+                    ? theme.palette.mode === 'dark'
+                      ? RETICULUM_ACTIVE_BLUE_DARK
+                      : RETICULUM_ACTIVE_BLUE_LIGHT
                     : 'transparent',
                   transition:
                     'background-color 0.15s ease, border-color 0.15s ease',
-                  '&::before': {
-                    backgroundColor: isSelected
-                      ? theme.palette.primary.main
-                      : 'transparent',
-                    borderRadius: '999px',
-                    bottom: '5px',
-                    content: '""',
-                    left: 0,
-                    position: 'absolute',
-                    top: '5px',
-                    width: '3px',
-                  },
                   '&:hover': {
                     backgroundColor: isSelected
-                      ? theme.palette.action.selected
+                      ? theme.palette.mode === 'dark'
+                        ? RETICULUM_ACTIVE_BLUE_DARK
+                        : RETICULUM_ACTIVE_BLUE_LIGHT
                       : theme.palette.action.hover,
                     '& .dm-friend-indicator': {
                       opacity: 1,
@@ -621,7 +616,10 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
                     }}
                     secondaryTypographyProps={{
                       sx: {
-                        color: theme.palette.text.secondary,
+                        color:
+                          theme.palette.mode === 'dark'
+                            ? 'rgb(240, 240, 240)'
+                            : 'rgb(21, 26, 35)',
                         fontFamily: 'Inter',
                         fontSize: reticulumChatEnabled ? '11px' : '12px',
                         lineHeight: 1.4,

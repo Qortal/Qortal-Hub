@@ -112,6 +112,7 @@ import { capitalizeFirstChar } from '../../i18n/processors';
 import Base58Untyped from '../../encryption/Base58';
 import publicKeyToAddressUntyped from '../../utils/generateWallet/publicKeyToAddress';
 import {
+  deployAt,
   multiPaymentWithPrivateData,
   payAppFeeAfterPublish,
   publishMultipleQDNResources,
@@ -119,7 +120,7 @@ import {
   sendCoin,
   transferAssetRequest,
 } from '../get';
-import { isRunningGateway } from '../qortal-requests';
+import { hasSessionPermission, isRunningGateway } from '../qortal-requests';
 import { sendLocalForeignCoin } from '../foreign-coin-send';
 import {
   createEndpoint,
@@ -147,6 +148,7 @@ import {
   checkValueTransferFee,
   parseDecimalAmount,
 } from '../../transactions/paymentSafety';
+import { serializeQortalRequestError } from '../qortal-request-errors';
 
 const Base58 = Base58Untyped as any;
 const publicKeyToAddress = publicKeyToAddressUntyped as any;
@@ -291,7 +293,11 @@ beforeEach(() => {
   vi.mocked(sendQortFee).mockResolvedValue(FEE as unknown as number);
   vi.mocked(getFee).mockResolvedValue({ timestamp: 1, fee: FEE });
   vi.mocked(getBalanceInfo).mockResolvedValue(100);
-  vi.mocked(getAssetBalanceInfo).mockResolvedValue(100);
+  // Atomic units, as the real `getAssetBalanceInfo` reads /assets/balances.
+  // This was `100` — one micro-unit of the asset — which only passed because the
+  // asset-balance guard compared atomic against decimal text and so never fired.
+  // A realistic balance keeps that guard live instead of silently dead.
+  vi.mocked(getAssetBalanceInfo).mockResolvedValue(1e12);
   vi.mocked(getAssetInfo).mockResolvedValue({ name: 'TESTASSET' });
   vi.mocked(resolveRecipient).mockImplementation(async (value: unknown) => {
     if (value === 'Recipient B')
@@ -314,7 +320,7 @@ describe('SEND_COIN with QORT', () => {
     stubBalance(100);
     const payloads = answerPrompts({ accepted: true });
     vi.mocked(sendCoinFunc).mockResolvedValue({
-      res: { success: true, data: { signature: 'SIG' } },
+      res: { success: true, outcome: 'sent', data: { signature: 'SIG' } },
       validApi: null,
     });
 
@@ -342,7 +348,7 @@ describe('SEND_COIN with QORT', () => {
     stubBalance(100);
     const payloads = answerPrompts({ accepted: true });
     vi.mocked(sendCoinFunc).mockResolvedValue({
-      res: { success: true, data: { signature: 'SIG' } },
+      res: { success: true, outcome: 'sent', data: { signature: 'SIG' } },
       validApi: null,
     });
 
@@ -384,7 +390,7 @@ describe('SEND_COIN with QORT', () => {
     stubBalance(100);
     const payloads = answerPrompts({ accepted: true });
     vi.mocked(sendCoinFunc).mockResolvedValue({
-      res: { success: true, data: { signature: 'SIG' } },
+      res: { success: true, outcome: 'sent', data: { signature: 'SIG' } },
       validApi: null,
     });
     const amount = 0.1 + 0.2; // 0.30000000000000004
@@ -437,6 +443,60 @@ describe('SEND_COIN with QORT', () => {
     ).rejects.toThrow('question:message.error.fee_above_limit');
     expect(payloads).toHaveLength(0);
     expect(sendCoinFunc).not.toHaveBeenCalled();
+  });
+
+  // background.ts sendCoin reports `sent` only when the node's answer
+  // carries the payment's signature.
+  it("rejects with the node's reason when it refuses the payment", async () => {
+    stubBalance(100);
+    answerPrompts({ accepted: true });
+    vi.mocked(sendCoinFunc).mockResolvedValue({
+      res: {
+        success: false,
+        outcome: 'refused',
+        data: {
+          error: 312,
+          message: 'transaction invalid: insufficient balance (NO_BALANCE)',
+        },
+      },
+      validApi: null,
+    });
+    const error = await sendCoin(
+      { coin: 'QORT', amount: '1', recipient: ACCOUNT_A },
+      false,
+      OPENED_APP
+    ).catch((rejected) => rejected);
+    expect(error).toBeInstanceOf(Error);
+    expect(serializeQortalRequestError(error)).toEqual({
+      error: 'transaction invalid: insufficient balance (NO_BALANCE)',
+      message: 'transaction invalid: insufficient balance (NO_BALANCE)',
+    });
+  });
+
+  it('rejects with PAYMENT_OUTCOME_UNKNOWN when the answer does not say whether the payment went through', async () => {
+    stubBalance(100);
+    answerPrompts({ accepted: true });
+    vi.mocked(sendCoinFunc).mockResolvedValue({
+      res: {
+        success: false,
+        outcome: 'unknown',
+        data: '<html><body><h1>502 Bad Gateway</h1></body></html>',
+      },
+      validApi: null,
+    });
+    const error = await sendCoin(
+      { coin: 'QORT', amount: '1', recipient: ACCOUNT_A },
+      false,
+      OPENED_APP
+    ).catch((rejected) => rejected);
+    expect(error).toBeInstanceOf(Error);
+    // What the Q-App gets back (qortal-requests.ts serializes it).
+    expect(serializeQortalRequestError(error)).toEqual({
+      error: 'PAYMENT_OUTCOME_UNKNOWN',
+      code: 'PAYMENT_OUTCOME_UNKNOWN',
+      message: 'question:message.error.payment_outcome_unknown',
+    });
+    expect(sendCoinFunc).toHaveBeenCalledTimes(1);
   });
 
   it('leaves a foreign coin "send max" request as it was', async () => {
@@ -553,6 +613,47 @@ describe('TRANSFER_ASSET', () => {
     expect(transferAsset).not.toHaveBeenCalled();
   });
 
+  it('accepts a send that spends the balance exactly, plus its fee', async () => {
+    // 0.28 + 0.01 fee against exactly 0.29 QORT. The old check scaled the
+    // balance through toFixed(0) but left `Number(amount) * 1e8` unrounded, so
+    // the sum came out one float ulp over the balance and the send was refused
+    // as insufficient.
+    stubBalance('0.29000000');
+    vi.mocked(sendQortFee).mockResolvedValue('0.01000000');
+    vi.mocked(sendCoinFunc).mockResolvedValue({
+      res: { success: true, outcome: 'sent', data: { signature: 'SIG' } },
+      validApi: null,
+    });
+    const payloads = answerPrompts({ accepted: true });
+
+    await sendCoin(
+      { coin: 'QORT', amount: '0.28', destinationAddress: ACCOUNT_C },
+      false,
+      OPENED_APP
+    );
+
+    expect(payloads).toHaveLength(1);
+    expect(sendCoinFunc).toHaveBeenCalledTimes(1);
+  });
+
+  it('still refuses a send one unit past the balance', async () => {
+    // The boundary above must not have been loosened into "never refuse".
+    stubBalance('0.29000000');
+    vi.mocked(sendQortFee).mockResolvedValue('0.01000000');
+    const payloads = answerPrompts({ accepted: true });
+
+    await expect(
+      sendCoin(
+        { coin: 'QORT', amount: '0.29', destinationAddress: ACCOUNT_C },
+        false,
+        OPENED_APP
+      )
+    ).rejects.toThrow('question:message.error.insufficient_funds');
+
+    expect(payloads).toHaveLength(0);
+    expect(sendCoinFunc).not.toHaveBeenCalled();
+  });
+
   it('refuses a node fee above the ceiling before asking', async () => {
     const payloads = answerPrompts({ accepted: true });
     vi.mocked(getFee).mockResolvedValue({ timestamp: 1, fee: '3.00000000' });
@@ -569,6 +670,34 @@ describe('TRANSFER_ASSET', () => {
 });
 
 // ── MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA ───────────────────────────────────
+
+describe('DEPLOY_AT amount', () => {
+  it('parses the amount before showing it, so the box shows what the AT is funded with', async () => {
+    // The dialog renders `amount` verbatim, while DeployAtTransaction does
+    // Math.round(rAmount * 1e8). Passing the raw request value let '1e3' read as
+    // "1e3 QORT" in the box the user ticks, then fund the AT with 1000 QORT.
+    vi.mocked(getFee).mockResolvedValue({ timestamp: 1, fee: FEE });
+    const payloads = answerPrompts({ accepted: false });
+
+    await expect(
+      deployAt(
+        {
+          name: 'at',
+          description: 'd',
+          tags: 't',
+          creationBytes: 'BYTES',
+          amount: '1e3',
+          assetId: 0,
+          type: 'CODE',
+        },
+        false,
+        OPENED_APP
+      )
+    ).rejects.toThrow(/invalid_amount/i);
+
+    expect(payloads).toHaveLength(0);
+  });
+});
 
 describe('MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA', () => {
   const request = {
@@ -658,7 +787,11 @@ describe('MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA', () => {
       parseDecimalAmount(amount);
       return { signature: 'PAY' };
     });
-    vi.mocked(getAssetBalanceInfo).mockResolvedValue(1e10);
+    // This case is about a large amount surviving the round trip, so the balance
+    // must fund it. 1e10 atomic is 100 whole units, which the 100000000.1-unit
+    // payment below exceeds; it only passed before because the asset-balance
+    // guard compared atomic against decimal and could never fire.
+    vi.mocked(getAssetBalanceInfo).mockResolvedValue(1e20);
     const large = {
       ...request,
       assetId: 5,
@@ -691,6 +824,20 @@ describe('MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA', () => {
       })}`
     );
     expect(transferAsset).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses a multi-payment the asset balance cannot fund, before asking', async () => {
+    const payloads = answerPrompts({ accepted: true });
+    // The request totals 3.25 units (1 + 2.25). The node answers /assets/balances
+    // in atomic units, so 100000000 is 1 whole unit: not enough for 3.25.
+    vi.mocked(getAssetBalanceInfo).mockResolvedValue(100000000);
+
+    await expect(
+      multiPaymentWithPrivateData(request, false, OPENED_APP)
+    ).rejects.toThrow('question:message.error.insufficient_balance');
+
+    expect(payloads).toHaveLength(0);
+    expect(transferAsset).not.toHaveBeenCalled();
   });
 
   it('passes the first failure through when nothing was sent', async () => {
@@ -817,6 +964,30 @@ describe('MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA', () => {
     );
   });
 
+  it('names an AT recipient as an invalid recipient, not a missing public key', async () => {
+    // A MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA encrypts to the recipient's public
+    // key, and an AT has none. The recipient gate accepted the AT address and the
+    // very next line threw a public-key error, so the user was told their
+    // recipient had a key problem rather than that an AT cannot receive a
+    // private payment.
+    const payloads = answerPrompts({ accepted: true });
+    const atAddress = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+
+    await expect(
+      multiPaymentWithPrivateData(
+        {
+          ...request,
+          payments: [{ ...request.payments[0], recipient: atAddress }],
+        },
+        false,
+        OPENED_APP
+      )
+    ).rejects.toThrow(/invalid_receiver|recipient/i);
+
+    expect(payloads).toHaveLength(0);
+    expect(transferAsset).not.toHaveBeenCalled();
+  });
+
   it('refuses an asset id it cannot read before asking', async () => {
     const payloads = answerPrompts({ accepted: true });
     await expect(
@@ -864,7 +1035,7 @@ describe('app fee after a publish', () => {
 
   it('pays with the fee the dialog showed and says nothing when it goes through', async () => {
     vi.mocked(sendCoinFunc).mockResolvedValue({
-      res: { success: true, data: {} },
+      res: { success: true, outcome: 'sent', data: {} },
       validApi: null,
     });
     await expect(payAppFeeAfterPublish(payment)).resolves.toBeUndefined();
@@ -892,7 +1063,11 @@ describe('app fee after a publish', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     onTestFinished(() => warn.mockRestore());
     vi.mocked(sendCoinFunc).mockResolvedValue({
-      res: { success: false, data: { error: 2, message: 'NO_BALANCE' } },
+      res: {
+        success: false,
+        outcome: 'refused',
+        data: { error: 2, message: 'NO_BALANCE' },
+      },
       validApi: null,
     });
     await expect(payAppFeeAfterPublish(payment)).resolves.toBeUndefined();
@@ -903,6 +1078,29 @@ describe('app fee after a publish', () => {
         message: `question:message.error.app_fee_not_sent ${JSON.stringify({
           error: 'NO_BALANCE',
         })}`,
+      })
+    );
+  });
+
+  it('tells the user to check their transactions when the answer does not say whether the fee was paid', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    onTestFinished(() => warn.mockRestore());
+    vi.mocked(sendCoinFunc).mockResolvedValue({
+      res: {
+        success: false,
+        outcome: 'unknown',
+        data: '<html><body><h1>502 Bad Gateway</h1></body></html>',
+      },
+      validApi: null,
+    });
+    await expect(payAppFeeAfterPublish(payment)).resolves.toBeUndefined();
+    expect(sendCoinFunc).toHaveBeenCalledTimes(1);
+    expect(executeEvent).toHaveBeenCalledTimes(1);
+    expect(executeEvent).toHaveBeenCalledWith(
+      'openGlobalSnackBar',
+      expect.objectContaining({
+        type: 'warning',
+        message: 'question:message.error.app_fee_outcome_unknown',
       })
     );
   });
@@ -975,7 +1173,7 @@ describe('app fee after a publish', () => {
       vi.mocked(getAllUserNames).mockResolvedValue(['Publisher']);
       vi.mocked(publishData).mockResolvedValue({ signature: 'PUBLISH_SIG' });
       vi.mocked(sendCoinFunc).mockResolvedValue({
-        res: { success: true, data: {} },
+        res: { success: true, outcome: 'sent', data: {} },
         validApi: null,
       });
     });
@@ -1064,6 +1262,66 @@ describe('app fee after a publish', () => {
           publish({ appFee: '1.5', appFeeRecipient: 'Recipient B' })
         );
         expect(payloads[0].appFee).toBe('1.51');
+        expect(publishData).toHaveBeenCalledTimes(1);
+        expect(sendCoinFunc).not.toHaveBeenCalled();
+      }
+    );
+
+    it.each(publishes)(
+      '%s passes the fee it showed to publishData, so signing uses it',
+      async (_kind, publish) => {
+        // Without `feeAmount` publishData re-reads the ARBITRARY fee at signing
+        // time and the amount the user approved is discarded. `?fee=` takes
+        // atomic units, and getFee answers decimal text, so the value passed
+        // must be the atomic form of FEE ('0.01000000' -> 1000000).
+        const payloads = answerPrompts({ accepted: true });
+
+        await withFakeTimers(() => publish({}));
+
+        expect(payloads).toHaveLength(1);
+        expect(publishData).toHaveBeenCalledWith(
+          expect.objectContaining({ feeAmount: 1000000 })
+        );
+      }
+    );
+
+    it.each(publishes)(
+      '%s still shows the app fee when the tab already holds the publish grant',
+      async (_kind, publish) => {
+        // A session grant covers the publish. It does not cover the app fee,
+        // which is a separate amount of QORT leaving the wallet that the user
+        // has never been shown. Skipping the dialog on a grant meant the fee was
+        // never displayed AND `checkbox1` stayed false, so the branch that pays
+        // the app fee was skipped too: the app was silently never paid.
+        vi.mocked(hasSessionPermission).mockReturnValue(true);
+        const payloads = answerPrompts({ accepted: true, checkbox1: true });
+
+        await withFakeTimers(() =>
+          publish({ appFee: '1.50', appFeeRecipient: 'Recipient B' })
+        );
+
+        expect(payloads).toHaveLength(1);
+        expect(payloads[0].appFee).toBe('1.51');
+        expect(payloads[0].confirmCheckbox).toBe(true);
+        expect(sendCoinFunc).toHaveBeenCalledTimes(1);
+        expect(sendCoinFunc).toHaveBeenCalledWith(
+          { amount: 1.5, receiver: ACCOUNT_A, approvedFee: FEE },
+          true
+        );
+      }
+    );
+
+    it.each(publishes)(
+      '%s still skips the dialog on a grant when there is no app fee',
+      async (_kind, publish) => {
+        // The grant is still honoured for a plain publish: nothing leaves the
+        // wallet, so there is nothing new to show.
+        vi.mocked(hasSessionPermission).mockReturnValue(true);
+        const payloads = answerPrompts({ accepted: true });
+
+        await withFakeTimers(() => publish({}));
+
+        expect(payloads).toHaveLength(0);
         expect(publishData).toHaveBeenCalledTimes(1);
         expect(sendCoinFunc).not.toHaveBeenCalled();
       }

@@ -1181,7 +1181,14 @@
       "name": "Name",
       "website": "Website"
     },
-    "suggestions": "Suggestions"
+    "suggestions": "Suggestions",
+    "zoom": {
+      "button": "zoom: {{percent}}",
+      "kept": "kept for {{name}} on this computer",
+      "same_as_hub": "same as Hub",
+      "zoom_in": "zoom in",
+      "zoom_out": "zoom out"
+    }
   },
   "new_post_in": "new post in {{ title }}",
   "node_state": {
@@ -1965,6 +1972,7 @@
       "image_metadata_unremovable": "image {{index}} can't be posted: its location and camera details can't be removed from this format. Save it as JPEG or PNG and try again.",
       "images_too_large": "these images are too large to post together. Remove an image and try again.",
       "name_required": "a Qortal name is required to publish",
+      "not_posted_left_home": "not posted: you left Home before it was sent. Publish again when you're ready.",
       "post_too_large": "this post is over 5 MB, so {{app}} would not show it. Shorten it or remove an image.",
       "publish_failed": "failed to publish",
       "too_many_images": "maximum {{count}} images per post"

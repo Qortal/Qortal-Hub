@@ -6,6 +6,7 @@ import {
   normalizeSidePanel,
   readSidePanel,
   sameSidePanel,
+  saveSidePanel,
   SIDE_PANEL_ADDED_LIMIT,
   SIDE_PANEL_BUILT_INS,
   SIDE_PANEL_BUTTON_SIZES,
@@ -298,5 +299,23 @@ describe('useSidePanelSettings', () => {
     act(() => result.current[1]((current) => ({ ...current, show: 'always' })));
     expect(result.current[0].show).toBe('hover');
     expect(localStorage.length).toBe(0);
+  });
+
+  // The account setting the panel replaces kept the buttons beside the
+  // content when it was off; a panel arranged here already has its own say.
+  it('carries over an account that kept the buttons beside the content', () => {
+    localStorage.setItem('qortal-hub-show-action-drawer', 'false');
+    expect(readSidePanel(ALICE).show).toBe('always');
+  });
+
+  it('leaves the panel at the edge when the old setting kept the drawer', () => {
+    localStorage.setItem('qortal-hub-show-action-drawer', 'true');
+    expect(readSidePanel(ALICE).show).toBe('hover');
+  });
+
+  it("lets the panel's own setting win over the old one", () => {
+    localStorage.setItem('qortal-hub-show-action-drawer', 'false');
+    saveSidePanel(ALICE, { ...SIDE_PANEL_DEFAULT, show: 'hover' });
+    expect(readSidePanel(ALICE).show).toBe('hover');
   });
 });

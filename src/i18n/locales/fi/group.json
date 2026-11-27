@@ -31,6 +31,7 @@
     "scroll_bottom": "vieritä alas",
     "scroll_unread_messages": "siirry lukemattomiin viesteihin",
     "select_group": "valitse ryhmä",
+    "update_group": "update group",
     "visit_q_mintership": "vieraile Q-Mintershipissä"
   },
   "activity_dashboard": {
@@ -61,16 +62,19 @@
     "approval_single": "Yksi",
     "approval_threshold_description": "Ryhmän päätösten hyväksymiseen vaadittava ylläpitäjien osuus.",
     "approval_threshold_label": "Hyväksynnän kynnys",
+    "button_update": "Update Group",
     "creating": "Luodaan...",
     "description_create": "Valitse nimi, kuvaile ryhmäsi ja aloita.",
     "description_invites": "Tarkastele saamiasi kutsuja.",
     "description_placeholder": "Mistä tämä ryhmä kertoo?",
     "description_too_long": "Kuvaus saa olla enintään {{max}} merkkiä",
+    "description_update": "Modify group settings and update configuration.",
     "max_delay_label": "Suurin hyväksynnän viive",
     "min_delay_label": "Pienin hyväksynnän viive",
     "modes_aria": "Ryhmän hallintatilat",
     "name_hint": "Käytä selkeää ja tunnistettavaa nimeä.",
-    "name_placeholder": "esim. Qortal-kehittäjät"
+    "name_placeholder": "esim. Qortal-kehittäjät",
+    "updating": "Updating..."
   },
   "admin_space": {
     "ask_description": "This key encrypts content visible only to admins.",
@@ -209,13 +213,22 @@
     "create_category": "Luo kategoria",
     "create_channel": "Luo kanava",
     "hidden_users": "Piilotetut käyttäjät",
+    "hide_muted_channels": "Hide Muted Channels",
     "invite_link_copied": "Kutsulinkki kopioitu",
     "invite_link_copy_failed": "Kutsulinkin kopiointi epäonnistui",
     "leave_group": "Poistu ryhmästä",
+    "mark_all_groups_read": "mark all groups as read",
     "mark_all_read": "Merkitse kaikki luetuksi",
     "mark_as_read": "Merkitse luetuksi",
+    "mute_channel": "Mute Channel",
+    "mute_group": "Mute Group",
     "mute_push_notifications": "Mykistä push-ilmoitukset",
-    "unmute_push_notifications": "Poista push-ilmoitusten mykistys"
+    "mute_section": "Mute Section",
+    "muted_for": "Muted for {{hours}}",
+    "notification_settings": "notification settings",
+    "unmute": "Unmute",
+    "unmute_push_notifications": "Poista push-ilmoitusten mykistys",
+    "update_group": "Update group"
   },
   "dashboard": {
     "account_overview": "Tilin yleiskatsaus",
@@ -848,6 +861,9 @@
       "group_member_admin": "jäsen asetettu ylläpitäjäksi onnistuneesti. Muutosten näkyminen voi kestää muutaman minuutin",
       "group_promotion": "mainos julkaistu onnistuneesti. Sen näkymisessä voi kestää muutaman minuutin",
       "group_remove_member": "jäseneltä poistettu ylläpitäjän oikeudet onnistuneesti. Muutosten näkyminen voi kestää muutaman minuutin",
+      "group_update_label": "updated group {{group_name}}: success!",
+      "group_update_name": "updated group {{group_name}}: awaiting confirmation",
+      "group_updated": "successfully updated group. It may take a couple of minutes for the changes to propagate",
       "invitation_cancellation": "kutsu peruutettu onnistuneesti. Muutosten näkyminen voi kestää muutaman minuutin",
       "invitation_request": "liittymispyyntö hyväksytty: odottaa vahvistusta",
       "loading_threads": "ladataan ketjuja... odota hetki.",
@@ -890,6 +906,26 @@
     "try_again": "Yritä uudelleen",
     "unencrypted": "Salaamaton",
     "verification_failed": "Vahvistus epäonnistui"
+  },
+  "mute": {
+    "for_15_minutes": "For 15 Minutes",
+    "for_1_hour": "For 1 Hour",
+    "for_24_hours": "For 24 Hours",
+    "for_3_hours": "For 3 Hours",
+    "for_8_hours": "For 8 Hours",
+    "until_i_turn_it_back_on": "Until I turn it back on"
+  },
+  "notification_settings": {
+    "all_messages": "all messages",
+    "all_messages_body": "New message in #{{channelName}}",
+    "all_messages_title": "New message in {{groupName}}",
+    "hide_muted_channels": "Hide Muted Channels",
+    "none": "none",
+    "notify_on_reactions": "Notify on Reactions",
+    "notify_on_replies": "notify on replies",
+    "notify_on_welcome_posts": "notify on welcome posts",
+    "only_mentions": "only @mentions",
+    "suppress_everyone_here": "suppress @everyone and @here"
   },
   "onboarding": {
     "action": {

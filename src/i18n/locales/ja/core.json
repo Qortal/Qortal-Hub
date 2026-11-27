@@ -1181,7 +1181,14 @@
       "name": "名前",
       "website": "Webサイト"
     },
-    "suggestions": "候補"
+    "suggestions": "候補",
+    "zoom": {
+      "button": "ズーム：{{percent}}",
+      "kept": "このコンピューターに{{name}}用として保存されます",
+      "same_as_hub": "Hubと同じ",
+      "zoom_in": "拡大",
+      "zoom_out": "縮小"
+    }
   },
   "new_post_in": "{{ title }} の新しい投稿",
   "node_state": {
@@ -1965,6 +1972,7 @@
       "image_metadata_unremovable": "画像{{index}}は投稿できません。この形式では位置情報とカメラ情報を削除できません。JPEGまたはPNGで保存して、もう一度お試しください。",
       "images_too_large": "画像が大きすぎるため、まとめて投稿できません。画像を1枚削除して、もう一度お試しください。",
       "name_required": "公開するにはQortal名が必要です",
+      "not_posted_left_home": "投稿されていません。送信される前にホームを離れました。準備ができたら、もう一度公開してください。",
       "post_too_large": "この投稿は5 MBを超えているため、{{app}}に表示されません。短くするか、画像を削除してください。",
       "publish_failed": "公開に失敗しました",
       "too_many_images": "1投稿あたりの画像は最大{{count}}枚です"

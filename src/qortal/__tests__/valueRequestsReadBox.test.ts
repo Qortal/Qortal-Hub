@@ -267,7 +267,14 @@ describe('DEPLOY_AT', () => {
 describe('SIGN_TRANSACTION', () => {
   it('asks for "I have read this request", and signs and sends nothing when declined', async () => {
     const fetchMock = stubNode({
-      '/transactions/decode': { type: 'PAYMENT', amount: '1.00000000' },
+      // A real decode carries the fee. The fixture used to omit it, which is not
+      // something Core answers; now that the fee is bounded before signing, a
+      // valued transaction with no fee is refused rather than signed unchecked.
+      '/transactions/decode': {
+        type: 'PAYMENT',
+        amount: '1.00000000',
+        fee: '0.01000000',
+      },
       '/transactions/convert': 'BYTES_TO_SIGN',
     });
     const payloads = simulatePermission(false);
@@ -288,5 +295,35 @@ describe('SIGN_TRANSACTION', () => {
     ]);
     expect(getKeyPair).not.toHaveBeenCalled();
     expect(processTransactionVersion2).not.toHaveBeenCalled();
+  });
+
+  it('refuses to sign a PAYMENT the requester loaded with an enormous fee', async () => {
+    // The requester builds these bytes, so no node quoted the fee and there is
+    // no approval to compare against: this request is a PAYMENT carrying a
+    // 500 QORT fee, refused before the user is asked to approve it.
+    const fetchMock = stubNode({
+      '/transactions/decode': {
+        type: 'PAYMENT',
+        amount: '1.00000000',
+        fee: '500.00000000',
+      },
+      '/transactions/convert': 'BYTES_TO_SIGN',
+    });
+    const payloads = simulatePermission(true);
+
+    await expect(
+      signTransaction(
+        { unsignedBytes: 'UNSIGNED_BYTES', process: true },
+        false,
+        OPENED_APP
+      )
+    ).rejects.toThrow(/fee/i);
+
+    expect(payloads).toHaveLength(0);
+    expect(getKeyPair).not.toHaveBeenCalled();
+    expect(processTransactionVersion2).not.toHaveBeenCalled();
+    expect(requestedUrls(fetchMock)).toEqual([
+      `${NODE}/transactions/decode?ignoreValidityChecks=false`,
+    ]);
   });
 });

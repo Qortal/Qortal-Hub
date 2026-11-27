@@ -212,9 +212,7 @@ const BorderGlow = ({
         useCssSweep ? 'sweep-active border-glow-css-sweep' : ''
       } ${animated && !alwaysOn ? 'border-glow-css-sweep-intro' : ''} ${
         reverseSweep ? 'border-glow-css-sweep-reverse' : ''
-      } ${
-        className
-      }`.trim()}
+      } ${className}`.trim()}
       style={
         {
           '--card-bg': backgroundColor,

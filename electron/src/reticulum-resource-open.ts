@@ -11,10 +11,11 @@ export function safeReticulumOpenFileName(
   suggestedFileName?: string,
   fallbackFileName = 'attachment.bin'
 ): string {
-  const source = String(suggestedFileName || fallbackFileName || 'attachment.bin')
-    .replace(/\\/g, '/')
-    .split('/')
-    .pop() || 'attachment.bin';
+  const source =
+    String(suggestedFileName || fallbackFileName || 'attachment.bin')
+      .replace(/\\/g, '/')
+      .split('/')
+      .pop() || 'attachment.bin';
   let cleaned = source
     .replace(/[<>:"/\\|?*]/g, '_')
     .split('')
@@ -28,11 +29,12 @@ export function safeReticulumOpenFileName(
   }
   const extension = path.extname(cleaned).slice(0, 24);
   const stem = path.basename(cleaned, extension).slice(0, 120) || 'attachment';
-  const hashSuffix = String(fileHash || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-f0-9]/g, '')
-    .slice(0, 12) || nodeCrypto.randomBytes(6).toString('hex');
+  const hashSuffix =
+    String(fileHash || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-f0-9]/g, '')
+      .slice(0, 12) || nodeCrypto.randomBytes(6).toString('hex');
   return `${stem}-${hashSuffix}${extension}`;
 }
 
@@ -44,7 +46,8 @@ export async function materializeReticulumResourceForOpen(options: {
   fallbackFileName?: string;
 }): Promise<string> {
   const sourceStat = await fs.promises.stat(options.sourcePath);
-  if (!sourceStat.isFile()) throw new Error('Verified attachment is not a file');
+  if (!sourceStat.isFile())
+    throw new Error('Verified attachment is not a file');
   const destinationDirectory = path.join(
     options.tempRoot,
     openSessionDirectory

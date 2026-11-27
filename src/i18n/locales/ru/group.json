@@ -31,6 +31,7 @@
     "scroll_bottom": "прокрутить вниз",
     "scroll_unread_messages": "перейти к непрочитанным сообщениям",
     "select_group": "выбрать группу",
+    "update_group": "update group",
     "visit_q_mintership": "посетить Q-Mintership"
   },
   "activity_dashboard": {
@@ -61,16 +62,19 @@
     "approval_single": "Один",
     "approval_threshold_description": "Процент администраторов, необходимый для одобрения решений группы.",
     "approval_threshold_label": "Порог одобрения",
+    "button_update": "Update Group",
     "creating": "Создание...",
     "description_create": "Выберите название, опишите свою группу и начните.",
     "description_invites": "Просмотрите полученные приглашения.",
     "description_placeholder": "О чём эта группа?",
     "description_too_long": "Описание не должно превышать {{max}} символов",
+    "description_update": "Modify group settings and update configuration.",
     "max_delay_label": "Максимальная задержка одобрения",
     "min_delay_label": "Минимальная задержка одобрения",
     "modes_aria": "Режимы управления группой",
     "name_hint": "Используйте понятное, узнаваемое название.",
-    "name_placeholder": "напр. разработчики Qortal"
+    "name_placeholder": "напр. разработчики Qortal",
+    "updating": "Updating..."
   },
   "admin_space": {
     "ask_description": "This key encrypts content visible only to admins.",
@@ -209,13 +213,22 @@
     "create_category": "Создать категорию",
     "create_channel": "Создать канал",
     "hidden_users": "Скрытые пользователи",
+    "hide_muted_channels": "Hide Muted Channels",
     "invite_link_copied": "Ссылка-приглашение скопирована",
     "invite_link_copy_failed": "Не удалось скопировать ссылку-приглашение",
     "leave_group": "Покинуть группу",
+    "mark_all_groups_read": "mark all groups as read",
     "mark_all_read": "Отметить все как прочитанные",
     "mark_as_read": "Отметить как прочитанное",
+    "mute_channel": "Mute Channel",
+    "mute_group": "Mute Group",
     "mute_push_notifications": "Отключить push-уведомления",
-    "unmute_push_notifications": "Включить push-уведомления"
+    "mute_section": "Mute Section",
+    "muted_for": "Muted for {{hours}}",
+    "notification_settings": "notification settings",
+    "unmute": "Unmute",
+    "unmute_push_notifications": "Включить push-уведомления",
+    "update_group": "Update group"
   },
   "dashboard": {
     "account_overview": "Обзор аккаунта",
@@ -848,6 +861,9 @@
       "group_member_admin": "участник назначен администратором. Обновление может занять несколько минут",
       "group_promotion": "промоакция успешно опубликована. Может занять немного времени для отображения",
       "group_remove_member": "администраторские права успешно удалены. Обновление может занять несколько минут",
+      "group_update_label": "updated group {{group_name}}: success!",
+      "group_update_name": "updated group {{group_name}}: awaiting confirmation",
+      "group_updated": "successfully updated group. It may take a couple of minutes for the changes to propagate",
       "invitation_cancellation": "приглашение успешно отменено. Обновление может занять несколько минут",
       "invitation_request": "запрос на вступление принят: ожидается подтверждение",
       "loading_threads": "загрузка тем... подождите.",
@@ -890,6 +906,26 @@
     "try_again": "Повторить",
     "unencrypted": "Не зашифровано",
     "verification_failed": "Проверка не пройдена"
+  },
+  "mute": {
+    "for_15_minutes": "For 15 Minutes",
+    "for_1_hour": "For 1 Hour",
+    "for_24_hours": "For 24 Hours",
+    "for_3_hours": "For 3 Hours",
+    "for_8_hours": "For 8 Hours",
+    "until_i_turn_it_back_on": "Until I turn it back on"
+  },
+  "notification_settings": {
+    "all_messages": "all messages",
+    "all_messages_body": "New message in #{{channelName}}",
+    "all_messages_title": "New message in {{groupName}}",
+    "hide_muted_channels": "Hide Muted Channels",
+    "none": "none",
+    "notify_on_reactions": "Notify on Reactions",
+    "notify_on_replies": "notify on replies",
+    "notify_on_welcome_posts": "notify on welcome posts",
+    "only_mentions": "only @mentions",
+    "suppress_everyone_here": "suppress @everyone and @here"
   },
   "onboarding": {
     "action": {

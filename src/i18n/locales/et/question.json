@@ -42,6 +42,7 @@
     "error": {
       "add_to_list": "nimekirja lisamine ebaõnnestus",
       "app_fee_not_sent": "avaldamine õnnestus, kuid rakenduse tasu ei saadetud: {{ error }}",
+      "app_fee_outcome_unknown": "avaldamine õnnestus, kuid Hub ei suutnud kindlaks teha, kas rakenduse tasu maksti. Kontrolli seda oma tehingutest.",
       "at_info": "AT-d (automaatse tehingu) teavet ei leitud.",
       "buy_order": "kauplemiskorralduse esitamine ebaõnnestus",
       "cancel_sell_order": "müügikorralduse tühistamine ebaõnnestus. Proovi uuesti!",
@@ -104,6 +105,7 @@
       "node_info": "haarde teabe kättesaamine ebaõnnestus",
       "node_status": "haarde oleku kättesaamine ebaõnnestus",
       "only_encrypted_data": "ainult krüpteeritud andmed võivad minna privaatteenustesse",
+      "payment_outcome_unknown": "Hub ei suutnud kindlaks teha, kas see makse läks läbi. Kontrolli oma tehinguid, enne kui uuesti proovid.",
       "payments_partially_sent": "{{ total }} maksest {{ sent }} läks enne seda viga läbi. Kontrolli oma tehinguid, enne kui uuesti proovid. {{ error }}",
       "perform_request": "päringu sooritamine ebaõnnestus",
       "poll_create": "küsitluse loomine ebaõnnestus",
