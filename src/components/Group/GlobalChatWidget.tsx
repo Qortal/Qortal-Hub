@@ -116,8 +116,7 @@ export function GlobalChatWidget({
   const storedBounds = useAtomValue(globalChatWidgetBoundsAtom);
   const setStoredBounds = useSetAtom(globalChatWidgetBoundsAtom);
   const initialBounds = useMemo(() => {
-    if (typeof window === 'undefined')
-      return { x: 0, width: 380, height: 560 };
+    if (typeof window === 'undefined') return { x: 0, width: 380, height: 560 };
     const w = window.innerWidth;
     const h = window.innerHeight - appChromeOffsetNow();
     const maxW = Math.min(WIDGET_MAX_WIDTH, w - 48);
@@ -158,12 +157,12 @@ export function GlobalChatWidget({
   const currentDragXRef = useRef(0);
   const dragFixedYRef = useRef(0); // actual transform-y at drag start, held constant during drag
   // delta from re-resizable is cumulative from resize start, so track initial size
-  const resizeInitialSizeRef = useRef({ width: widgetWidth, height: widgetHeight });
+  const resizeInitialSizeRef = useRef({
+    width: widgetWidth,
+    height: widgetHeight,
+  });
 
-  const maxWidgetWidth = Math.min(
-    WIDGET_MAX_WIDTH,
-    windowSize.w - 48
-  );
+  const maxWidgetWidth = Math.min(WIDGET_MAX_WIDTH, windowSize.w - 48);
   const maxWidgetHeight = Math.min(
     WIDGET_MAX_HEIGHT,
     Math.max(WIDGET_MIN_HEIGHT, windowSize.h - 120)
@@ -183,8 +182,18 @@ export function GlobalChatWidget({
       delta: { width: number; height: number }
     ) => {
       const { width: initW, height: initH } = resizeInitialSizeRef.current;
-      setWidgetWidth(Math.min(maxWidgetWidth, Math.max(WIDGET_MIN_WIDTH, initW + delta.width)));
-      setWidgetHeight(Math.min(maxWidgetHeight, Math.max(WIDGET_MIN_HEIGHT, initH + delta.height)));
+      setWidgetWidth(
+        Math.min(
+          maxWidgetWidth,
+          Math.max(WIDGET_MIN_WIDTH, initW + delta.width)
+        )
+      );
+      setWidgetHeight(
+        Math.min(
+          maxWidgetHeight,
+          Math.max(WIDGET_MIN_HEIGHT, initH + delta.height)
+        )
+      );
     },
     [maxWidgetWidth, maxWidgetHeight]
   );
@@ -226,7 +235,10 @@ export function GlobalChatWidget({
 
   useEffect(() => {
     const onResize = () =>
-      setWindowSize({ w: window.innerWidth, h: window.innerHeight - appChromeOffsetNow() });
+      setWindowSize({
+        w: window.innerWidth,
+        h: window.innerHeight - appChromeOffsetNow(),
+      });
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
@@ -242,13 +254,13 @@ export function GlobalChatWidget({
       WIDGET_MAX_HEIGHT,
       Math.max(WIDGET_MIN_HEIGHT, h - 120)
     );
-    setWidgetWidth(Math.min(maxW, Math.max(WIDGET_MIN_WIDTH, storedBounds.width)));
+    setWidgetWidth(
+      Math.min(maxW, Math.max(WIDGET_MIN_WIDTH, storedBounds.width))
+    );
     setWidgetHeight(
       Math.min(maxH, Math.max(WIDGET_MIN_HEIGHT, storedBounds.height))
     );
-    setBottomX(
-      Math.max(0, Math.min(w - storedBounds.width, storedBounds.x))
-    );
+    setBottomX(Math.max(0, Math.min(w - storedBounds.width, storedBounds.x)));
   }, [storedBounds]);
 
   // Clamp bottomX when window/widget size changes, but skip during resize to avoid horizontal jump.
@@ -261,7 +273,8 @@ export function GlobalChatWidget({
   // so no re-renders fight the position. Rnd's own transition is suppressed via inline override.
   const handleBarPointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if ((e.target as HTMLElement).closest('.global-chat-widget-no-drag')) return;
+      if ((e.target as HTMLElement).closest('.global-chat-widget-no-drag'))
+        return;
       e.preventDefault();
       didDragRef.current = false;
       const el = rndRef.current?.resizableElement?.current;
@@ -271,14 +284,19 @@ export function GlobalChatWidget({
       dragStartBottomXRef.current = bottomX;
       currentDragXRef.current = bottomX;
       // Read the actual transform-y react-draggable set so we keep it exactly fixed during drag.
-      const matrix = new DOMMatrix(el.style.transform || window.getComputedStyle(el).transform);
+      const matrix = new DOMMatrix(
+        el.style.transform || window.getComputedStyle(el).transform
+      );
       dragFixedYRef.current = matrix.m42;
       el.style.transition = 'none';
       const onMove = (moveEvent: PointerEvent) => {
         moveEvent.preventDefault();
         didDragRef.current = true;
         const dx = moveEvent.clientX - dragStartClientXRef.current;
-        const nextX = Math.max(0, Math.min(maxXRef.current, dragStartBottomXRef.current + dx));
+        const nextX = Math.max(
+          0,
+          Math.min(maxXRef.current, dragStartBottomXRef.current + dx)
+        );
         currentDragXRef.current = nextX;
         el.style.transform = `translate(${nextX}px, ${dragFixedYRef.current}px)`;
       };
@@ -290,7 +308,11 @@ export function GlobalChatWidget({
         const finalX = currentDragXRef.current;
         // React's next render will overwrite our inline transform with the correct controlled value
         setBottomX(finalX);
-        setStoredBounds({ x: finalX, width: widgetWidth, height: widgetHeight });
+        setStoredBounds({
+          x: finalX,
+          width: widgetWidth,
+          height: widgetHeight,
+        });
       };
       window.addEventListener('pointermove', onMove, true);
       window.addEventListener('pointerup', onUp, true);
@@ -436,1064 +458,1075 @@ export function GlobalChatWidget({
         onResizeStop={handleRndResizeStop}
         style={{ zIndex: 1300 }}
       >
-      <Box
-        sx={{
-          width: '100%',
-          height: '100%',
-          minWidth: WIDGET_MIN_WIDTH,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'flex-end',
-          overflow: 'hidden',
-          borderRadius: '8px 8px 0 0',
-          boxShadow: `0 -4px 24px ${theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.12)'}, 0 -1px 0 ${theme.palette.divider}`,
-          border: '1px solid',
-          borderBottom: 'none',
-          borderColor: theme.palette.divider,
-          backgroundColor: theme.palette.background.surface,
-        }}
-      >
-        {/* Bar: drag handle (pointer) + click to expand/collapse. */}
         <Box
-          component="div"
-          role="button"
-          tabIndex={0}
-          onClick={handleBarClick}
-          onPointerDown={handleBarPointerDown}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              handleBarClick();
-            }
-          }}
           sx={{
             width: '100%',
+            height: '100%',
             minWidth: WIDGET_MIN_WIDTH,
-            maxWidth: widgetWidth,
-            border: 'none',
-            cursor: 'pointer',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 1.5,
-            padding: '8px 14px',
-            backgroundColor: 'transparent',
-            color: theme.palette.text.primary,
-            transition: 'background-color 0.2s ease',
-            '&:hover': {
-              backgroundColor: theme.palette.action.hover,
-            },
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            overflow: 'hidden',
+            borderRadius: '8px 8px 0 0',
+            boxShadow: `0 -4px 24px ${theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.12)'}, 0 -1px 0 ${theme.palette.divider}`,
+            border: '1px solid',
+            borderBottom: 'none',
+            borderColor: theme.palette.divider,
+            backgroundColor: theme.palette.background.surface,
           }}
-          aria-label={
-            open
-              ? t('core:action.close', { postProcess: 'capitalizeFirstChar' })
-              : t('group:group.messaging', {
-                  postProcess: 'capitalizeFirstChar',
-                })
-          }
         >
+          {/* Bar: drag handle (pointer) + click to expand/collapse. */}
           <Box
+            component="div"
+            role="button"
+            tabIndex={0}
+            onClick={handleBarClick}
+            onPointerDown={handleBarPointerDown}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleBarClick();
+              }
+            }}
             sx={{
+              width: '100%',
+              minWidth: WIDGET_MIN_WIDTH,
+              maxWidth: widgetWidth,
+              border: 'none',
+              cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
+              justifyContent: 'space-between',
               gap: 1.5,
-              minWidth: 0,
-              flex: 1,
+              padding: '8px 14px',
+              backgroundColor: 'transparent',
+              color: theme.palette.text.primary,
+              transition: 'background-color 0.2s ease',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+              },
             }}
+            aria-label={
+              open
+                ? t('core:action.close', { postProcess: 'capitalizeFirstChar' })
+                : t('group:group.messaging', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
+            }
           >
-            <Avatar
+            <Box
               sx={{
-                width: 36,
-                height: 36,
-                flexShrink: 0,
-                backgroundColor: theme.palette.background.default,
-                color: theme.palette.text.primary,
-                boxShadow: theme.shadows[1],
-                border: `1px solid ${theme.palette.divider}`,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+                minWidth: 0,
+                flex: 1,
               }}
-              alt={myName || ''}
-              src={getUserAvatarUrl(myName)}
             >
-              {(myName || '')?.charAt(0) || '?'}
-            </Avatar>
-            <Typography
-              sx={{
-                fontFamily: 'Inter',
-                fontSize: '15px',
-                fontWeight: 600,
-                letterSpacing: '-0.02em',
-                color: theme.palette.text.primary,
-              }}
-              noWrap
-            >
-              {t('group:group.messaging', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </Typography>
-            {(directChatHasUnread || groupChatHasUnread) && !open && (
-              <Box
+              <Avatar
                 sx={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: '50%',
-                  backgroundColor: theme.palette.primary.main,
-                  border: `2px solid ${theme.palette.background.paper}`,
+                  width: 36,
+                  height: 36,
                   flexShrink: 0,
-                  boxShadow: `0 0 0 2px ${theme.palette.primary.main}40`,
-                  animation: 'unread-pulse 1.5s ease-in-out infinite',
-                  '@keyframes unread-pulse': {
-                    '0%, 100%': {
-                      boxShadow: `0 0 0 2px ${theme.palette.primary.main}40`,
-                      transform: 'scale(1)',
-                    },
-                    '50%': {
-                      boxShadow: `0 0 0 6px ${theme.palette.primary.main}30`,
-                      transform: 'scale(1.1)',
-                    },
-                  },
+                  backgroundColor: theme.palette.background.default,
+                  color: theme.palette.text.primary,
+                  boxShadow: theme.shadows[1],
+                  border: `1px solid ${theme.palette.divider}`,
                 }}
-                aria-hidden
-              />
-            )}
-          </Box>
-          <Box
-            className="global-chat-widget-no-drag"
-            sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
-          >
-            {onClose && (
+                alt={myName || ''}
+                src={getUserAvatarUrl(myName)}
+              >
+                {(myName || '')?.charAt(0) || '?'}
+              </Avatar>
+              <Typography
+                sx={{
+                  fontFamily: 'Inter',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  letterSpacing: '-0.02em',
+                  color: theme.palette.text.primary,
+                }}
+                noWrap
+              >
+                {t('group:group.messaging', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Typography>
+              {(directChatHasUnread || groupChatHasUnread) && !open && (
+                <Box
+                  sx={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: '50%',
+                    backgroundColor: theme.palette.primary.main,
+                    border: `2px solid ${theme.palette.background.paper}`,
+                    flexShrink: 0,
+                    boxShadow: `0 0 0 2px ${theme.palette.primary.main}40`,
+                    animation: 'unread-pulse 1.5s ease-in-out infinite',
+                    '@keyframes unread-pulse': {
+                      '0%, 100%': {
+                        boxShadow: `0 0 0 2px ${theme.palette.primary.main}40`,
+                        transform: 'scale(1)',
+                      },
+                      '50%': {
+                        boxShadow: `0 0 0 6px ${theme.palette.primary.main}30`,
+                        transform: 'scale(1.1)',
+                      },
+                    },
+                  }}
+                  aria-hidden
+                />
+              )}
+            </Box>
+            <Box
+              className="global-chat-widget-no-drag"
+              sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+            >
+              {onClose && (
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClose();
+                  }}
+                  sx={{
+                    color: theme.palette.text.secondary,
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    '&:hover': {
+                      backgroundColor: theme.palette.action.hover,
+                      color: theme.palette.text.primary,
+                    },
+                  }}
+                  aria-label={t('core:action.close', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                >
+                  <CloseRoundedIcon sx={{ fontSize: 22 }} />
+                </IconButton>
+              )}
               <IconButton
                 size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClose();
-                }}
                 sx={{
-                  color: theme.palette.text.secondary,
+                  width: 34,
+                  height: 34,
                   borderRadius: '10px',
                   cursor: 'pointer',
+                  color: theme.palette.text.secondary,
                   '&:hover': {
                     backgroundColor: theme.palette.action.hover,
                     color: theme.palette.text.primary,
                   },
                 }}
-                aria-label={t('core:action.close', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
+                aria-hidden
               >
-                <CloseRoundedIcon sx={{ fontSize: 22 }} />
+                {open ? (
+                  <KeyboardArrowUpRoundedIcon
+                    sx={{ fontSize: 20, transform: 'rotate(180deg)' }}
+                  />
+                ) : (
+                  <KeyboardArrowUpRoundedIcon sx={{ fontSize: 18 }} />
+                )}
               </IconButton>
-            )}
-            <IconButton
-              size="small"
-              sx={{
-                width: 34,
-                height: 34,
-                borderRadius: '10px',
-                cursor: 'pointer',
-                color: theme.palette.text.secondary,
-                '&:hover': {
-                  backgroundColor: theme.palette.action.hover,
-                  color: theme.palette.text.primary,
-                },
-              }}
-              aria-hidden
-            >
-              {open ? (
-                <KeyboardArrowUpRoundedIcon
-                  sx={{ fontSize: 20, transform: 'rotate(180deg)' }}
-                />
-              ) : (
-                <KeyboardArrowUpRoundedIcon sx={{ fontSize: 18 }} />
-              )}
-            </IconButton>
+            </Box>
           </Box>
-        </Box>
 
-        {/* Panel always mounted so scroll position and state (tab, selection) are preserved when minimized */}
-        <Box
-          sx={{
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            backgroundColor: theme.palette.background.surface,
-            borderTop: '1px solid',
-            borderColor: theme.palette.divider,
-            ...(open
-              ? {
-                  height: widgetHeight,
-                  minHeight: WIDGET_MIN_HEIGHT,
-                  maxHeight:
-                    `min(800px, calc(100vh - ${appChromeOffsetPx} - 120px))`,
-                  overflow: 'hidden',
-                  visibility: 'visible',
-                  opacity: 1,
-                }
-              : {
-                  height: 0,
-                  minHeight: 0,
-                  maxHeight: 0,
-                  overflow: 'hidden',
-                  visibility: 'hidden',
-                  opacity: 0,
-                  pointerEvents: 'none',
-                }),
-          }}
-        >
-          {showThread ? (
-            selectedDirect != null ? (
-              <MiniDirectThread
-                direct={selectedDirect}
-                myAddress={myAddress}
-                myName={myName}
-                onBack={() => setSelectedDirect(null)}
-                onOpenInApp={() => {
-                  setOpen(false);
-                  executeEvent('openDirectMessageInternal', {
-                    address: selectedDirect?.address,
-                    name: selectedDirect?.name,
-                  });
-                }}
-                getTimestampEnterChat={getTimestampEnterChat}
-                getUserAvatarUrl={getUserAvatarUrl}
-              />
-            ) : selectedGroup != null ? (
-              <MiniGroupThread
-                group={selectedGroup}
-                isPrivate={selectedGroupIsPrivate}
-                getSecretKeyForGroup={getSecretKeyForGroup}
-                myAddress={myAddress}
-                myName={myName}
-                onBack={() => setSelectedGroup(null)}
-                onOpenInApp={() => {
-                  setOpen(false);
-                  executeEvent('openGroupMessage', {
-                    from: selectedGroup?.groupId,
-                  });
-                }}
-                getTimestampEnterChat={getTimestampEnterChat}
-                getUserAvatarUrl={getUserAvatarUrl}
-              />
-            ) : null
-          ) : (
-            <>
-              <Box
-                sx={{
-                  display: 'flex',
-                  padding: '8px 12px 0',
-                  gap: '4px',
-                  borderBottom: '1px solid',
-                  borderColor: theme.palette.divider,
-                  flexShrink: 0,
-                }}
-              >
+          {/* Panel always mounted so scroll position and state (tab, selection) are preserved when minimized */}
+          <Box
+            sx={{
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              backgroundColor: theme.palette.background.surface,
+              borderTop: '1px solid',
+              borderColor: theme.palette.divider,
+              ...(open
+                ? {
+                    height: widgetHeight,
+                    minHeight: WIDGET_MIN_HEIGHT,
+                    maxHeight: `min(800px, calc(100vh - ${appChromeOffsetPx} - 120px))`,
+                    overflow: 'hidden',
+                    visibility: 'visible',
+                    opacity: 1,
+                  }
+                : {
+                    height: 0,
+                    minHeight: 0,
+                    maxHeight: 0,
+                    overflow: 'hidden',
+                    visibility: 'hidden',
+                    opacity: 0,
+                    pointerEvents: 'none',
+                  }),
+            }}
+          >
+            {showThread ? (
+              selectedDirect != null ? (
+                <MiniDirectThread
+                  direct={selectedDirect}
+                  myAddress={myAddress}
+                  myName={myName}
+                  onBack={() => setSelectedDirect(null)}
+                  onOpenInApp={() => {
+                    setOpen(false);
+                    executeEvent('openDirectMessageInternal', {
+                      address: selectedDirect?.address,
+                      name: selectedDirect?.name,
+                    });
+                  }}
+                  getTimestampEnterChat={getTimestampEnterChat}
+                  getUserAvatarUrl={getUserAvatarUrl}
+                />
+              ) : selectedGroup != null ? (
+                <MiniGroupThread
+                  group={selectedGroup}
+                  isPrivate={selectedGroupIsPrivate}
+                  getSecretKeyForGroup={getSecretKeyForGroup}
+                  myAddress={myAddress}
+                  myName={myName}
+                  onBack={() => setSelectedGroup(null)}
+                  onOpenInApp={() => {
+                    setOpen(false);
+                    executeEvent('openGroupMessage', {
+                      from: selectedGroup?.groupId,
+                    });
+                  }}
+                  getTimestampEnterChat={getTimestampEnterChat}
+                  getUserAvatarUrl={getUserAvatarUrl}
+                />
+              ) : null
+            ) : (
+              <>
                 <Box
-                  onClick={() => setTab('messages')}
                   sx={{
-                    flex: 1,
                     display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 1,
-                    padding: '10px 12px',
-                    borderRadius: '12px 12px 0 0',
-                    cursor: 'pointer',
-                    backgroundColor:
-                      tab === 'messages'
-                        ? theme.palette.action.selected
-                        : 'transparent',
-                    transition: 'background-color 0.15s ease',
-                    '&:hover': {
+                    padding: '8px 12px 0',
+                    gap: '4px',
+                    borderBottom: '1px solid',
+                    borderColor: theme.palette.divider,
+                    flexShrink: 0,
+                  }}
+                >
+                  <Box
+                    onClick={() => setTab('messages')}
+                    sx={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 1,
+                      padding: '10px 12px',
+                      borderRadius: '12px 12px 0 0',
+                      cursor: 'pointer',
                       backgroundColor:
                         tab === 'messages'
                           ? theme.palette.action.selected
-                          : theme.palette.action.hover,
-                    },
-                  }}
-                >
-                  <ForumRoundedIcon
-                    sx={{
-                      fontSize: 20,
-                      color:
-                        tab === 'messages'
-                          ? directChatHasUnread
-                            ? theme.palette.primary.main
-                            : theme.palette.text.primary
-                          : theme.palette.text.secondary,
-                    }}
-                  />
-                  <Typography
-                    sx={{
-                      fontFamily: 'Inter',
-                      fontSize: '14px',
-                      fontWeight: 600,
-                      color:
-                        tab === 'messages'
-                          ? directChatHasUnread
-                            ? theme.palette.primary.main
-                            : theme.palette.text.primary
-                          : theme.palette.text.secondary,
+                          : 'transparent',
+                      transition: 'background-color 0.15s ease',
+                      '&:hover': {
+                        backgroundColor:
+                          tab === 'messages'
+                            ? theme.palette.action.selected
+                            : theme.palette.action.hover,
+                      },
                     }}
                   >
-                    {t('group:group.dm', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Typography>
-                  {directChatHasUnread && (
-                    <Box
+                    <ForumRoundedIcon
                       sx={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        backgroundColor: theme.palette.primary.main,
-                        flexShrink: 0,
+                        fontSize: 20,
+                        color:
+                          tab === 'messages'
+                            ? directChatHasUnread
+                              ? theme.palette.primary.main
+                              : theme.palette.text.primary
+                            : theme.palette.text.secondary,
                       }}
                     />
-                  )}
-                </Box>
-                <Box
-                  onClick={() => setTab('groups')}
-                  sx={{
-                    flex: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 1,
-                    padding: '10px 12px',
-                    borderRadius: '12px 12px 0 0',
-                    cursor: 'pointer',
-                    backgroundColor:
-                      tab === 'groups'
-                        ? theme.palette.action.selected
-                        : 'transparent',
-                    transition: 'background-color 0.15s ease',
-                    '&:hover': {
-                      backgroundColor:
-                        tab === 'groups'
-                          ? theme.palette.action.selected
-                          : theme.palette.action.hover,
-                    },
-                  }}
-                >
-                  <GroupsRoundedIcon
-                    sx={{
-                      fontSize: 20,
-                      color:
-                        tab === 'groups'
-                          ? groupChatHasUnread
-                            ? theme.palette.primary.main
-                            : theme.palette.text.primary
-                          : theme.palette.text.secondary,
-                    }}
-                  />
-                  <Typography
-                    sx={{
-                      fontFamily: 'Inter',
-                      fontSize: '14px',
-                      fontWeight: 600,
-                      color:
-                        tab === 'groups'
-                          ? groupChatHasUnread
-                            ? theme.palette.primary.main
-                            : theme.palette.text.primary
-                          : theme.palette.text.secondary,
-                    }}
-                  >
-                    {t('group:group.group_other', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Typography>
-                  {groupChatHasUnread && (
-                    <Box
+                    <Typography
                       sx={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        backgroundColor: theme.palette.primary.main,
-                        flexShrink: 0,
+                        fontFamily: 'Inter',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        color:
+                          tab === 'messages'
+                            ? directChatHasUnread
+                              ? theme.palette.primary.main
+                              : theme.palette.text.primary
+                            : theme.palette.text.secondary,
                       }}
-                    />
-                  )}
-                </Box>
-              </Box>
-
-              <List
-                sx={{
-                  flex: 1,
-                  overflowY: 'auto',
-                  padding: '12px 8px',
-                  backgroundColor: theme.palette.background.surface,
-                  '&::-webkit-scrollbar': { width: 8 },
-                  '&::-webkit-scrollbar-thumb': {
-                    backgroundColor: theme.palette.action.hover,
-                    borderRadius: 4,
-                  },
-                }}
-                className="group-list"
-                dense={false}
-              >
-                {tab === 'messages' && (
-                  <>
-                    <ClickAwayListener
-                      onClickAway={() => setNewDmSuggestionsOpen(false)}
                     >
+                      {t('group:group.dm', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </Typography>
+                    {directChatHasUnread && (
                       <Box
-                        ref={newDmInputRef}
                         sx={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          backgroundColor: theme.palette.primary.main,
                           flexShrink: 0,
-                          padding: '12px 8px 8px',
-                          width: '100%',
                         }}
+                      />
+                    )}
+                  </Box>
+                  <Box
+                    onClick={() => setTab('groups')}
+                    sx={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 1,
+                      padding: '10px 12px',
+                      borderRadius: '12px 12px 0 0',
+                      cursor: 'pointer',
+                      backgroundColor:
+                        tab === 'groups'
+                          ? theme.palette.action.selected
+                          : 'transparent',
+                      transition: 'background-color 0.15s ease',
+                      '&:hover': {
+                        backgroundColor:
+                          tab === 'groups'
+                            ? theme.palette.action.selected
+                            : theme.palette.action.hover,
+                      },
+                    }}
+                  >
+                    <GroupsRoundedIcon
+                      sx={{
+                        fontSize: 20,
+                        color:
+                          tab === 'groups'
+                            ? groupChatHasUnread
+                              ? theme.palette.primary.main
+                              : theme.palette.text.primary
+                            : theme.palette.text.secondary,
+                      }}
+                    />
+                    <Typography
+                      sx={{
+                        fontFamily: 'Inter',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        color:
+                          tab === 'groups'
+                            ? groupChatHasUnread
+                              ? theme.palette.primary.main
+                              : theme.palette.text.primary
+                            : theme.palette.text.secondary,
+                      }}
+                    >
+                      {t('group:group.group_other', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </Typography>
+                    {groupChatHasUnread && (
+                      <Box
+                        sx={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          backgroundColor: theme.palette.primary.main,
+                          flexShrink: 0,
+                        }}
+                      />
+                    )}
+                  </Box>
+                </Box>
+
+                <List
+                  sx={{
+                    flex: 1,
+                    overflowY: 'auto',
+                    padding: '12px 8px',
+                    backgroundColor: theme.palette.background.surface,
+                    '&::-webkit-scrollbar': { width: 8 },
+                    '&::-webkit-scrollbar-thumb': {
+                      backgroundColor: theme.palette.action.hover,
+                      borderRadius: 4,
+                    },
+                  }}
+                  className="group-list"
+                  dense={false}
+                >
+                  {tab === 'messages' && (
+                    <>
+                      <ClickAwayListener
+                        onClickAway={() => setNewDmSuggestionsOpen(false)}
                       >
                         <Box
+                          ref={newDmInputRef}
                           sx={{
-                            position: 'relative',
+                            flexShrink: 0,
+                            padding: '12px 8px 8px',
                             width: '100%',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 1,
                           }}
                         >
                           <Box
                             sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 1,
+                              position: 'relative',
                               width: '100%',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 1,
                             }}
                           >
-                            <TextField
-                              fullWidth
-                              size="small"
-                              variant="outlined"
-                              placeholder={t(
-                                'auth:message.generic.name_address',
-                                {
-                                  postProcess: 'capitalizeFirstChar',
-                                }
-                              )}
-                              value={newDmInput}
-                              onChange={(e) => {
-                                setNewDmInput(e.target.value);
-                                setLastSelectedNameOption(null);
-                                setNewDmSuggestionsOpen(true);
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1,
+                                width: '100%',
                               }}
-                              onFocus={() => setNewDmSuggestionsOpen(true)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' && newDmInput.trim()) {
-                                  e.preventDefault();
-                                  handleStartNewDm();
-                                  setNewDmSuggestionsOpen(false);
-                                }
-                              }}
-                              slotProps={{
-                                htmlInput: {
-                                  'aria-label': t(
-                                    'auth:message.generic.name_address',
-                                    { postProcess: 'capitalizeFirstChar' }
-                                  ),
-                                },
-                              }}
-                              InputProps={{
-                                startAdornment: (
-                                  <InputAdornment position="start">
-                                    <AddRoundedIcon
-                                      sx={{
-                                        color: theme.palette.primary.main,
-                                        fontSize: '20px',
-                                      }}
-                                    />
-                                  </InputAdornment>
-                                ),
-                                endAdornment: newDmNameLoading ? (
-                                  <InputAdornment position="end">
-                                    <CircularProgress size={18} />
-                                  </InputAdornment>
-                                ) : null,
-                                sx: {
-                                  backgroundColor:
-                                    theme.palette.background.paper,
-                                  borderRadius: '12px',
-                                  fontFamily: 'Inter',
-                                  fontSize: '14px',
-                                  '& fieldset': {
-                                    borderColor: theme.palette.divider,
-                                    borderRadius: '12px',
-                                  },
-                                  '&.Mui-focused fieldset': {
-                                    borderWidth: '2px',
-                                    borderColor: theme.palette.primary.main,
-                                  },
-                                },
-                              }}
-                            />
-                            {newDmInput.trim() && (
-                              <Button
+                            >
+                              <TextField
+                                fullWidth
                                 size="small"
-                                variant="contained"
-                                onClick={() => {
-                                  handleStartNewDm();
-                                  setNewDmSuggestionsOpen(false);
+                                variant="outlined"
+                                placeholder={t(
+                                  'auth:message.generic.name_address',
+                                  {
+                                    postProcess: 'capitalizeFirstChar',
+                                  }
+                                )}
+                                value={newDmInput}
+                                onChange={(e) => {
+                                  setNewDmInput(e.target.value);
+                                  setLastSelectedNameOption(null);
+                                  setNewDmSuggestionsOpen(true);
                                 }}
-                                disabled={
-                                  !newDmInput.trim() ||
-                                  (!validateAddress(newDmInput.trim()) &&
-                                    !lastSelectedNameOption &&
-                                    (newDmNameOptions.length === 0 ||
-                                      typeof newDmNameOptions[0] !== 'object'))
-                                }
-                                sx={{
-                                  flexShrink: 0,
-                                  borderRadius: '10px',
-                                  fontFamily: 'Inter',
-                                  fontWeight: 600,
-                                  fontSize: '13px',
-                                  textTransform: 'none',
+                                onFocus={() => setNewDmSuggestionsOpen(true)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && newDmInput.trim()) {
+                                    e.preventDefault();
+                                    handleStartNewDm();
+                                    setNewDmSuggestionsOpen(false);
+                                  }
                                 }}
-                              >
-                                {t('core:action.new.chat', {
-                                  postProcess: 'capitalizeFirstChar',
-                                })}
-                              </Button>
-                            )}
-                          </Box>
-                          {newDmSuggestionsOpen &&
-                            (newDmNameOptions.length > 0 ||
-                              newDmNameLoading) && (
-                              <Paper
-                                elevation={8}
-                                sx={{
-                                  position: 'absolute',
-                                  left: 0,
-                                  right: 0,
-                                  top: '100%',
-                                  marginTop: 4,
-                                  maxHeight: 220,
-                                  overflow: 'hidden',
-                                  overflowY: 'auto',
-                                  zIndex: 1400,
-                                  borderRadius: '12px',
-                                  border: `1px solid ${theme.palette.divider}`,
-                                  boxShadow:
-                                    theme.palette.mode === 'dark'
-                                      ? '0 8px 32px rgba(0,0,0,0.4)'
-                                      : '0 8px 32px rgba(0,0,0,0.12)',
-                                  '&::-webkit-scrollbar': { width: 6 },
-                                  '&::-webkit-scrollbar-thumb': {
-                                    backgroundColor: theme.palette.divider,
-                                    borderRadius: 3,
+                                slotProps={{
+                                  htmlInput: {
+                                    'aria-label': t(
+                                      'auth:message.generic.name_address',
+                                      { postProcess: 'capitalizeFirstChar' }
+                                    ),
                                   },
                                 }}
-                              >
-                                {newDmNameLoading &&
-                                newDmNameOptions.length === 0 ? (
-                                  <Box
-                                    sx={{
-                                      py: 2,
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      gap: 1,
-                                    }}
-                                  >
-                                    <CircularProgress size={20} />
-                                    <Typography
-                                      variant="body2"
-                                      color="text.secondary"
+                                InputProps={{
+                                  startAdornment: (
+                                    <InputAdornment position="start">
+                                      <AddRoundedIcon
+                                        sx={{
+                                          color: theme.palette.primary.main,
+                                          fontSize: '20px',
+                                        }}
+                                      />
+                                    </InputAdornment>
+                                  ),
+                                  endAdornment: newDmNameLoading ? (
+                                    <InputAdornment position="end">
+                                      <CircularProgress size={18} />
+                                    </InputAdornment>
+                                  ) : null,
+                                  sx: {
+                                    backgroundColor:
+                                      theme.palette.background.paper,
+                                    borderRadius: '12px',
+                                    fontFamily: 'Inter',
+                                    fontSize: '14px',
+                                    '& fieldset': {
+                                      borderColor: theme.palette.divider,
+                                      borderRadius: '12px',
+                                    },
+                                    '&.Mui-focused fieldset': {
+                                      borderWidth: '2px',
+                                      borderColor: theme.palette.primary.main,
+                                    },
+                                  },
+                                }}
+                              />
+                              {newDmInput.trim() && (
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  onClick={() => {
+                                    handleStartNewDm();
+                                    setNewDmSuggestionsOpen(false);
+                                  }}
+                                  disabled={
+                                    !newDmInput.trim() ||
+                                    (!validateAddress(newDmInput.trim()) &&
+                                      !lastSelectedNameOption &&
+                                      (newDmNameOptions.length === 0 ||
+                                        typeof newDmNameOptions[0] !==
+                                          'object'))
+                                  }
+                                  sx={{
+                                    flexShrink: 0,
+                                    borderRadius: '10px',
+                                    fontFamily: 'Inter',
+                                    fontWeight: 600,
+                                    fontSize: '13px',
+                                    textTransform: 'none',
+                                  }}
+                                >
+                                  {t('core:action.new.chat', {
+                                    postProcess: 'capitalizeFirstChar',
+                                  })}
+                                </Button>
+                              )}
+                            </Box>
+                            {newDmSuggestionsOpen &&
+                              (newDmNameOptions.length > 0 ||
+                                newDmNameLoading) && (
+                                <Paper
+                                  elevation={8}
+                                  sx={{
+                                    position: 'absolute',
+                                    left: 0,
+                                    right: 0,
+                                    top: '100%',
+                                    marginTop: 4,
+                                    maxHeight: 220,
+                                    overflow: 'hidden',
+                                    overflowY: 'auto',
+                                    zIndex: 1400,
+                                    borderRadius: '12px',
+                                    border: `1px solid ${theme.palette.divider}`,
+                                    boxShadow:
+                                      theme.palette.mode === 'dark'
+                                        ? '0 8px 32px rgba(0,0,0,0.4)'
+                                        : '0 8px 32px rgba(0,0,0,0.12)',
+                                    '&::-webkit-scrollbar': { width: 6 },
+                                    '&::-webkit-scrollbar-thumb': {
+                                      backgroundColor: theme.palette.divider,
+                                      borderRadius: 3,
+                                    },
+                                  }}
+                                >
+                                  {newDmNameLoading &&
+                                  newDmNameOptions.length === 0 ? (
+                                    <Box
+                                      sx={{
+                                        py: 2,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: 1,
+                                      }}
                                     >
-                                      {t('core:loading.generic', {
-                                        postProcess: 'capitalizeFirstChar',
-                                      })}
-                                    </Typography>
-                                  </Box>
-                                ) : (
-                                  <List disablePadding sx={{ py: 0.5 }}>
-                                    {newDmNameOptions.map((opt) => {
-                                      const label =
-                                        typeof opt === 'string'
-                                          ? opt
-                                          : opt.name;
-                                      const key =
-                                        typeof opt === 'string'
-                                          ? opt
-                                          : opt.address;
-                                      const initial = (label || '?')
-                                        .charAt(0)
-                                        .toUpperCase();
-                                      return (
-                                        <ListItem
-                                          key={key}
-                                          disablePadding
-                                          sx={{ px: 0.5 }}
-                                        >
-                                          <ListItemButton
-                                            onClick={() => {
-                                              const valueToSet =
-                                                typeof opt === 'string'
-                                                  ? opt
-                                                  : opt.name;
-                                              setNewDmInput(valueToSet);
-                                              setLastSelectedNameOption(opt);
-                                              setNewDmSuggestionsOpen(false);
-                                            }}
-                                            sx={{
-                                              borderRadius: '8px',
-                                              py: 1,
-                                              px: 1.25,
-                                              '&:hover': {
-                                                backgroundColor:
-                                                  theme.palette.action.hover,
-                                              },
-                                            }}
+                                      <CircularProgress size={20} />
+                                      <Typography
+                                        variant="body2"
+                                        color="text.secondary"
+                                      >
+                                        {t('core:loading.generic', {
+                                          postProcess: 'capitalizeFirstChar',
+                                        })}
+                                      </Typography>
+                                    </Box>
+                                  ) : (
+                                    <List disablePadding sx={{ py: 0.5 }}>
+                                      {newDmNameOptions.map((opt) => {
+                                        const label =
+                                          typeof opt === 'string'
+                                            ? opt
+                                            : opt.name;
+                                        const key =
+                                          typeof opt === 'string'
+                                            ? opt
+                                            : opt.address;
+                                        const initial = (label || '?')
+                                          .charAt(0)
+                                          .toUpperCase();
+                                        return (
+                                          <ListItem
+                                            key={key}
+                                            disablePadding
+                                            sx={{ px: 0.5 }}
                                           >
-                                            <Avatar
+                                            <ListItemButton
+                                              onClick={() => {
+                                                const valueToSet =
+                                                  typeof opt === 'string'
+                                                    ? opt
+                                                    : opt.name;
+                                                setNewDmInput(valueToSet);
+                                                setLastSelectedNameOption(opt);
+                                                setNewDmSuggestionsOpen(false);
+                                              }}
                                               sx={{
-                                                width: 32,
-                                                height: 32,
-                                                mr: 1.25,
-                                                fontSize: '0.875rem',
-                                                fontWeight: 600,
-                                                bgcolor:
-                                                  theme.palette.primary.main,
-                                                color:
-                                                  theme.palette.primary
-                                                    .contrastText,
+                                                borderRadius: '8px',
+                                                py: 1,
+                                                px: 1.25,
+                                                '&:hover': {
+                                                  backgroundColor:
+                                                    theme.palette.action.hover,
+                                                },
                                               }}
                                             >
-                                              {initial}
-                                            </Avatar>
-                                            <ListItemText
-                                              primary={label}
-                                              primaryTypographyProps={{
-                                                fontWeight: 500,
-                                                fontSize: '0.875rem',
-                                              }}
-                                            />
-                                          </ListItemButton>
-                                        </ListItem>
-                                      );
-                                    })}
-                                  </List>
-                                )}
-                              </Paper>
-                            )}
+                                              <Avatar
+                                                sx={{
+                                                  width: 32,
+                                                  height: 32,
+                                                  mr: 1.25,
+                                                  fontSize: '0.875rem',
+                                                  fontWeight: 600,
+                                                  bgcolor:
+                                                    theme.palette.primary.main,
+                                                  color:
+                                                    theme.palette.primary
+                                                      .contrastText,
+                                                }}
+                                              >
+                                                {initial}
+                                              </Avatar>
+                                              <ListItemText
+                                                primary={label}
+                                                primaryTypographyProps={{
+                                                  fontWeight: 500,
+                                                  fontSize: '0.875rem',
+                                                }}
+                                              />
+                                            </ListItemButton>
+                                          </ListItem>
+                                        );
+                                      })}
+                                    </List>
+                                  )}
+                                </Paper>
+                              )}
+                          </Box>
                         </Box>
-                      </Box>
-                    </ClickAwayListener>
-                    {sortedDirects.length === 0 ? (
-                      <Box
-                        sx={{
-                          padding: 4,
-                          textAlign: 'center',
-                          color: theme.palette.text.secondary,
-                          fontFamily: 'Inter',
-                          fontSize: '14px',
-                        }}
-                      >
-                        {t('core:message.generic.no_messages', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                      </Box>
-                    ) : (
-                      sortedDirects.map((direct: any) => {
-                        const avatarUrl = getUserAvatarUrl(direct?.name);
-                        const avatarKey =
-                          direct?.address ||
-                          direct?.name ||
-                          `${direct?.timestamp}-${direct?.sender}`;
-                        const isAvatarLoaded = Boolean(
-                          avatarUrl &&
+                      </ClickAwayListener>
+                      {sortedDirects.length === 0 ? (
+                        <Box
+                          sx={{
+                            padding: 4,
+                            textAlign: 'center',
+                            color: theme.palette.text.secondary,
+                            fontFamily: 'Inter',
+                            fontSize: '14px',
+                          }}
+                        >
+                          {t('core:message.generic.no_messages', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                        </Box>
+                      ) : (
+                        sortedDirects.map((direct: any) => {
+                          const avatarUrl = getUserAvatarUrl(direct?.name);
+                          const avatarKey =
+                            direct?.address ||
+                            direct?.name ||
+                            `${direct?.timestamp}-${direct?.sender}`;
+                          const isAvatarLoaded = Boolean(
+                            avatarUrl &&
                             avatarKey &&
                             directAvatarLoaded[avatarKey]
-                        );
-                        const hasUnread =
-                          direct?.sender !== myAddress &&
-                          direct?.timestamp &&
-                          ((!timestampEnterData[direct?.address] &&
-                            Date.now() - direct?.timestamp <
-                              timeDifferenceForNotificationChats) ||
-                            (timestampEnterData[direct?.address] ?? 0) <
-                              direct?.timestamp);
-                        const directName = direct?.name || direct?.address;
-                        const hasUnsafeName = Boolean(
-                          direct?.name && hasInvisibleCharacters(direct.name)
-                        );
+                          );
+                          const hasUnread =
+                            direct?.sender !== myAddress &&
+                            direct?.timestamp &&
+                            ((!timestampEnterData[direct?.address] &&
+                              Date.now() - direct?.timestamp <
+                                timeDifferenceForNotificationChats) ||
+                              (timestampEnterData[direct?.address] ?? 0) <
+                                direct?.timestamp);
+                          const directName = direct?.name || direct?.address;
+                          const hasUnsafeName = Boolean(
+                            direct?.name && hasInvisibleCharacters(direct.name)
+                          );
 
-                        return (
-                          <ListItem
-                            key={direct?.timestamp + direct?.sender}
-                            onClick={() => {
-                              (window as any)
-                                .sendMessage('addTimestampEnterChat', {
-                                  timestamp: Date.now(),
-                                  groupId: direct?.address,
-                                })
-                                .catch((error: any) => {
-                                  console.error(
-                                    'Failed to add timestamp:',
-                                    error?.message || 'An error occurred'
-                                  );
-                                });
-                              setSelectedDirect(direct);
-                              getTimestampEnterChat();
-                            }}
-                            sx={{
-                              borderRadius: '10px',
-                              cursor: 'pointer',
-                              marginBottom: '6px',
-                              padding: '12px 14px',
-                              width: '100%',
-                              backgroundColor:
-                                selectedDirect?.address === direct?.address
-                                  ? theme.palette.action.selected
-                                  : 'transparent',
-                              borderLeft:
-                                selectedDirect?.address === direct?.address
-                                  ? `3px solid ${theme.palette.primary.main}`
-                                  : '3px solid transparent',
-                              transition:
-                                'background-color 0.15s ease, border-color 0.15s ease',
-                              '&:hover': {
+                          return (
+                            <ListItem
+                              key={direct?.timestamp + direct?.sender}
+                              onClick={() => {
+                                (window as any)
+                                  .sendMessage('addTimestampEnterChat', {
+                                    timestamp: Date.now(),
+                                    groupId: direct?.address,
+                                  })
+                                  .catch((error: any) => {
+                                    console.error(
+                                      'Failed to add timestamp:',
+                                      error?.message || 'An error occurred'
+                                    );
+                                  });
+                                setSelectedDirect(direct);
+                                getTimestampEnterChat();
+                              }}
+                              sx={{
+                                borderRadius: '10px',
+                                cursor: 'pointer',
+                                marginBottom: '6px',
+                                padding: '12px 14px',
+                                width: '100%',
                                 backgroundColor:
                                   selectedDirect?.address === direct?.address
                                     ? theme.palette.action.selected
-                                    : theme.palette.action.hover,
-                              },
-                            }}
-                          >
-                            <ListItemAvatar
-                              sx={{ minWidth: 44, marginRight: 0 }}
+                                    : 'transparent',
+                                borderLeft:
+                                  selectedDirect?.address === direct?.address
+                                    ? `3px solid ${theme.palette.primary.main}`
+                                    : '3px solid transparent',
+                                transition:
+                                  'background-color 0.15s ease, border-color 0.15s ease',
+                                '&:hover': {
+                                  backgroundColor:
+                                    selectedDirect?.address === direct?.address
+                                      ? theme.palette.action.selected
+                                      : theme.palette.action.hover,
+                                },
+                              }}
                             >
-                              <Avatar
-                                sx={{
-                                  height: 40,
-                                  width: 40,
-                                  background: theme.palette.background.default,
-                                  color: theme.palette.text.primary,
-                                  ...getClickableAvatarSx(
-                                    theme,
-                                    isAvatarLoaded
-                                  ),
-                                }}
-                                alt={direct?.name || direct?.address}
-                                src={avatarUrl}
-                                imgProps={{
-                                  onLoad: () => {
-                                    if (!avatarKey) return;
-                                    setDirectAvatarLoaded((prev) =>
-                                      prev[avatarKey]
-                                        ? prev
-                                        : { ...prev, [avatarKey]: true }
-                                    );
-                                  },
-                                  onError: () => {
-                                    if (!avatarKey) return;
-                                    setDirectAvatarLoaded((prev) =>
-                                      prev[avatarKey] === false
-                                        ? prev
-                                        : { ...prev, [avatarKey]: false }
-                                    );
-                                  },
-                                }}
+                              <ListItemAvatar
+                                sx={{ minWidth: 44, marginRight: 0 }}
                               >
-                                {(direct?.name || direct?.address)?.charAt(0)}
-                              </Avatar>
-                            </ListItemAvatar>
-                            <ListItemText
-                              primary={directName}
-                              secondary={
-                                !direct?.timestamp
-                                  ? t('core:message.generic.no_messages', {
-                                      postProcess: 'capitalizeFirstChar',
-                                    })
-                                  : (() => {
-                                      const senderLabel =
-                                        direct?.sender === myAddress
-                                          ? t('group:last_message_you', {
-                                              postProcess:
-                                                'capitalizeFirstChar',
-                                            })
-                                          : direct?.name || direct?.address;
-                                      return t('group:last_message_from', {
-                                        sender: senderLabel,
-                                        date: formatEmailDate(direct.timestamp),
-                                      });
-                                    })()
-                              }
-                              primaryTypographyProps={{
-                                sx: {
-                                  color: hasUnread
-                                    ? theme.palette.primary.main
-                                    : theme.palette.text.primary,
-                                  fontFamily: 'Inter',
-                                  fontSize: '15px',
-                                  fontWeight: 600,
-                                  lineHeight: 1.3,
-                                  ...(hasUnsafeName
-                                    ? {
-                                        textDecorationLine: 'line-through',
-                                        textDecorationThickness: '2px',
-                                        textDecorationColor:
-                                          theme.palette.error.main,
-                                      }
-                                    : {}),
-                                },
-                              }}
-                              secondaryTypographyProps={{
-                                sx: {
-                                  color: theme.palette.text.secondary,
-                                  fontFamily: 'Inter',
-                                  fontSize: '12px',
-                                  lineHeight: 1.4,
-                                  marginTop: '3px',
-                                },
-                              }}
-                              sx={{
-                                flex: 1,
-                                minWidth: 0,
-                                margin: 0,
-                                overflow: 'hidden',
-                              }}
-                            />
-                            {hasUnread && (
-                              <MarkChatUnreadIcon
+                                <Avatar
+                                  sx={{
+                                    height: 40,
+                                    width: 40,
+                                    background:
+                                      theme.palette.background.default,
+                                    color: theme.palette.text.primary,
+                                    ...getClickableAvatarSx(
+                                      theme,
+                                      isAvatarLoaded
+                                    ),
+                                  }}
+                                  alt={direct?.name || direct?.address}
+                                  src={avatarUrl}
+                                  imgProps={{
+                                    onLoad: () => {
+                                      if (!avatarKey) return;
+                                      setDirectAvatarLoaded((prev) =>
+                                        prev[avatarKey]
+                                          ? prev
+                                          : { ...prev, [avatarKey]: true }
+                                      );
+                                    },
+                                    onError: () => {
+                                      if (!avatarKey) return;
+                                      setDirectAvatarLoaded((prev) =>
+                                        prev[avatarKey] === false
+                                          ? prev
+                                          : { ...prev, [avatarKey]: false }
+                                      );
+                                    },
+                                  }}
+                                >
+                                  {(direct?.name || direct?.address)?.charAt(0)}
+                                </Avatar>
+                              </ListItemAvatar>
+                              <ListItemText
+                                primary={directName}
+                                secondary={
+                                  !direct?.timestamp
+                                    ? t('core:message.generic.no_messages', {
+                                        postProcess: 'capitalizeFirstChar',
+                                      })
+                                    : (() => {
+                                        const senderLabel =
+                                          direct?.sender === myAddress
+                                            ? t('group:last_message_you', {
+                                                postProcess:
+                                                  'capitalizeFirstChar',
+                                              })
+                                            : direct?.name || direct?.address;
+                                        return t('group:last_message_from', {
+                                          sender: senderLabel,
+                                          date: formatEmailDate(
+                                            direct.timestamp
+                                          ),
+                                        });
+                                      })()
+                                }
+                                primaryTypographyProps={{
+                                  sx: {
+                                    color: hasUnread
+                                      ? theme.palette.primary.main
+                                      : theme.palette.text.primary,
+                                    fontFamily: 'Inter',
+                                    fontSize: '15px',
+                                    fontWeight: 600,
+                                    lineHeight: 1.3,
+                                    ...(hasUnsafeName
+                                      ? {
+                                          textDecorationLine: 'line-through',
+                                          textDecorationThickness: '2px',
+                                          textDecorationColor:
+                                            theme.palette.error.main,
+                                        }
+                                      : {}),
+                                  },
+                                }}
+                                secondaryTypographyProps={{
+                                  sx: {
+                                    color: theme.palette.text.secondary,
+                                    fontFamily: 'Inter',
+                                    fontSize: '12px',
+                                    lineHeight: 1.4,
+                                    marginTop: '3px',
+                                  },
+                                }}
                                 sx={{
-                                  color: theme.palette.primary.main,
-                                  fontSize: '18px',
-                                  flexShrink: 0,
-                                  marginLeft: 1,
+                                  flex: 1,
+                                  minWidth: 0,
+                                  margin: 0,
+                                  overflow: 'hidden',
                                 }}
                               />
-                            )}
-                          </ListItem>
-                        );
-                      })
-                    )}
-                  </>
-                )}
-
-                {tab === 'groups' && (
-                  <>
-                    {sortedGroups.length === 0 ? (
-                      <Box
-                        sx={{
-                          padding: 4,
-                          textAlign: 'center',
-                          color: theme.palette.text.secondary,
-                          fontFamily: 'Inter',
-                          fontSize: '14px',
-                        }}
-                      >
-                        No groups
-                      </Box>
-                    ) : (
-                      sortedGroups.map((group: any) => {
-                        const groupName =
-                          group?.groupName ||
-                          group?.name ||
-                          (group?.groupId === '0'
-                            ? 'General'
-                            : `Group ${group?.groupId}`);
-                        const ownerName =
-                          groupsOwnerNames[group?.groupId] ??
-                          group?.ownerName ??
-                          group?.name;
-                        const avatarUrl =
-                          ownerName && group?.groupId
-                            ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${ownerName}/qortal_group_avatar_${group?.groupId}?async=true`
-                            : null;
-                        const isSelected =
-                          selectedGroup?.groupId === group?.groupId;
-                        const groupChatTimestamp =
-                          groupChatTimestamps[group?.groupId];
-                        const groupEnterTimestamp =
-                          timestampEnterData[group?.groupId];
-                        const hasUnreadGroup =
-                          (group?.reticulumChatSummary?.unreadCount ?? 0) > 0 ||
-                          (group?.data &&
-                            groupChatTimestamp &&
-                            group?.sender !== myAddress &&
-                            group?.timestamp &&
-                            ((groupEnterTimestamp == null &&
-                              Date.now() - group?.timestamp <
-                                timeDifferenceForNotificationChats) ||
-                              (groupEnterTimestamp ?? 0) < group?.timestamp));
-                        const hasReticulumMention =
-                          group?.reticulumChatSummary?.hasUnreadMention === true ||
-                          (group?.reticulumChatSummary?.mentionCount ?? 0) > 0;
-                        const groupProperty = groupsProperties[group?.groupId];
-                        const isPrivateGroup = groupProperty?.isOpen === false;
-                        return (
-                          <ListItem
-                            key={group?.groupId}
-                            onClick={() => {
-                              (window as any)
-                                .sendMessage('addTimestampEnterChat', {
-                                  timestamp: Date.now(),
-                                  groupId: group?.groupId,
-                                })
-                                .catch((error: any) => {
-                                  console.error(
-                                    'Failed to add timestamp:',
-                                    error?.message || 'An error occurred'
-                                  );
-                                });
-                              setSelectedGroup(group);
-                              getTimestampEnterChat();
-                            }}
-                            sx={{
-                              borderRadius: '10px',
-                              cursor: 'pointer',
-                              marginBottom: '6px',
-                              padding: '12px 14px',
-                              width: '100%',
-                              backgroundColor: isSelected
-                                ? theme.palette.action.selected
-                                : 'transparent',
-                              borderLeft: isSelected
-                                ? `3px solid ${theme.palette.primary.main}`
-                                : '3px solid transparent',
-                              transition:
-                                'background-color 0.15s ease, border-color 0.15s ease',
-                              '&:hover': {
-                                backgroundColor: isSelected
-                                  ? theme.palette.action.selected
-                                  : theme.palette.action.hover,
-                              },
-                            }}
-                          >
-                            <ListItemAvatar
-                              sx={{ minWidth: 44, marginRight: 0 }}
-                            >
-                              <Avatar
-                                sx={{
-                                  height: 40,
-                                  width: 40,
-                                  background: theme.palette.background.default,
-                                  color: theme.palette.text.primary,
-                                  ...getClickableAvatarSx(theme, !!avatarUrl),
-                                }}
-                                src={avatarUrl || undefined}
-                                imgProps={{
-                                  onLoad: () => {},
-                                  onError: () => {},
-                                }}
-                              >
-                                {groupName?.charAt(0)?.toUpperCase() || 'G'}
-                              </Avatar>
-                            </ListItemAvatar>
-                            <ListItemText
-                              primary={
-                                group?.groupId === '0' ? 'General' : groupName
-                              }
-                              secondary={
-                                !group?.timestamp
-                                  ? t('core:message.generic.no_messages', {
-                                      postProcess: 'capitalizeFirstChar',
-                                    })
-                                  : (() => {
-                                      const senderLabel =
-                                        group?.sender === myAddress
-                                          ? t('group:last_message_you', {
-                                              postProcess:
-                                                'capitalizeFirstChar',
-                                            })
-                                          : group?.senderName ||
-                                            (group?.sender
-                                              ? `${String(group.sender).slice(0, 6)}…`
-                                              : t('group:last_message', {
-                                                  postProcess:
-                                                    'capitalizeFirstChar',
-                                                }));
-                                      return t('group:last_message_from', {
-                                        sender: senderLabel,
-                                        date: formatEmailDate(group.timestamp),
-                                      });
-                                    })()
-                              }
-                              primaryTypographyProps={{
-                                sx: {
-                                  color: hasUnreadGroup
-                                    ? theme.palette.primary.main
-                                    : theme.palette.text.primary,
-                                  fontFamily: 'Inter',
-                                  fontSize: '15px',
-                                  fontWeight: 600,
-                                  lineHeight: 1.3,
-                                },
-                              }}
-                              secondaryTypographyProps={{
-                                sx: {
-                                  color: theme.palette.text.secondary,
-                                  fontFamily: 'Inter',
-                                  fontSize: '12px',
-                                  lineHeight: 1.4,
-                                  marginTop: '3px',
-                                },
-                              }}
-                              sx={{
-                                flex: 1,
-                                minWidth: 0,
-                                margin: 0,
-                                overflow: 'hidden',
-                              }}
-                            />
-                            <Box
-                              sx={{
-                                alignItems: 'center',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '4px',
-                                flexShrink: 0,
-                                justifyContent: 'center',
-                                marginLeft: 1,
-                              }}
-                            >
-                              {hasUnreadGroup && (
+                              {hasUnread && (
                                 <MarkChatUnreadIcon
                                   sx={{
-                                    color:
-                                      theme.palette.other?.unread ??
-                                      theme.palette.primary.main,
+                                    color: theme.palette.primary.main,
                                     fontSize: '18px',
+                                    flexShrink: 0,
+                                    marginLeft: 1,
                                   }}
                                 />
                               )}
-                              {hasReticulumMention && (
-                                <AlternateEmailIcon
+                            </ListItem>
+                          );
+                        })
+                      )}
+                    </>
+                  )}
+
+                  {tab === 'groups' && (
+                    <>
+                      {sortedGroups.length === 0 ? (
+                        <Box
+                          sx={{
+                            padding: 4,
+                            textAlign: 'center',
+                            color: theme.palette.text.secondary,
+                            fontFamily: 'Inter',
+                            fontSize: '14px',
+                          }}
+                        >
+                          No groups
+                        </Box>
+                      ) : (
+                        sortedGroups.map((group: any) => {
+                          const groupName =
+                            group?.groupName ||
+                            group?.name ||
+                            (group?.groupId === '0'
+                              ? 'General'
+                              : `Group ${group?.groupId}`);
+                          const ownerName =
+                            groupsOwnerNames[group?.groupId] ??
+                            group?.ownerName ??
+                            group?.name;
+                          const avatarUrl =
+                            ownerName && group?.groupId
+                              ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${ownerName}/qortal_group_avatar_${group?.groupId}?async=true`
+                              : null;
+                          const isSelected =
+                            selectedGroup?.groupId === group?.groupId;
+                          const groupChatTimestamp =
+                            groupChatTimestamps[group?.groupId];
+                          const groupEnterTimestamp =
+                            timestampEnterData[group?.groupId];
+                          const hasUnreadGroup =
+                            (group?.reticulumChatSummary?.unreadCount ?? 0) >
+                              0 ||
+                            (group?.data &&
+                              groupChatTimestamp &&
+                              group?.sender !== myAddress &&
+                              group?.timestamp &&
+                              ((groupEnterTimestamp == null &&
+                                Date.now() - group?.timestamp <
+                                  timeDifferenceForNotificationChats) ||
+                                (groupEnterTimestamp ?? 0) < group?.timestamp));
+                          const hasReticulumMention =
+                            group?.reticulumChatSummary?.hasUnreadMention ===
+                              true ||
+                            (group?.reticulumChatSummary?.mentionCount ?? 0) >
+                              0;
+                          const groupProperty =
+                            groupsProperties[group?.groupId];
+                          const isPrivateGroup =
+                            groupProperty?.isOpen === false;
+                          return (
+                            <ListItem
+                              key={group?.groupId}
+                              onClick={() => {
+                                (window as any)
+                                  .sendMessage('addTimestampEnterChat', {
+                                    timestamp: Date.now(),
+                                    groupId: group?.groupId,
+                                  })
+                                  .catch((error: any) => {
+                                    console.error(
+                                      'Failed to add timestamp:',
+                                      error?.message || 'An error occurred'
+                                    );
+                                  });
+                                setSelectedGroup(group);
+                                getTimestampEnterChat();
+                              }}
+                              sx={{
+                                borderRadius: '10px',
+                                cursor: 'pointer',
+                                marginBottom: '6px',
+                                padding: '12px 14px',
+                                width: '100%',
+                                backgroundColor: isSelected
+                                  ? theme.palette.action.selected
+                                  : 'transparent',
+                                borderLeft: isSelected
+                                  ? `3px solid ${theme.palette.primary.main}`
+                                  : '3px solid transparent',
+                                transition:
+                                  'background-color 0.15s ease, border-color 0.15s ease',
+                                '&:hover': {
+                                  backgroundColor: isSelected
+                                    ? theme.palette.action.selected
+                                    : theme.palette.action.hover,
+                                },
+                              }}
+                            >
+                              <ListItemAvatar
+                                sx={{ minWidth: 44, marginRight: 0 }}
+                              >
+                                <Avatar
                                   sx={{
-                                    color:
-                                      theme.palette.other?.unread ??
-                                      theme.palette.primary.main,
-                                    fontSize: '18px',
+                                    height: 40,
+                                    width: 40,
+                                    background:
+                                      theme.palette.background.default,
+                                    color: theme.palette.text.primary,
+                                    ...getClickableAvatarSx(theme, !!avatarUrl),
                                   }}
-                                />
-                              )}
-                              {isPrivateGroup && (
-                                <LockIcon
-                                  sx={{
-                                    color:
-                                      theme.palette.other?.positive ??
-                                      theme.palette.text.secondary,
-                                    fontSize: '18px',
+                                  src={avatarUrl || undefined}
+                                  imgProps={{
+                                    onLoad: () => {},
+                                    onError: () => {},
                                   }}
-                                  titleAccess={t('group:group.private', {
-                                    postProcess: 'capitalizeFirstChar',
-                                  })}
-                                />
-                              )}
-                            </Box>
-                          </ListItem>
-                        );
-                      })
-                    )}
-                  </>
-                )}
-              </List>
-            </>
-          )}
+                                >
+                                  {groupName?.charAt(0)?.toUpperCase() || 'G'}
+                                </Avatar>
+                              </ListItemAvatar>
+                              <ListItemText
+                                primary={
+                                  group?.groupId === '0' ? 'General' : groupName
+                                }
+                                secondary={
+                                  !group?.timestamp
+                                    ? t('core:message.generic.no_messages', {
+                                        postProcess: 'capitalizeFirstChar',
+                                      })
+                                    : (() => {
+                                        const senderLabel =
+                                          group?.sender === myAddress
+                                            ? t('group:last_message_you', {
+                                                postProcess:
+                                                  'capitalizeFirstChar',
+                                              })
+                                            : group?.senderName ||
+                                              (group?.sender
+                                                ? `${String(group.sender).slice(0, 6)}…`
+                                                : t('group:last_message', {
+                                                    postProcess:
+                                                      'capitalizeFirstChar',
+                                                  }));
+                                        return t('group:last_message_from', {
+                                          sender: senderLabel,
+                                          date: formatEmailDate(
+                                            group.timestamp
+                                          ),
+                                        });
+                                      })()
+                                }
+                                primaryTypographyProps={{
+                                  sx: {
+                                    color: hasUnreadGroup
+                                      ? theme.palette.primary.main
+                                      : theme.palette.text.primary,
+                                    fontFamily: 'Inter',
+                                    fontSize: '15px',
+                                    fontWeight: 600,
+                                    lineHeight: 1.3,
+                                  },
+                                }}
+                                secondaryTypographyProps={{
+                                  sx: {
+                                    color: theme.palette.text.secondary,
+                                    fontFamily: 'Inter',
+                                    fontSize: '12px',
+                                    lineHeight: 1.4,
+                                    marginTop: '3px',
+                                  },
+                                }}
+                                sx={{
+                                  flex: 1,
+                                  minWidth: 0,
+                                  margin: 0,
+                                  overflow: 'hidden',
+                                }}
+                              />
+                              <Box
+                                sx={{
+                                  alignItems: 'center',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '4px',
+                                  flexShrink: 0,
+                                  justifyContent: 'center',
+                                  marginLeft: 1,
+                                }}
+                              >
+                                {hasUnreadGroup && (
+                                  <MarkChatUnreadIcon
+                                    sx={{
+                                      color:
+                                        theme.palette.other?.unread ??
+                                        theme.palette.primary.main,
+                                      fontSize: '18px',
+                                    }}
+                                  />
+                                )}
+                                {hasReticulumMention && (
+                                  <AlternateEmailIcon
+                                    sx={{
+                                      color:
+                                        theme.palette.other?.unread ??
+                                        theme.palette.primary.main,
+                                      fontSize: '18px',
+                                    }}
+                                  />
+                                )}
+                                {isPrivateGroup && (
+                                  <LockIcon
+                                    sx={{
+                                      color:
+                                        theme.palette.other?.positive ??
+                                        theme.palette.text.secondary,
+                                      fontSize: '18px',
+                                    }}
+                                    titleAccess={t('group:group.private', {
+                                      postProcess: 'capitalizeFirstChar',
+                                    })}
+                                  />
+                                )}
+                              </Box>
+                            </ListItem>
+                          );
+                        })
+                      )}
+                    </>
+                  )}
+                </List>
+              </>
+            )}
+          </Box>
         </Box>
-      </Box>
-    </Rnd>
+      </Rnd>
     </>
   );
 }

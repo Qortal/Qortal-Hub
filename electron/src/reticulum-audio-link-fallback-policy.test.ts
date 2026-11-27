@@ -45,8 +45,7 @@ describe('shouldActivateReticulumPeerRxFallback', () => {
     expect(
       shouldActivateReticulumPeerRxFallback({
         peerRxRecent: false,
-        peerRxAgeMs:
-          RETICULUM_AUDIO_FALLBACK_REMOTE_RX_MISSING_MS_DEFAULT - 1,
+        peerRxAgeMs: RETICULUM_AUDIO_FALLBACK_REMOTE_RX_MISSING_MS_DEFAULT - 1,
         outboundPacketAgeMs: 500,
       })
     ).toBe(false);
@@ -183,8 +182,7 @@ describe('isInReticulumFallbackReactivationCooldown', () => {
       isInReticulumFallbackReactivationCooldown({
         packetFallbackLastExitAtMs: 1_000_000,
         nowMs:
-          1_000_000 +
-          RETICULUM_AUDIO_FALLBACK_REACTIVATION_COOLDOWN_MS_DEFAULT,
+          1_000_000 + RETICULUM_AUDIO_FALLBACK_REACTIVATION_COOLDOWN_MS_DEFAULT,
       })
     ).toBe(false);
   });

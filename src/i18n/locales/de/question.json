@@ -42,6 +42,7 @@
     "error": {
       "add_to_list": "Fehler beim Hinzufügen zur Liste",
       "app_fee_not_sent": "Die Veröffentlichung war erfolgreich, aber die App-Gebühr wurde nicht gesendet: {{ error }}",
+      "app_fee_outcome_unknown": "Die Veröffentlichung war erfolgreich, aber Hub konnte nicht feststellen, ob die App-Gebühr bezahlt wurde. Prüfen Sie das in Ihren Transaktionen.",
       "at_info": "AT-Informationen konnten nicht gefunden werden.",
       "buy_order": "Handelsauftrag konnte nicht übermittelt werden",
       "cancel_sell_order": "Fehler beim Abbrechen des Verkaufsauftrags. Versuchen Sie es erneut!",
@@ -104,6 +105,7 @@
       "node_info": "Knoteninformationen konnten nicht abgerufen werden",
       "node_status": "Knotenstatus konnte nicht abgerufen werden",
       "only_encrypted_data": "Nur verschlüsselte Daten sind für private Dienste zulässig",
+      "payment_outcome_unknown": "Hub konnte nicht feststellen, ob diese Zahlung ausgeführt wurde. Prüfen Sie Ihre Transaktionen, bevor Sie es erneut versuchen.",
       "payments_partially_sent": "Vor diesem Fehler ausgeführte Zahlungen: {{ sent }} von {{ total }}. Prüfen Sie Ihre Transaktionen, bevor Sie es erneut versuchen. {{ error }}",
       "perform_request": "Anfrage konnte nicht ausgeführt werden",
       "poll_create": "Umfrage konnte nicht erstellt werden",

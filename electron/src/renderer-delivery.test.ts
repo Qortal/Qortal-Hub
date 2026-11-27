@@ -19,7 +19,9 @@ describe('renderer delivery', () => {
   it('sends when the current main frame is ready', () => {
     const webContents = webContentsStub();
 
-    expect(sendToRenderer(webContents, 'test:event', { ok: true })).toBe('sent');
+    expect(sendToRenderer(webContents, 'test:event', { ok: true })).toBe(
+      'sent'
+    );
     expect(webContents.send).toHaveBeenCalledWith('test:event', { ok: true });
   });
 
@@ -36,21 +38,29 @@ describe('renderer delivery', () => {
     });
 
     expect(isRendererMainFrameReady(webContents)).toBe(false);
-    expect(sendToRenderer(webContents, 'test:event')).toBe('temporarily-unavailable');
+    expect(sendToRenderer(webContents, 'test:event')).toBe(
+      'temporarily-unavailable'
+    );
     expect(webContents.send).not.toHaveBeenCalled();
   });
 
   it('contains a frame-disposal race without treating the WebContents as dead', () => {
     const webContents = webContentsStub({
       send: vi.fn(() => {
-        throw new Error('Render frame was disposed before WebFrameMain could be accessed');
+        throw new Error(
+          'Render frame was disposed before WebFrameMain could be accessed'
+        );
       }),
     });
 
-    expect(sendToRenderer(webContents, 'test:event')).toBe('temporarily-unavailable');
+    expect(sendToRenderer(webContents, 'test:event')).toBe(
+      'temporarily-unavailable'
+    );
     expect(
       isRendererFrameUnavailableError(
-        new Error('Render frame was disposed before WebFrameMain could be accessed')
+        new Error(
+          'Render frame was disposed before WebFrameMain could be accessed'
+        )
       )
     ).toBe(true);
   });

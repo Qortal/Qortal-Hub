@@ -3,10 +3,12 @@
 Use this file as the repeatable checklist and logging format for new group-call diagnostics exports.
 
 Related docs:
+
 - [docs/gcall-receive-profiles.md](/home/qortal/Desktop/desktop-app-official/qortal-desktop/docs/gcall-receive-profiles.md)
 - [docs/group-call-audio-roadmap.md](/home/qortal/Desktop/desktop-app-official/qortal-desktop/docs/group-call-audio-roadmap.md)
 
 Primary runtime fields:
+
 - `audioSurfaceRuntimeDiagnostics.receiveEngine.livePolicyProfilesBySource`
 - `audioSurfaceRuntimeDiagnostics.receiveEngine.livePolicyStateBySource`
 - `audioSurfaceRuntimeDiagnostics.receiveEngine.profileTransitions`
@@ -18,6 +20,7 @@ Primary runtime fields:
 ## Purpose
 
 Use this template to answer the same questions for every new call:
+
 - What profile was each side in?
 - Did that profile match the actual user symptom?
 - Was the call bad because of:
@@ -31,6 +34,7 @@ This is meant to stop ad hoc analysis and make profile tuning cumulative.
 ## Review Workflow
 
 For each new call:
+
 1. Confirm both exports belong to the same room.
 2. Record user-reported symptom first.
 3. Record what each side’s dominant profile was.
@@ -65,33 +69,39 @@ Copy this section for each new call:
 ## Call: <date / short label>
 
 Room:
+
 - `<room id>`
 
 Files:
+
 - Side A: `<path>`
 - Side B: `<path>`
 
 User symptom:
+
 - `<plain description>`
 
 High-level verdict:
+
 - `<good / mixed / bad / catastrophic>`
 - `<one sentence summary>`
 
 Not the problem:
+
 - `<decrypt / decode / queue / failover / startup / etc.>`
 
 Primary next target:
+
 - `<profile or subsystem>`
 ```
 
 ## Side-By-Side Table Template
 
 ```md
-| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
-| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
-| A | `<root/standby/participant>` | `<profile>` | `<yes/no>` | `<n>` | `<n>` | `<n>` | `<n>` | `<n>` | `<mode>` | `<short note>` |
-| B | `<root/standby/participant>` | `<profile>` | `<yes/no>` | `<n>` | `<n>` | `<n>` | `<n>` | `<n>` | `<mode>` | `<short note>` |
+| Side | Role                         | Dominant Profile | User-Bad?  | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes          |
+| ---- | ---------------------------- | ---------------- | ---------- | ---------------: | ------------: | ---------------: | ----------: | --------: | ------------- | -------------- |
+| A    | `<root/standby/participant>` | `<profile>`      | `<yes/no>` |            `<n>` |         `<n>` |            `<n>` |       `<n>` |     `<n>` | `<mode>`      | `<short note>` |
+| B    | `<root/standby/participant>` | `<profile>`      | `<yes/no>` |            `<n>` |         `<n>` |            `<n>` |       `<n>` |     `<n>` | `<mode>`      | `<short note>` |
 ```
 
 ## Classification Check
@@ -102,15 +112,19 @@ For each side:
 ### Side A
 
 Expected profile from symptom:
+
 - `<profile>`
 
 Actual exported profile:
+
 - `<profile>`
 
 Did classification match?
+
 - `<yes/no/partly>`
 
 If no:
+
 - `<what looked wrong>`
 - `<whether to retune selector or create a new profile>`
 ```
@@ -118,12 +132,14 @@ If no:
 ## Trend Check
 
 Use `recentWindowTrends` to decide whether the call was:
+
 - flat-bad the whole sampled window
 - gradually degrading
 - hit by a discrete event
 - oscillating between modes
 
 Prefer the windowed delta fields when judging whether the call is still bad now:
+
 - `missingFramesDelta`
 - `concealmentTicksDelta`
 - `packetsDroppedPendingDecryptDelta`
@@ -134,6 +150,7 @@ Use `recentWindowSummary` for a quick whole-export-window read, then inspect the
 trend rows when a side improved or degraded during the call.
 
 Use `profileTransitions` and `livePolicyStateBySource` to answer:
+
 - when a profile changed
 - what metrics caused the transition
 - whether a profile is stuck because hold timers or clear conditions remain active
@@ -145,6 +162,7 @@ Template:
 ## Trend Read
 
 Side A:
+
 - `<flat-bad / gradual / discrete / oscillating>`
 - Reasons seen:
   - `<entered-recovery>`
@@ -153,6 +171,7 @@ Side A:
   - `<none>`
 
 Side B:
+
 - `<flat-bad / gradual / discrete / oscillating>`
 - Reasons seen:
   - `<...>`
@@ -176,6 +195,7 @@ Use these rules to pick the next change:
 ## New Profile Gate
 
 Only add a new profile if all are true:
+
 - the failure shape recurs
 - it does not fit an existing profile cleanly
 - forcing it into an existing profile would likely worsen other calls
@@ -187,18 +207,23 @@ Record the proposal like this:
 ## New Profile Proposal
 
 Name:
+
 - `<candidate profile name>`
 
 Why existing profiles were insufficient:
+
 - `<reason>`
 
 Recurring evidence:
+
 - `<call ids or export labels>`
 
 Distinct signals:
+
 - `<metrics / trends / user symptom>`
 
 Risk if folded into an existing profile:
+
 - `<what would likely regress>`
 ```
 
@@ -207,15 +232,16 @@ Risk if folded into an existing profile:
 Use this when reviewing multiple calls on one build:
 
 ```md
-| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
-| --- | --- | --- | --- | --- | --- | --- |
-| `<call id>` | A | `<profile>` | `<yes/no>` | `<yes/no/partly>` | `<receive/startup/key/etc.>` | `<tune X / no change>` |
-| `<call id>` | B | `<profile>` | `<yes/no>` | `<yes/no/partly>` | `<receive/startup/key/etc.>` | `<tune X / no change>` |
+| Call        | Side | Dominant Profile | User-Bad?  | Classification Correct? | Main Issue Class             | Next Action            |
+| ----------- | ---- | ---------------- | ---------- | ----------------------- | ---------------------------- | ---------------------- |
+| `<call id>` | A    | `<profile>`      | `<yes/no>` | `<yes/no/partly>`       | `<receive/startup/key/etc.>` | `<tune X / no change>` |
+| `<call id>` | B    | `<profile>`      | `<yes/no>` | `<yes/no/partly>`       | `<receive/startup/key/etc.>` | `<tune X / no change>` |
 ```
 
 ## Success Criteria
 
 Treat a build as materially improved when a batch of ordinary calls shows:
+
 - most sides spend most time in `clean-low-latency`
 - bad profiles are brief, not dominant for the whole call
 - `recentWindowTrends` are mostly quiet

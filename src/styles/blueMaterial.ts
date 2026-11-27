@@ -169,10 +169,10 @@ export const getBlueTier3StepperState = (
 ) => {
   if (status === 'inactive') {
     return {
-      background:
-        isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(27,29,36,0.08)',
-      borderColor:
-        isDarkMode ? 'rgba(255,255,255,0.16)' : 'rgba(27,29,36,0.14)',
+      background: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(27,29,36,0.08)',
+      borderColor: isDarkMode
+        ? 'rgba(255,255,255,0.16)'
+        : 'rgba(27,29,36,0.14)',
       boxShadow: 'none',
       scale: 1,
     };

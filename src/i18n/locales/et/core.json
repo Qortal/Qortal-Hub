@@ -1847,6 +1847,7 @@
       "image_metadata_unremovable": "pilti {{index}} ei saa postitada: selles vormingus ei saa asukoha- ja kaamerateavet eemaldada. Salvesta see JPEG- või PNG-vormingus ja proovi uuesti.",
       "images_too_large": "need pildid on koos postitamiseks liiga suured. Eemalda üks pilt ja proovi uuesti.",
       "name_required": "avaldamiseks on vaja Qortali nime",
+      "not_posted_left_home": "postitamata: lahkusid avalehelt enne, kui postitus saadeti. Avalda see uuesti, kui oled valmis.",
       "post_too_large": "see postitus on üle 5 MB, seega {{app}} seda ei näitaks. Lühenda seda või eemalda pilt.",
       "publish_failed": "avaldamine ebaõnnestus",
       "too_many_images": "postituses võib olla kuni {{count}} pilti"

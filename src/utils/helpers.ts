@@ -59,14 +59,15 @@ export async function ensureElectronCertIfLocalPrivateHttps(
     }
     return {
       success: false,
-      error:
-        result?.error || 'Unable to prepare local HTTPS certificate',
+      error: result?.error || 'Unable to prepare local HTTPS certificate',
     };
   } catch (e) {
     return {
       success: false,
       error:
-        e instanceof Error ? e.message : 'Unable to prepare local HTTPS certificate',
+        e instanceof Error
+          ? e.message
+          : 'Unable to prepare local HTTPS certificate',
     };
   }
 }

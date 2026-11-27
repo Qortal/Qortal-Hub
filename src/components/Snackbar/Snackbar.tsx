@@ -14,12 +14,7 @@ const getSnackbarDisplayMessage = (message: unknown) => {
   return message;
 };
 
-export const CustomizedSnackbars = ({
-  open,
-  setOpen,
-  info,
-  setInfo,
-}) => {
+export const CustomizedSnackbars = ({ open, setOpen, info, setInfo }) => {
   const lastSignatureRef = useRef<string | null>(null);
 
   useEffect(() => {

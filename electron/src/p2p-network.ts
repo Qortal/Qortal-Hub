@@ -9,10 +9,7 @@ import { EventEmitter } from 'events';
 import { generate as generateCert } from 'selfsigned';
 import { log as loggerLog, error as loggerError } from './logger';
 import Database, { type Database as DB, type Statement } from 'better-sqlite3';
-import {
-  STUN_FIXED_UDP_PORT,
-  STUN_WIRE_VERSION,
-} from './stun-bootstrap';
+import { STUN_FIXED_UDP_PORT, STUN_WIRE_VERSION } from './stun-bootstrap';
 import {
   createNatApiClient,
   destroyNatClient,
@@ -193,13 +190,16 @@ export class P2PNetwork extends EventEmitter {
   private apiServer: http.Server | null = null;
   private peers = new Map<string, PeerRecord>();
   /** addr → discovery metadata, accumulated for the lifetime of this session. */
-  private discoveredPeers = new Map<string, {
-    address: string;
-    discoveredAt: number;
-    /** nodeId of the peer that told us about this address, or 'seed' for
-     *  addresses from the initial peer list. */
-    source: string;
-  }>();
+  private discoveredPeers = new Map<
+    string,
+    {
+      address: string;
+      discoveredAt: number;
+      /** nodeId of the peer that told us about this address, or 'seed' for
+       *  addresses from the initial peer list. */
+      source: string;
+    }
+  >();
   /** id → absolute expiry timestamp */
   private seenMessages = new Map<string, number>();
   private pingTimer: ReturnType<typeof setInterval> | null = null;
@@ -213,7 +213,6 @@ export class P2PNetwork extends EventEmitter {
    *  handshake.  Once true it never resets — it proves this node's listen
    *  port was reachable at least once during this session. */
   private everHadInbound = false;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private upnpClient: any = null;
   /** Set to true in stop() so a concurrent setupUPnP() knows to tear down immediately. */
   private upnpStopped = false;
@@ -237,7 +236,10 @@ export class P2PNetwork extends EventEmitter {
    * Limits how many new TLS connections a single IP can open per minute,
    * defending against connection-flood spam at the socket level.
    */
-  private ipConnCount = new Map<string, { count: number; windowStart: number }>();
+  private ipConnCount = new Map<
+    string,
+    { count: number; windowStart: number }
+  >();
   private readonly MAX_INBOUND_PER_IP = 5;
   private readonly IP_WINDOW_MS = 60_000;
   constructor(options: P2PNetworkOptions = {}) {
@@ -268,7 +270,9 @@ export class P2PNetwork extends EventEmitter {
           INSERT OR IGNORE INTO discovered_peers (address, discovered_at, source)
           VALUES (?, ?, ?)
         `);
-        loggerLog('[P2P] Shared peer DB opened for discovered-peer persistence.');
+        loggerLog(
+          '[P2P] Shared peer DB opened for discovered-peer persistence.'
+        );
       } catch (err) {
         loggerError('[P2P] Failed to open shared peer DB:', err);
         this.peerDb = null;
@@ -371,7 +375,11 @@ export class P2PNetwork extends EventEmitter {
 
     // Close shared peer DB handle (best-effort)
     if (this.peerDb) {
-      try { this.peerDb.close(); } catch { /* ignore */ }
+      try {
+        this.peerDb.close();
+      } catch {
+        /* ignore */
+      }
       this.peerDb = null;
       this.stmtInsertPeer = null;
     }
@@ -381,10 +389,9 @@ export class P2PNetwork extends EventEmitter {
     if (this.upnpClient) {
       const client = this.upnpClient;
       this.upnpClient = null;
-      void unmapTcpPort(client, this.port, this.port)
-        .finally(() => {
-          void destroyNatClient(client);
-        });
+      void unmapTcpPort(client, this.port, this.port).finally(() => {
+        void destroyNatClient(client);
+      });
     }
 
     loggerLog('[P2P] Stopped.');
@@ -481,9 +488,7 @@ export class P2PNetwork extends EventEmitter {
    */
   getPublicIpPeers(): P2PPeerInfo[] {
     return Array.from(this.peers.values())
-      .filter(
-        (p) => p.connected && p.canAcceptInbound && !isPrivateIP(p.host)
-      )
+      .filter((p) => p.connected && p.canAcceptInbound && !isPrivateIP(p.host))
       .map(({ id, host, port, connected, outbound, canAcceptInbound }) => ({
         id,
         host,
@@ -568,7 +573,9 @@ export class P2PNetwork extends EventEmitter {
       // Bail out if stop() was called while we were loading the module.
       if (this.upnpStopped) return;
 
-      const client = await createNatApiClient({ description: 'Qortal Hub P2P' });
+      const client = await createNatApiClient({
+        description: 'Qortal Hub P2P',
+      });
       if (this.upnpStopped) {
         await destroyNatClient(client);
         return;
@@ -662,7 +669,10 @@ export class P2PNetwork extends EventEmitter {
     // connections in a short window before any P2P/chat logic runs.
     const ip = normalizeHost(socket.remoteAddress ?? '');
     if (ip) {
-      const entry = this.ipConnCount.get(ip) ?? { count: 0, windowStart: Date.now() };
+      const entry = this.ipConnCount.get(ip) ?? {
+        count: 0,
+        windowStart: Date.now(),
+      };
       if (Date.now() - entry.windowStart > this.IP_WINDOW_MS) {
         entry.count = 0;
         entry.windowStart = Date.now();
@@ -670,7 +680,9 @@ export class P2PNetwork extends EventEmitter {
       entry.count++;
       this.ipConnCount.set(ip, entry);
       if (entry.count > this.MAX_INBOUND_PER_IP) {
-        loggerLog(`[P2P] Rate-limited inbound from ${ip} (${entry.count} connections in window)`);
+        loggerLog(
+          `[P2P] Rate-limited inbound from ${ip} (${entry.count} connections in window)`
+        );
         socket.destroy();
         return;
       }
@@ -1193,7 +1205,11 @@ export class P2PNetwork extends EventEmitter {
    * Uses INSERT OR IGNORE so the first-discovered record wins across instances.
    * Called off the hot path via setImmediate.
    */
-  private persistDiscoveredPeer(address: string, discoveredAt: number, source: string): void {
+  private persistDiscoveredPeer(
+    address: string,
+    discoveredAt: number,
+    source: string
+  ): void {
     if (!this.stmtInsertPeer) return;
     setImmediate(() => {
       try {
@@ -1326,9 +1342,7 @@ export class P2PNetwork extends EventEmitter {
         const peers = connectedPeers().map((p) => {
           const ageMs = p.connectedAt != null ? t - p.connectedAt : 0;
           const lastPingSec =
-            p.lastPingAt != null
-              ? Math.floor((t - p.lastPingAt) / 1000)
-              : null;
+            p.lastPingAt != null ? Math.floor((t - p.lastPingAt) / 1000) : null;
           return {
             nodeId: p.id,
             address: p.dialAddr || `${p.host}:${p.port}`,
@@ -1352,8 +1366,14 @@ export class P2PNetwork extends EventEmitter {
             'unknown';
           for (const p of this.peers.values()) {
             if (p.dialAddr === d.address || p.id === d.address) {
-              if (p.connected) { status = 'connected'; break; }
-              if (!p.socket.destroyed) { status = 'connecting'; break; }
+              if (p.connected) {
+                status = 'connected';
+                break;
+              }
+              if (!p.socket.destroyed) {
+                status = 'connecting';
+                break;
+              }
               status = 'unreachable';
               break;
             }
@@ -1368,7 +1388,12 @@ export class P2PNetwork extends EventEmitter {
         });
         // Sort: connected first, then connecting, then the rest by discovery time desc.
         result.sort((a, b) => {
-          const order = { connected: 0, connecting: 1, unknown: 2, unreachable: 3 };
+          const order = {
+            connected: 0,
+            connecting: 1,
+            unknown: 2,
+            unreachable: 3,
+          };
           const diff = order[a.status] - order[b.status];
           return diff !== 0 ? diff : b.discoveredAt - a.discoveredAt;
         });
@@ -1429,7 +1454,6 @@ export async function startP2PNetwork(
 
 export function stopP2PNetwork(): void {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('./stun-coordinator').stopStunCoordinator();
   } catch {
     /* ignore */

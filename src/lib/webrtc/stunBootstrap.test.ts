@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildBootstrapIceServers,
-  STUN_FIXED_UDP_PORT,
-} from './stunBootstrap';
+import { buildBootstrapIceServers, STUN_FIXED_UDP_PORT } from './stunBootstrap';
 import golden from './__fixtures__/bootstrap-stun-golden.json';
 
 describe('stunBootstrap', () => {

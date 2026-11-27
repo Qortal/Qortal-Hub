@@ -130,6 +130,10 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.{test,spec}.{ts,tsx}', 'electron/src/**/*.test.ts'],
     environmentMatchGlobs: [['electron/**', 'node']],
+    // Leave Vitest's 5s default in place. A suite that genuinely needs longer
+    // should say so on its own `describe`, as AppPublishWidget already does,
+    // so the allowance is tied to the file that needs it rather than lifting
+    // the limit for every test in the repo.
   } as any,
   assetsInclude: ['**/*.wasm'],
   plugins: [

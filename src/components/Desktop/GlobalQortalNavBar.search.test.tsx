@@ -342,6 +342,24 @@ describe('GlobalQortalNavBar search suggestions', () => {
     expect(input).toHaveValue('qortal://use-app-page/APP/Q-Shop');
   });
 
+  it("shows a page's link that opens that page again, for a name ending in '!'", async () => {
+    const input = renderBar({
+      mode: 'apps',
+      page: { service: 'APP', name: 'Publisher!' },
+    });
+    const shown = (input as HTMLInputElement).value;
+    expect(shown).toBe('qortal://use-app-page/APP/Publisher%21');
+
+    // The link, pasted back with a sentence's full stop after it.
+    type(input, `${shown}.`);
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(pagesShown()).toEqual([{ name: 'Publisher!', service: 'APP' }]);
+    expect(librarySearches()).toEqual([]);
+  });
+
   it('ranks the apps this account opens most first', () => {
     const input = renderBar();
     act(() => {

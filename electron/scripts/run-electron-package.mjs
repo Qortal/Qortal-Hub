@@ -16,18 +16,37 @@ const mode = process.argv[2];
 const configs = {
   pack: {
     description: 'current host unpacked app',
-    allowed: [{ platform: 'linux' }, { platform: 'darwin' }, { platform: 'win32' }],
+    allowed: [
+      { platform: 'linux' },
+      { platform: 'darwin' },
+      { platform: 'win32' },
+    ],
     builderArgs: ['build', '--dir', '-c', './electron-builder.config.json'],
   },
   local: {
     description: 'current host packaged app',
-    allowed: [{ platform: 'linux' }, { platform: 'darwin' }, { platform: 'win32' }],
-    builderArgs: ['build', '-c', './electron-builder.config.json', '--publish=never'],
+    allowed: [
+      { platform: 'linux' },
+      { platform: 'darwin' },
+      { platform: 'win32' },
+    ],
+    builderArgs: [
+      'build',
+      '-c',
+      './electron-builder.config.json',
+      '--publish=never',
+    ],
   },
   lin: {
     description: 'Linux x64 package',
     allowed: [{ platform: 'linux', arch: 'x64' }],
-    builderArgs: ['build', '-c', './electron-builder.config.lin.json', '--publish=never', '-l'],
+    builderArgs: [
+      'build',
+      '-c',
+      './electron-builder.config.lin.json',
+      '--publish=never',
+      '-l',
+    ],
   },
   arm: {
     description: 'Linux arm64 package',
@@ -44,7 +63,13 @@ const configs = {
   win: {
     description: 'Windows package',
     allowed: [{ platform: 'win32' }],
-    builderArgs: ['build', '-c', './electron-builder.config.win.json', '--publish=never', '-w'],
+    builderArgs: [
+      'build',
+      '-c',
+      './electron-builder.config.win.json',
+      '--publish=never',
+      '-w',
+    ],
   },
   mac: {
     description: 'macOS package',
@@ -200,5 +225,6 @@ if (cfg.universal) {
   run(npmCmd, ['run', 'bundle:reticulum']);
 }
 
-const electronBuilderCmd = process.platform === 'win32' ? 'electron-builder.cmd' : 'electron-builder';
+const electronBuilderCmd =
+  process.platform === 'win32' ? 'electron-builder.cmd' : 'electron-builder';
 runWithEnv(electronBuilderCmd, cfg.builderArgs, cfg.builderEnv ?? {});

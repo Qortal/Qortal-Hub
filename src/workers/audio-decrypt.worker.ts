@@ -186,10 +186,7 @@ function handleDecryptSingle(id: number, buffer: ArrayBuffer): void {
     return;
   }
   const transferables = decoded.map((d) => d.opusFrame);
-  workerPost(
-    { type: 'result', id, decodedMulti: decoded },
-    transferables
-  );
+  workerPost({ type: 'result', id, decodedMulti: decoded }, transferables);
 }
 
 function handleDecryptBatch(
@@ -236,10 +233,7 @@ function handleDecryptBatch(
       results.push({ id, status: 'ok', decodedMulti: decoded });
     }
   }
-  workerPost(
-    { type: 'resultBatch', batchId, results },
-    transferables
-  );
+  workerPost({ type: 'resultBatch', batchId, results }, transferables);
 }
 
 function dispatchMessage(data: InboundMessage): void {
@@ -305,10 +299,9 @@ function dispatchMessage(data: InboundMessage): void {
         roomKeyBytes,
         libsodiumProvider
       );
-      workerPost(
-        { type: 'encryptResult', id: data.id, packet: u8.buffer },
-        [u8.buffer as ArrayBuffer]
-      );
+      workerPost({ type: 'encryptResult', id: data.id, packet: u8.buffer }, [
+        u8.buffer as ArrayBuffer,
+      ]);
     } catch {
       workerPost({
         type: 'encryptResult',

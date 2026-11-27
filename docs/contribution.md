@@ -1,4 +1,3 @@
-
 # 🤝 Contributing Guide
 
 Thank you for your interest in contributing! We follow a structured Git workflow to keep the project clean, stable, and production-ready at all times.
@@ -7,11 +6,11 @@ Thank you for your interest in contributing! We follow a structured Git workflow
 
 ## 📦 Branch Overview
 
-| Branch           | Purpose                                                  |
-|------------------|----------------------------------------------------------|
-| `master`         | Stable, production-ready code. All releases are tagged from here. |
-| `develop`        | Active development branch. All new features go here first. |
-| `release/x.y.z`  | Pre-release branch for staging, QA, and final polish.     |
+| Branch          | Purpose                                                           |
+| --------------- | ----------------------------------------------------------------- |
+| `master`        | Stable, production-ready code. All releases are tagged from here. |
+| `develop`       | Active development branch. All new features go here first.        |
+| `release/x.y.z` | Pre-release branch for staging, QA, and final polish.             |
 
 ---
 
@@ -81,4 +80,3 @@ A new `release/x.y.z` branch must be created for **every release**.
    git branch -d release/1.2.0
    git push origin --delete release/1.2.0
    ```
-

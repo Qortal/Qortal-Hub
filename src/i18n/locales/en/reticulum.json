@@ -21,7 +21,17 @@
     "sign_failed": "Unable to sign Reticulum chat event",
     "welcome_failed": "Reticulum welcome publish failed"
   },
-  "copy_invite_link": "copy invite link",
+  "context_menu": {
+    "clipboard_permission_denied": "Unable to access clipboard",
+    "copy": "Copy",
+    "copy_shortcut": "Copy\tCtrl+C",
+    "cut": "Cut",
+    "cut_shortcut": "Cut\tCtrl+X",
+    "no_suggestions": "No suggestions",
+    "paste": "Paste",
+    "paste_shortcut": "Paste\tCtrl+V"
+  },
+  "copy_invite_link": "Copy Invite Link",
   "discussion": {
     "choose_emoji": "choose emoji",
     "close": "close discussion",
@@ -52,11 +62,8 @@
     "channel_default_no_expiry": "channel default (no expiry)",
     "channel_default_with": "channel default ({{duration}})",
     "do_not_auto_delete": "do not auto-delete",
-    "lock_preferred": "lock {{duration}} as preferred expiry",
     "maximum": "maximum {{duration}}",
     "no_expiry": "no expiry",
-    "preferred_locked": "preferred locked expiry",
-    "remove_preferred": "remove {{duration}} preferred expiry",
     "set": "set message expiry",
     "title": "message expiry",
     "tooltip_value": "message expiry: {{value}}",
@@ -117,6 +124,13 @@
     "chat": "Chat",
     "enter_qortal_land": "Enter Qortal Land",
     "return_to_chat": "Return to Chat"
+  },
+  "notification": {
+    "mention_special_in_group": "{{sender}} mentioned {{target}} in {{groupName}}",
+    "mention_you_in_group": "{{sender}} mentioned you in {{groupName}}",
+    "reply_you_in_group": "{{sender}} replied to you in {{groupName}}",
+    "someone": "someone",
+    "welcome_joined": "{{name}} has joined the {{groupName}} group"
   },
   "onboarding": {
     "find_communities": "Find Communities",
@@ -203,15 +217,20 @@
     "nav": {
       "mentions": "Mentions",
       "messages": "Messages",
+      "notifications": "Notifications",
       "text_size": "Text size",
       "threads": "Threads"
     },
     "notifications": {
-      "description": "Show Reticulum Q-Chat mentions in the Hub notification panel. Regular unread messages will not create Hub notifications.",
-      "mentions": {
-        "description": "Alert me when someone mentions me in a channel.",
-        "label": "Mention notifications"
-      },
+      "apply_button": "Apply to All Groups",
+      "delivery_description": "Choose how Q-Chat push notifications are delivered to your system.",
+      "delivery_ephemeral": "Use Ephemeral Notifications",
+      "delivery_ephemeral_tooltip": "Ephemeral notifications are gone forever after the preview disappears.",
+      "delivery_native": "Use Push Notifications",
+      "delivery_native_tooltip": "Push notifications go into your OS Notification Manager after the preview disappears.",
+      "delivery_title": "Notification Delivery",
+      "description": "Configure notification preferences that apply to all of your groups at once. Per-section and per-channel overrides are preserved.",
+      "revert_button": "Revert to Defaults",
       "title": "Notifications"
     },
     "text_size": {

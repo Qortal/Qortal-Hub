@@ -51,10 +51,50 @@ const mockApps = [
 
 // Ratings map mirroring ratingsStoreAtom contents (key = service-name lowercased)
 const mockRatingsMap = new Map([
-  ['app-aliceapp',   { averageRating: 4.5, totalVotes: 100, voteCounts: [], hasPublishedRating: true, pollInfo: null, lastFetched: 0 }],
-  ['app-bobapp',     { averageRating: 3.0, totalVotes: 50,  voteCounts: [], hasPublishedRating: true, pollInfo: null, lastFetched: 0 }],
-  ['app-charlieapp', { averageRating: 5.0, totalVotes: 25,  voteCounts: [], hasPublishedRating: true, pollInfo: null, lastFetched: 0 }],
-  ['app-daveapp',    { averageRating: 4.0, totalVotes: 200, voteCounts: [], hasPublishedRating: true, pollInfo: null, lastFetched: 0 }],
+  [
+    'app-aliceapp',
+    {
+      averageRating: 4.5,
+      totalVotes: 100,
+      voteCounts: [],
+      hasPublishedRating: true,
+      pollInfo: null,
+      lastFetched: 0,
+    },
+  ],
+  [
+    'app-bobapp',
+    {
+      averageRating: 3.0,
+      totalVotes: 50,
+      voteCounts: [],
+      hasPublishedRating: true,
+      pollInfo: null,
+      lastFetched: 0,
+    },
+  ],
+  [
+    'app-charlieapp',
+    {
+      averageRating: 5.0,
+      totalVotes: 25,
+      voteCounts: [],
+      hasPublishedRating: true,
+      pollInfo: null,
+      lastFetched: 0,
+    },
+  ],
+  [
+    'app-daveapp',
+    {
+      averageRating: 4.0,
+      totalVotes: 200,
+      voteCounts: [],
+      hasPublishedRating: true,
+      pollInfo: null,
+      lastFetched: 0,
+    },
+  ],
 ]);
 
 describe('filterAndSortApps', () => {
@@ -105,9 +145,9 @@ describe('filterAndSortApps', () => {
         ratingsMap: mockRatingsMap,
       });
       expect(result[0].name).toBe('CharlieApp'); // 5.0
-      expect(result[1].name).toBe('AliceApp');   // 4.5
-      expect(result[2].name).toBe('DaveApp');    // 4.0
-      expect(result[3].name).toBe('BobApp');     // 3.0
+      expect(result[1].name).toBe('AliceApp'); // 4.5
+      expect(result[2].name).toBe('DaveApp'); // 4.0
+      expect(result[3].name).toBe('BobApp'); // 3.0
     });
 
     it('sorts by most rated using ratingsMap', () => {
@@ -118,9 +158,9 @@ describe('filterAndSortApps', () => {
         search: '',
         ratingsMap: mockRatingsMap,
       });
-      expect(result[0].name).toBe('DaveApp');    // 200
-      expect(result[1].name).toBe('AliceApp');   // 100
-      expect(result[2].name).toBe('BobApp');     // 50
+      expect(result[0].name).toBe('DaveApp'); // 200
+      expect(result[1].name).toBe('AliceApp'); // 100
+      expect(result[2].name).toBe('BobApp'); // 50
       expect(result[3].name).toBe('CharlieApp'); // 25
     });
 
@@ -149,7 +189,17 @@ describe('filterAndSortApps', () => {
 
     it('highest_rated: apps missing from ratingsMap sort last', () => {
       const partialMap = new Map([
-        ['app-charlieapp', { averageRating: 5.0, totalVotes: 25, voteCounts: [], hasPublishedRating: true, pollInfo: null, lastFetched: 0 }],
+        [
+          'app-charlieapp',
+          {
+            averageRating: 5.0,
+            totalVotes: 25,
+            voteCounts: [],
+            hasPublishedRating: true,
+            pollInfo: null,
+            lastFetched: 0,
+          },
+        ],
       ]);
       const result = filterAndSortApps(mockApps, {
         sort: 'highest_rated',
@@ -163,7 +213,17 @@ describe('filterAndSortApps', () => {
 
     it('most_rated: apps missing from ratingsMap sort last', () => {
       const partialMap = new Map([
-        ['app-daveapp', { averageRating: 4.0, totalVotes: 200, voteCounts: [], hasPublishedRating: true, pollInfo: null, lastFetched: 0 }],
+        [
+          'app-daveapp',
+          {
+            averageRating: 4.0,
+            totalVotes: 200,
+            voteCounts: [],
+            hasPublishedRating: true,
+            pollInfo: null,
+            lastFetched: 0,
+          },
+        ],
       ]);
       const result = filterAndSortApps(mockApps, {
         sort: 'most_rated',
@@ -196,7 +256,7 @@ describe('filterAndSortApps', () => {
 
     it('recently_updated: apps without updated field sort last (treated as 0)', () => {
       const appsWithMissingUpdated = [
-        { ...mockApps[0] },                         // AliceApp — no updated
+        { ...mockApps[0] }, // AliceApp — no updated
         { ...mockApps[1], updated: 1800000000000 }, // BobApp — most recent
         { ...mockApps[2], updated: 1700000000000 }, // CharlieApp
       ];
