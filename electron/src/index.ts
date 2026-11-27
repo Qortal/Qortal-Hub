@@ -29,6 +29,7 @@ import {
   warn as loggerWarn,
   debug as loggerDebug,
 } from './logger';
+import { parseTestMode, isSuppressedInTestMode } from './test-mode';
 import {
   ElectronCapacitorApp,
   flushMiscPersistentStore,
@@ -130,7 +131,10 @@ app.commandLine.appendSwitch(
   'enable-blink-features',
   Array.from(
     new Set([
-      ...app.commandLine.getSwitchValue('enable-blink-features').split(',').filter(Boolean),
+      ...app.commandLine
+        .getSwitchValue('enable-blink-features')
+        .split(',')
+        .filter(Boolean),
       'SpeakerSelection',
     ])
   ).join(',')
@@ -633,20 +637,43 @@ async function setupMultiInstanceUserData(
 
 // Run Application
 (async () => {
-  const instanceIndex = await setupMultiInstanceUserData();
+  // Decide test mode before anything touches the filesystem. A refusal is fatal:
+  // falling back to the default paths would read or write a developer's real
+  // installation, and `app-settings.json` lives in a shared path, not a
+  // per-instance one.
+  const testMode = parseTestMode({ isPackaged: app.isPackaged });
+  if ('error' in testMode && testMode.error) {
+    loggerError(`[TestMode] Refusing to start: ${testMode.error}`);
+    app.exit(1);
+    return;
+  }
+  const isTestMode = testMode.enabled === true;
+
+  if (isTestMode && testMode.enabled) {
+    // Isolate both roots: userData for databases and caches, appData because
+    // `getSharedSettingsFilePath` resolves `<appData>/qortal-hub/<file>`.
+    app.setPath('userData', testMode.profileDir);
+    app.setPath('appData', testMode.profileDir);
+    loggerLog(`[TestMode] active profile=${testMode.profileDir}`);
+  }
+
+  const instanceIndex = isTestMode ? 0 : await setupMultiInstanceUserData();
   setAudioSurfaceHttpsInstanceIndex(instanceIndex);
   setReticulumInstanceIndex(instanceIndex);
-  const recovery = recoverReticulumStateForAppLaunch(instanceIndex);
-  if (recovery.orphanedDaemonFound) {
-    loggerLog(
-      `[Reticulum] Startup recovery orphanedDaemonStopped=${recovery.orphanedDaemonStopped} daemonStateCleared=${recovery.daemonStateCleared}`
-    );
+  if (!isTestMode) {
+    const recovery = recoverReticulumStateForAppLaunch(instanceIndex);
+    if (recovery.orphanedDaemonFound) {
+      loggerLog(
+        `[Reticulum] Startup recovery orphanedDaemonStopped=${recovery.orphanedDaemonStopped} daemonStateCleared=${recovery.daemonStateCleared}`
+      );
+    }
+    registerReticulumAppInstance(instanceIndex);
   }
-  registerReticulumAppInstance(instanceIndex);
 
   await app.whenReady();
   const initialAppSettings = await readAppSettings();
   reticulumGloballyEnabled = initialAppSettings.reticulumEnabled !== false;
+  if (isTestMode) reticulumGloballyEnabled = false;
   automaticAppLockDisabled = initialAppSettings.autoLockTimeoutMinutes === 0;
   subscribeToAppSettingsChanges((settings) => {
     automaticAppLockDisabled = settings.autoLockTimeoutMinutes === 0;
@@ -758,20 +785,25 @@ async function setupMultiInstanceUserData(
     installCertificateVerification(mainWindow.webContents.session);
   }
 
-  // Start update checks
-  checkForUpdates();
-  setInterval(checkForUpdates, 24 * 60 * 60 * 1000);
+  // Test mode suppresses every side effect that would make a headless run
+  // non-deterministic or hang. The reasons live in `test-mode.ts`.
+  if (!isSuppressedInTestMode(isTestMode, 'updateChecks')) {
+    checkForUpdates();
+    setInterval(checkForUpdates, 24 * 60 * 60 * 1000);
+  }
 
-  powerMonitor.on('resume', () => {
-    void recoverReticulumAfterWake('powerMonitor:resume');
-    requestAuthenticatedRendererLock();
-  });
+  if (!isSuppressedInTestMode(isTestMode, 'powerMonitor')) {
+    powerMonitor.on('resume', () => {
+      void recoverReticulumAfterWake('powerMonitor:resume');
+      requestAuthenticatedRendererLock();
+    });
 
-  // When automatic locking is enabled, lock before sleep where the platform
-  // exposes suspend, then repeat on resume in case the renderer was frozen
-  // before it received the first IPC.
-  powerMonitor.on('suspend', requestAuthenticatedRendererLock);
-  powerMonitor.on('lock-screen', requestAuthenticatedRendererLock);
+    // When automatic locking is enabled, lock before sleep where the platform
+    // exposes suspend, then repeat on resume in case the renderer was frozen
+    // before it received the first IPC.
+    powerMonitor.on('suspend', requestAuthenticatedRendererLock);
+    powerMonitor.on('lock-screen', requestAuthenticatedRendererLock);
+  }
 })();
 
 // Set isQuitting flag before the app quits

@@ -161,7 +161,12 @@ export const useBlockedAddresses = (isAuthenticated?: boolean) => {
       setBlockedAddresses,
       setBlockedNames
     );
-  }, [activeWalletAddress, isAuthenticated, setBlockedAddresses, setBlockedNames]);
+  }, [
+    activeWalletAddress,
+    isAuthenticated,
+    setBlockedAddresses,
+    setBlockedNames,
+  ]);
 
   const isUserBlocked = useCallback(
     (address?: string | null) => {

@@ -33,8 +33,7 @@ export function ChatWidgetReopenIcon({
   const [chatWidgetClosed, setChatWidgetClosed] = useAtom(chatWidgetClosedAtom);
   const memberGroups = useAtomValue(memberGroupsAtom) ?? [];
 
-  const show =
-    chatWidgetClosed && (memberGroups?.length ?? 0) > 0;
+  const show = chatWidgetClosed && (memberGroups?.length ?? 0) > 0;
   if (!show) return null;
 
   const icon = (
@@ -75,8 +74,8 @@ export function ChatWidgetReopenIcon({
         arrow
         sx={{ fontSize: inTitleBar ? '20' : '24' }}
         slotProps={tooltipSlotProps(theme)}
-        >
-          <MoreRoundedIcon
+      >
+        <MoreRoundedIcon
           sx={{
             color: theme.palette.text.secondary,
             fontSize: inTitleBar ? 20 : undefined,

@@ -1117,7 +1117,14 @@
       "name": "Nombre",
       "website": "Sitio web"
     },
-    "suggestions": "Sugerencias"
+    "suggestions": "Sugerencias",
+    "zoom": {
+      "button": "zoom: {{percent}}",
+      "kept": "guardado para {{name}} en este equipo",
+      "same_as_hub": "igual que Hub",
+      "zoom_in": "acercar",
+      "zoom_out": "alejar"
+    }
   },
   "new_post_in": "nueva publicación en {{ title }}",
   "node_state": {
@@ -1901,6 +1908,7 @@
       "image_metadata_unremovable": "la imagen {{index}} no se puede publicar: no es posible quitar los datos de ubicación y de la cámara de este formato. Guárdala como JPEG o PNG e inténtalo de nuevo.",
       "images_too_large": "estas imágenes son demasiado grandes para publicarlas juntas. Quita una imagen e inténtalo de nuevo.",
       "name_required": "se necesita un nombre de Qortal para publicar",
+      "not_posted_left_home": "no publicado: saliste de Inicio antes de que se enviara. Vuelve a publicarlo cuando quieras.",
       "post_too_large": "este post pesa más de 5 MB, así que {{app}} no lo mostraría. Acórtalo o quita una imagen.",
       "publish_failed": "no se pudo publicar",
       "too_many_images": "máximo {{count}} imágenes por post"

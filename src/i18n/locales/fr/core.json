@@ -1117,7 +1117,14 @@
       "name": "Nom",
       "website": "Site web"
     },
-    "suggestions": "Suggestions"
+    "suggestions": "Suggestions",
+    "zoom": {
+      "button": "zoom : {{percent}}",
+      "kept": "enregistré pour {{name}} sur cet ordinateur",
+      "same_as_hub": "comme Hub",
+      "zoom_in": "zoom avant",
+      "zoom_out": "zoom arrière"
+    }
   },
   "new_post_in": "nouveau message dans {{ title }}",
   "node_state": {
@@ -1901,6 +1908,7 @@
       "image_metadata_unremovable": "l'image {{index}} ne peut pas être publiée : impossible de retirer la localisation et les informations de l'appareil photo dans ce format. Enregistrez-la en JPEG ou PNG et réessayez.",
       "images_too_large": "ces images sont trop lourdes pour être publiées ensemble. Retirez une image et réessayez.",
       "name_required": "un nom Qortal est requis pour publier",
+      "not_posted_left_home": "non publié : vous avez quitté l'Accueil avant son envoi. Publiez-le de nouveau quand vous le souhaitez.",
       "post_too_large": "cette publication dépasse 5 Mo, {{app}} ne l'afficherait donc pas. Raccourcissez-la ou retirez une image.",
       "publish_failed": "échec de la publication",
       "too_many_images": "{{count}} images maximum par publication"

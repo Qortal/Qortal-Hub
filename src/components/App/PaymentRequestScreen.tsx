@@ -1,7 +1,12 @@
 import { Box } from '@mui/material';
 import { Trans, useTranslation } from 'react-i18next';
 import { Spacer } from '../../common/Spacer';
-import { CustomButton, TextItalic, TextP, TextSpan } from '../../styles/App-styles.ts';
+import {
+  CustomButton,
+  TextItalic,
+  TextP,
+  TextSpan,
+} from '../../styles/App-styles.ts';
 import { ErrorText } from '../index';
 
 type PaymentRequestScreenProps = {
@@ -32,7 +37,11 @@ export function PaymentRequestScreen({
         <Trans
           i18nKey="message.generic.payment_request"
           ns="core"
-          components={{ br: <br />, italic: <TextItalic />, span: <TextSpan /> }}
+          components={{
+            br: <br />,
+            italic: <TextItalic />,
+            span: <TextSpan />,
+          }}
           values={{ hostname, count }}
           tOptions={{ postProcess: ['capitalizeFirstChar'] }}
         />

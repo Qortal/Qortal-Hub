@@ -524,6 +524,28 @@ try {
           appIcon: string;
         }>;
       }>,
+    spellCheck: {
+      getSuggestions: (word: string): Promise<string[]> => {
+        // webFrame is available in preload/renderer context
+        // This calls Electron's built-in Hunspell spellcheck directly
+        const webFrame = require('electron').webFrame;
+        if (webFrame && typeof webFrame.getWordSuggestions === 'function') {
+          try {
+            const suggestions = webFrame.getWordSuggestions(word);
+            console.log(
+              '[Preload] webFrame.getWordSuggestions returned:',
+              suggestions
+            );
+            return Promise.resolve(suggestions ?? []);
+          } catch (e) {
+            console.warn('[Preload] webFrame.getWordSuggestions error:', e);
+            return Promise.resolve([]);
+          }
+        }
+        console.log('[Preload] webFrame.getWordSuggestions not available');
+        return Promise.resolve([]);
+      },
+    },
     getSystemCallReadiness: () =>
       ipcRenderer.invoke('systemCallReadiness:getSnapshot') as Promise<{
         status: 'good' | 'warning' | 'blocked' | 'unknown';
@@ -1055,6 +1077,23 @@ try {
     get: (key: unknown) => ipcRenderer.invoke('publishProfiles:get', key),
     merge: (key: unknown, patch: unknown) =>
       ipcRenderer.invoke('publishProfiles:merge', key, patch),
+  });
+
+  // Zoom of the Hub and of each Q-App or website (hub-zoom.ts, app-zoom.ts).
+  contextBridge.exposeInMainWorld('hubZoom', {
+    onScreen: (report: unknown) => ipcRenderer.send('hubZoom:onScreen', report),
+    panelPointer: (tabId: unknown) =>
+      ipcRenderer.send('hubZoom:panelPointer', tabId),
+    get: (tabId: unknown) => ipcRenderer.invoke('hubZoom:get', tabId),
+    change: (target: unknown, action: unknown) =>
+      ipcRenderer.invoke('hubZoom:change', target, action),
+    onChanged: (listener: (change: unknown) => void) => {
+      const handler = (_event: unknown, change: unknown) => listener(change);
+      ipcRenderer.on('hubZoom:changed', handler);
+      return () => {
+        ipcRenderer.removeListener('hubZoom:changed', handler);
+      };
+    },
   });
 
   // Generic persistent store (persistent-store.json, in-memory cache + debounced writes in main)
@@ -2823,6 +2862,52 @@ try {
           ipcRenderer.send('reticulumChat:landCall:unsubscribe');
         };
       },
+      showNotification: async (payload: {
+        title: string;
+        body: string;
+        icon?: string;
+        notificationId?: string;
+        data?: Record<string, unknown>;
+        groupContext?: { groupId: number; channelId: string };
+        eventId?: string;
+      }) =>
+        ipcRenderer.invoke(
+          'reticulumChat:showNotification',
+          payload
+        ) as Promise<{ success: boolean }>,
+      onNotificationClicked: (
+        cb: (notificationId: string, data?: Record<string, unknown>) => void
+      ) => {
+        const handler = (
+          _event: unknown,
+          notificationId: string,
+          data?: Record<string, unknown>
+        ) => cb(notificationId, data);
+        ipcRenderer.on('reticulumChat:notificationClicked', handler);
+        return () => {
+          ipcRenderer.removeListener(
+            'reticulumChat:notificationClicked',
+            handler
+          );
+        };
+      },
+      dismissNotifications: (groupId: number, channelId?: string) =>
+        ipcRenderer.invoke('reticulumChat:dismissNotifications', {
+          groupId,
+          channelId,
+        }) as Promise<{ success: boolean }>,
+      setViewContext: (context: {
+        groupId: number;
+        channelId: string;
+        visible: boolean;
+      }) =>
+        ipcRenderer.invoke('reticulumChat:setViewContext', context) as Promise<{
+          success: boolean;
+        }>,
+      dismissNotification: (eventId: string) =>
+        ipcRenderer.invoke('reticulumChat:dismissNotification', {
+          eventId,
+        }) as Promise<{ success: boolean }>,
     });
   }
 
@@ -3945,6 +4030,52 @@ try {
           ipcRenderer.send('reticulumChat:landCall:unsubscribe');
         };
       },
+      showNotification: async (payload: {
+        title: string;
+        body: string;
+        icon?: string;
+        notificationId?: string;
+        data?: Record<string, unknown>;
+        groupContext?: { groupId: number; channelId: string };
+        eventId?: string;
+      }) =>
+        ipcRenderer.invoke(
+          'reticulumChat:showNotification',
+          payload
+        ) as Promise<{ success: boolean }>,
+      onNotificationClicked: (
+        cb: (notificationId: string, data?: Record<string, unknown>) => void
+      ) => {
+        const handler = (
+          _event: unknown,
+          notificationId: string,
+          data?: Record<string, unknown>
+        ) => cb(notificationId, data);
+        ipcRenderer.on('reticulumChat:notificationClicked', handler);
+        return () => {
+          ipcRenderer.removeListener(
+            'reticulumChat:notificationClicked',
+            handler
+          );
+        };
+      },
+      dismissNotifications: (groupId: number, channelId?: string) =>
+        ipcRenderer.invoke('reticulumChat:dismissNotifications', {
+          groupId,
+          channelId,
+        }) as Promise<{ success: boolean }>,
+      setViewContext: (context: {
+        groupId: number;
+        channelId: string;
+        visible: boolean;
+      }) =>
+        ipcRenderer.invoke('reticulumChat:setViewContext', context) as Promise<{
+          success: boolean;
+        }>,
+      dismissNotification: (eventId: string) =>
+        ipcRenderer.invoke('reticulumChat:dismissNotification', {
+          eventId,
+        }) as Promise<{ success: boolean }>,
     });
   }
 

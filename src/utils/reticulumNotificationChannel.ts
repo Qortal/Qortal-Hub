@@ -22,3 +22,31 @@ export function getReticulumNotificationChannelLabel(
   ) as ReticulumNotificationChannel | undefined;
   return cleanChannelLabel(channel?.name) || channelId;
 }
+
+/**
+ * Return a Unicode symbol representing the channel's visibility/access type:
+ *   🌐 public  — regular (members read + write)
+ *   🔒 read-only — admin_write (members read, admins write)
+ *   🚫 private — admin_private (admins read + write)
+ */
+export function getChannelVisibilitySymbol(
+  channelIdValue: unknown,
+  channels: unknown
+): string {
+  const channelId = cleanChannelLabel(channelIdValue) || 'general';
+  if (!Array.isArray(channels)) return '';
+  const channel = (
+    channels as {
+      channelId?: unknown;
+      name?: unknown;
+      writeMode?: string;
+      readMode?: string;
+    }[]
+  ).find((c) => cleanChannelLabel(c?.channelId) === channelId);
+  if (!channel) return '';
+  const readMode = channel.readMode;
+  const writeMode = channel.writeMode;
+  if (readMode === 'admins') return '\u{1F6AB}'; // private
+  if (writeMode === 'admins') return '\u{1F512}'; // read-only
+  return '\u{1F310}'; // public
+}

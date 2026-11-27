@@ -87,6 +87,14 @@ export class MockWebContents extends EventEmitter {
     if (this.destroyed) throw new Error('Object has been destroyed');
     this.zoomLevel = level;
   }
+  zoomMode: 'default' | 'isolated' | 'manual' | 'disabled' = 'default';
+  getZoomMode() {
+    return this.zoomMode;
+  }
+  setZoomMode(mode: 'default' | 'isolated' | 'manual' | 'disabled') {
+    if (this.destroyed) throw new Error('Object has been destroyed');
+    this.zoomMode = mode;
+  }
   debugger = new (class extends EventEmitter {
     attached = false;
     isAttached() {

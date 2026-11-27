@@ -38,10 +38,14 @@ type Props = {
 };
 
 const shortAddress = (address: string): string =>
-  address.length > 15 ? `${address.slice(0, 7)}...${address.slice(-5)}` : address;
+  address.length > 15
+    ? `${address.slice(0, 7)}...${address.slice(-5)}`
+    : address;
 
 const displayName = (member: GroupMember): string =>
-  member.primaryName?.trim() || member.name?.trim() || shortAddress(member.member);
+  member.primaryName?.trim() ||
+  member.name?.trim() ||
+  shortAddress(member.member);
 
 const roomLabel = (roomId: string): 'lounge' | 'park' =>
   roomId === 'park' ? 'park' : 'lounge';
@@ -77,12 +81,14 @@ export function QortalLandMembers({ groupId, myAddress }: Props) {
   useEffect(() => {
     setLandPresence(getQortalLandPresence(groupId)?.members ?? []);
     const onPresence = (event: Event) => {
-      const snapshot = (event as CustomEvent<QortalLandPresenceSnapshot>).detail;
+      const snapshot = (event as CustomEvent<QortalLandPresenceSnapshot>)
+        .detail;
       if (snapshot?.groupId !== groupId) return;
       setLandPresence(snapshot.members);
     };
     window.addEventListener(QORTAL_LAND_PRESENCE_EVENT, onPresence);
-    return () => window.removeEventListener(QORTAL_LAND_PRESENCE_EVENT, onPresence);
+    return () =>
+      window.removeEventListener(QORTAL_LAND_PRESENCE_EVENT, onPresence);
   }, [groupId]);
 
   const knownMembers = useMemo(() => {
@@ -107,7 +113,10 @@ export function QortalLandMembers({ groupId, myAddress }: Props) {
   }, [landPresence]);
 
   const landAddresses = useMemo(
-    () => new Set([...presenceBySession.values()].map((presence) => presence.address)),
+    () =>
+      new Set(
+        [...presenceBySession.values()].map((presence) => presence.address)
+      ),
     [presenceBySession]
   );
 
@@ -120,16 +129,28 @@ export function QortalLandMembers({ groupId, myAddress }: Props) {
   }, [presenceBySession]);
 
   const sections = useMemo(() => {
-    const lounge: Array<{ member: GroupMember; presence: QortalLandPresenceMember }> = [];
-    const park: Array<{ member: GroupMember; presence: QortalLandPresenceMember }> = [];
+    const lounge: Array<{
+      member: GroupMember;
+      presence: QortalLandPresenceMember;
+    }> = [];
+    const park: Array<{
+      member: GroupMember;
+      presence: QortalLandPresenceMember;
+    }> = [];
     for (const presence of presenceBySession.values()) {
-      const member = knownMembers.get(presence.address) || { member: presence.address };
-      (roomLabel(presence.roomId) === 'park' ? park : lounge).push({ member, presence });
+      const member = knownMembers.get(presence.address) || {
+        member: presence.address,
+      };
+      (roomLabel(presence.roomId) === 'park' ? park : lounge).push({
+        member,
+        presence,
+      });
     }
     const online = [...knownMembers.values()]
       .filter(
         (member) =>
-          onlineAddresses.has(member.member) && !landAddresses.has(member.member)
+          onlineAddresses.has(member.member) &&
+          !landAddresses.has(member.member)
       )
       .map((member) => ({ member, presence: null }));
     const sortByPresenceThenName = (
@@ -143,9 +164,13 @@ export function QortalLandMembers({ groupId, myAddress }: Props) {
         landAddresses.has(right.member.member) ||
         onlineAddresses.has(right.member.member);
       if (leftIsPresent !== rightIsPresent) return leftIsPresent ? -1 : 1;
-      return displayName(left.member).localeCompare(displayName(right.member), undefined, {
-        sensitivity: 'base',
-      });
+      return displayName(left.member).localeCompare(
+        displayName(right.member),
+        undefined,
+        {
+          sensitivity: 'base',
+        }
+      );
     };
     lounge.sort(sortByPresenceThenName);
     park.sort(sortByPresenceThenName);
@@ -153,11 +178,16 @@ export function QortalLandMembers({ groupId, myAddress }: Props) {
     return { lounge, park, online };
   }, [knownMembers, landAddresses, onlineAddresses, presenceBySession]);
 
-  const rowFontSize = textScale === 'high' ? 15 : textScale === 'medium' ? 14 : 13;
+  const rowFontSize =
+    textScale === 'high' ? 15 : textScale === 'medium' ? 14 : 13;
   const sectionData = [
     { key: 'lounge' as const, label: 'Lounge', icon: <NightlifeRoundedIcon /> },
     { key: 'park' as const, label: 'Park', icon: <LocalFloristRoundedIcon /> },
-    { key: 'online' as const, label: 'Group Online', icon: <Groups2RoundedIcon /> },
+    {
+      key: 'online' as const,
+      label: 'Group Online',
+      icon: <Groups2RoundedIcon />,
+    },
   ];
 
   return (
@@ -186,7 +216,9 @@ export function QortalLandMembers({ groupId, myAddress }: Props) {
                 display: 'flex',
                 minHeight: 38,
                 px: 0.75,
-                '&:hover': { backgroundColor: alpha(theme.palette.text.primary, 0.055) },
+                '&:hover': {
+                  backgroundColor: alpha(theme.palette.text.primary, 0.055),
+                },
               }}
             >
               <Box
@@ -211,7 +243,9 @@ export function QortalLandMembers({ groupId, myAddress }: Props) {
               >
                 {label}
               </Typography>
-              <Typography sx={{ color: 'text.secondary', fontSize: 11, mr: 0.25 }}>
+              <Typography
+                sx={{ color: 'text.secondary', fontSize: 11, mr: 0.25 }}
+              >
                 {rows.length}
               </Typography>
               <IconButton
@@ -242,10 +276,15 @@ export function QortalLandMembers({ groupId, myAddress }: Props) {
               ) : (
                 rows.map(({ member, presence }) => {
                   const name = displayName(member);
-                  const sessionCount = sessionCountByAddress.get(member.member) ?? 0;
+                  const sessionCount =
+                    sessionCountByAddress.get(member.member) ?? 0;
                   return (
                     <Box
-                      key={presence ? `${member.member}:${presence.sessionId}` : member.member}
+                      key={
+                        presence
+                          ? `${member.member}:${presence.sessionId}`
+                          : member.member
+                      }
                       sx={{
                         alignItems: 'center',
                         borderRadius: '7px',
@@ -254,7 +293,10 @@ export function QortalLandMembers({ groupId, myAddress }: Props) {
                         minHeight: 48,
                         px: 0.75,
                         '&:hover': {
-                          backgroundColor: alpha(theme.palette.text.primary, 0.045),
+                          backgroundColor: alpha(
+                            theme.palette.text.primary,
+                            0.045
+                          ),
                         },
                       }}
                     >
@@ -291,7 +333,11 @@ export function QortalLandMembers({ groupId, myAddress }: Props) {
                         {presence && sessionCount > 1 && (
                           <Typography
                             noWrap
-                            sx={{ color: 'text.secondary', fontSize: 10.5, lineHeight: 1.15 }}
+                            sx={{
+                              color: 'text.secondary',
+                              fontSize: 10.5,
+                              lineHeight: 1.15,
+                            }}
                           >
                             {sessionCount} active sessions
                           </Typography>

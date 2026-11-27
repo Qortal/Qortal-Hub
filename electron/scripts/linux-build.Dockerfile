@@ -7,7 +7,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     TZ=UTC
 
 # python3-dev pulls libpython3.9-dev (PyInstaller); python3 pulls libpython3.9-stdlib (.so runtime).
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# bullseye is archived; use snapshot.debian.org for consistent package versions + disable valid-until check.
+RUN echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid-until \
+    && echo 'deb http://snapshot.debian.org/archive/debian/20260824T000000Z bullseye main' > /etc/apt/sources.list \
+    && echo 'deb http://snapshot.debian.org/archive/debian-security/20260824T000000Z bullseye-security main' >> /etc/apt/sources.list \
+    && echo 'deb http://snapshot.debian.org/archive/debian/20260824T000000Z bullseye-updates main' >> /etc/apt/sources.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     git \

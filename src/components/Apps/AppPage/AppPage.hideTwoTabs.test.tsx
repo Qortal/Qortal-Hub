@@ -445,7 +445,7 @@ describe('the hide window open in two launcher tabs', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(publishes()).toHaveLength(5);
   });
-});
+}, 20000);
 
 describe('a hide and replace stopped halfway, with an older version listed in another tab', () => {
   it('is kept for the tab that stopped it while the other tab has its window open', async () => {

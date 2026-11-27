@@ -28,6 +28,8 @@ type MockStore = {
   reticulumDmExpiredEventMarkers: ReticulumChatRow[];
   reticulumDmExpiryPreferences: ReticulumChatRow[];
   reticulumDmReadWatermarks: ReticulumChatRow[];
+  reticulumChatReadAuthorCoverage: ReticulumChatRow[];
+  reticulumChatReadWatermarks: ReticulumChatRow[];
   reticulumDirectCallHistory: ReticulumChatRow[];
   reticulumDeviceReadStates: ReticulumChatRow[];
   reticulumPendingDeviceReadStates: ReticulumChatRow[];
@@ -62,6 +64,27 @@ class Statement {
           name,
         })
       );
+    }
+    if (
+      this.sql.includes('FROM reticulum_chat_read_author_coverage') &&
+      this.sql.includes('WHERE group_id = ?')
+    ) {
+      const [groupId, channelId, address] = args;
+      const alias =
+        /covered_seq\s+AS\s+(\w+)/i.exec(this.sql)?.[1] ?? 'covered_seq';
+      return this.store.reticulumChatReadAuthorCoverage
+        .filter(
+          (row) =>
+            Number(row.group_id) === Number(groupId) &&
+            row.channel_id === channelId &&
+            row.address === address
+        )
+        .map((row) => ({
+          author_address: row.author_address,
+          author_stream_id: row.author_stream_id,
+          [alias]: row.covered_seq,
+          covered_seq: row.covered_seq,
+        }));
     }
     if (this.sql.includes('FROM rchat_known_unavailable_ranges')) {
       const [groupId] = args;
@@ -181,7 +204,9 @@ class Statement {
             Number(row.author_seq) >= Number(fromSeq) &&
             Number(row.author_seq) <= Number(toSeq)
         )
-        .sort((left, right) => Number(left.author_seq) - Number(right.author_seq))
+        .sort(
+          (left, right) => Number(left.author_seq) - Number(right.author_seq)
+        )
         .map((row) => ({ author_seq: row.author_seq }));
     }
     if (this.sql.includes('FROM rchat_missing_range_peer_observations')) {
@@ -360,6 +385,49 @@ class Statement {
           .slice(0, limit)
           .reverse();
       }
+    }
+    if (
+      this.sql.includes('MAX(author_seq) AS covered_seq') &&
+      this.sql.includes('GROUP BY author_address, author_stream_id')
+    ) {
+      // Per-author read coverage for a receipt: highest seq per author stream at
+      // or below the read timestamp. Must precede the generic headers branch,
+      // which would otherwise treat the args as a page query.
+      const [groupId, channelId, upToTimestamp] = args;
+      const byAuthor = new Map<
+        string,
+        {
+          author_address: string;
+          author_stream_id: string;
+          covered_seq: number;
+        }
+      >();
+      for (const row of [
+        ...this.store.reticulumChatEventHeaders,
+        ...this.store.reticulumChatExpiredEventMarkers,
+      ]) {
+        if (Number(row.group_id) !== Number(groupId)) continue;
+        if (
+          channelId !== undefined &&
+          String(row.channel_id || '') !== String(channelId)
+        ) {
+          continue;
+        }
+        if (Number(row.timestamp) > Number(upToTimestamp)) continue;
+        const stream = String(row.author_stream_id || '');
+        if (!stream) continue;
+        const key = `${row.author_address}|${stream}`;
+        const seq = Number(row.author_seq) || 0;
+        const existing = byAuthor.get(key);
+        if (!existing || seq > existing.covered_seq) {
+          byAuthor.set(key, {
+            author_address: String(row.author_address),
+            author_stream_id: stream,
+            covered_seq: seq,
+          });
+        }
+      }
+      return [...byAuthor.values()];
     }
     if (this.sql.includes('FROM rchat_event_headers')) {
       const [groupId, _sameGroupId, limit, offset = 0] = args;
@@ -1019,6 +1087,26 @@ class Statement {
   }
 
   get(...args: any[]) {
+    if (
+      this.sql.includes('FROM reticulum_chat_read_author_coverage') &&
+      this.sql.includes('MAX(signed_at) AS signed_at')
+    ) {
+      // `stmtGetReadCoverageReceipt`: the newest receipt this channel's coverage
+      // came from, which a receipt compares its own signedAt against.
+      const [groupId, channelId, address] = args;
+      const rows = this.store.reticulumChatReadAuthorCoverage.filter(
+        (row) =>
+          Number(row.group_id) === Number(groupId) &&
+          row.channel_id === channelId &&
+          row.address === address
+      );
+      return {
+        signed_at: rows.reduce(
+          (max, row) => Math.max(max, Number(row.signed_at) || 0),
+          0
+        ),
+      };
+    }
     if (this.sql.includes('FROM rchat_rejected_digest_markers')) {
       const [groupId, digestFingerprint] = args;
       const row = this.store.reticulumChatRejectedDigestMarkers.find(
@@ -1142,6 +1230,27 @@ class Statement {
           row.scope_type === scopeType &&
           row.scope_id === scopeId
       );
+    }
+    if (this.sql.includes('FROM reticulum_chat_read_watermarks')) {
+      // The group read watermark has three independent columns: the clamped
+      // sender-time watermark, the local arrival moment (`local_read_at`) and
+      // the unclamped remote coverage. Code reads them with separate queries, so
+      // match on the selected column rather than the table alone.
+      const [groupId, channelId, address] = args;
+      const row = this.store.reticulumChatReadWatermarks.find(
+        (entry) =>
+          Number(entry.group_id) === Number(groupId) &&
+          String(entry.channel_id) === String(channelId) &&
+          String(entry.address) === String(address)
+      );
+      if (!row) return undefined;
+      if (this.sql.includes('local_read_at')) {
+        return { local_read_at: Number(row.local_read_at || 0) };
+      }
+      if (this.sql.includes('remote_covered_timestamp')) {
+        return { remote_covered_timestamp: Number(row.remote_covered_timestamp || 0) };
+      }
+      return { timestamp: Number(row.timestamp || 0) };
     }
     if (this.sql.includes('FROM rchat_dm_read_watermarks')) {
       const [conversationId, address] = args;
@@ -1382,6 +1491,17 @@ class Statement {
           (message) => message.root_event_id === args[0]
         );
         return row ? { event_id: row.current_event_id } : undefined;
+      }
+      if (
+        this.sql.includes('SELECT * FROM rchat_message_projection') &&
+        this.sql.includes('WHERE root_event_id = ?')
+      ) {
+        // `stmtGetMessageProjection`. Missed before, so every caller silently
+        // saw "no projection row" and fell back to defaults — including the
+        // arrival position the read boundary needs.
+        return this.store.reticulumChatMessages.find(
+          (message) => message.root_event_id === args[0]
+        );
       }
       if (this.sql.includes('COUNT(*) AS cnt')) {
         return { cnt: this.store.reticulumChatMessages.length };
@@ -2051,6 +2171,54 @@ class Statement {
         lastInsertRowid: 0,
       };
     }
+    if (this.sql.includes('INSERT INTO reticulum_chat_read_author_coverage')) {
+      const [
+        groupId,
+        channelId,
+        address,
+        authorAddress,
+        authorStreamId,
+        coveredSeq,
+        updatedAt,
+        signedAt,
+      ] = args;
+      const index = this.store.reticulumChatReadAuthorCoverage.findIndex(
+        (row) =>
+          Number(row.group_id) === Number(groupId) &&
+          row.channel_id === channelId &&
+          row.address === address &&
+          row.author_address === authorAddress &&
+          row.author_stream_id === authorStreamId
+      );
+      const row = {
+        group_id: Number(groupId),
+        channel_id: channelId,
+        address,
+        author_address: authorAddress,
+        author_stream_id: authorStreamId,
+        covered_seq: Number(coveredSeq),
+        updated_at: updatedAt,
+        signed_at: Number(signedAt) || 0,
+      };
+      if (index >= 0) {
+        // Matches the SQL: a lower seq never lowers what is already recorded, and
+        // the receipt marker only ever moves forward.
+        row.covered_seq = Math.max(
+          Number(this.store.reticulumChatReadAuthorCoverage[index].covered_seq),
+          row.covered_seq
+        );
+        row.signed_at = Math.max(
+          Number(
+            this.store.reticulumChatReadAuthorCoverage[index].signed_at ?? 0
+          ),
+          row.signed_at
+        );
+        this.store.reticulumChatReadAuthorCoverage[index] = row;
+      } else {
+        this.store.reticulumChatReadAuthorCoverage.push(row);
+      }
+      return { changes: 1, lastInsertRowid: index + 1 };
+    }
     if (this.sql.includes('INSERT INTO rchat_dm_read_watermarks')) {
       const [conversationId, address, timestamp] = args;
       const existing = this.store.reticulumDmReadWatermarks.find(
@@ -2069,6 +2237,56 @@ class Statement {
           timestamp,
         });
       }
+      return { changes: 1, lastInsertRowid: 0 };
+    }
+    if (this.sql.includes('INTO reticulum_chat_read_watermarks')) {
+      const [groupId, channelId, address, timestamp, localReadAt] = args;
+      const key = (row: ReticulumChatRow) =>
+        Number(row.group_id) === Number(groupId) &&
+        String(row.channel_id) === String(channelId) &&
+        String(row.address) === String(address);
+      let row = this.store.reticulumChatReadWatermarks.find(key);
+      if (!row) {
+        row = {
+          group_id: Number(groupId),
+          channel_id: String(channelId),
+          address: String(address),
+          timestamp: 0,
+          local_read_at: 0,
+          remote_covered_timestamp: 0,
+        };
+        this.store.reticulumChatReadWatermarks.push(row);
+      }
+      // The remote-coverage upsert passes 0 for both and only sets its own
+      // column, and the others only advance what they name — mirror that so a
+      // write to one column never clears another.
+      if (this.sql.includes('remote_covered_timestamp')) {
+        row.remote_covered_timestamp = Math.max(
+          Number(row.remote_covered_timestamp || 0),
+          Number(localReadAt)
+        );
+        return { changes: 1, lastInsertRowid: 0 };
+      }
+      row.timestamp = Number(timestamp);
+      row.local_read_at = Math.max(
+        Number(row.local_read_at || 0),
+        Number(localReadAt)
+      );
+      return { changes: 1, lastInsertRowid: 0 };
+    }
+    if (this.sql.includes('UPDATE reticulum_chat_read_watermarks')) {
+      const [localReadAt, groupId, channelId, address] = args;
+      const row = this.store.reticulumChatReadWatermarks.find(
+        (entry) =>
+          Number(entry.group_id) === Number(groupId) &&
+          String(entry.channel_id) === String(channelId) &&
+          String(entry.address) === String(address)
+      );
+      if (!row) return { changes: 0, lastInsertRowid: 0 };
+      row.local_read_at = Math.max(
+        Number(row.local_read_at || 0),
+        Number(localReadAt)
+      );
       return { changes: 1, lastInsertRowid: 0 };
     }
     if (this.sql.includes('INSERT INTO rchat_pending_device_read_state')) {
@@ -3600,6 +3818,8 @@ class MockDatabase {
       reticulumDmExpiredEventMarkers: [],
       reticulumDmExpiryPreferences: [],
       reticulumDmReadWatermarks: [],
+      reticulumChatReadAuthorCoverage: [],
+      reticulumChatReadWatermarks: [],
       reticulumDirectCallHistory: [],
       reticulumDeviceReadStates: [],
       reticulumPendingDeviceReadStates: [],

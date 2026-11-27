@@ -8,7 +8,10 @@ type CountdownOverlayProps = {
   onComplete: () => void;
 };
 
-export function CountdownOverlay({ countdown, onComplete }: CountdownOverlayProps) {
+export function CountdownOverlay({
+  countdown,
+  onComplete,
+}: CountdownOverlayProps) {
   return (
     <Box
       style={{

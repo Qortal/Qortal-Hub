@@ -340,8 +340,9 @@ describe('a budget pays for new publishes', () => {
     answer(0, { accepted: true });
     await publishing;
 
+    // It pays the fee the window showed, and the budget isn't charged.
     expect(publishData).toHaveBeenCalledWith(
-      expect.not.objectContaining({ feeAmount: expect.anything() })
+      expect.objectContaining({ feeAmount: FEE_ATOMIC })
     );
     expect(budget()).toMatchObject({ used: '0', actions: 0 });
   });
@@ -642,7 +643,7 @@ describe('who a budget is for', () => {
       address: 'QrecipientAddress',
       name: null,
     } as any);
-    vi.mocked(sendQortFee).mockResolvedValue(FEE as unknown as number);
+    vi.mocked(sendQortFee).mockResolvedValue(FEE);
     const { shown, answer } = watchWindows();
     const paying = sendCoin(
       { coin: 'QORT', amount: '0.01', recipient: 'QrecipientAddress' },

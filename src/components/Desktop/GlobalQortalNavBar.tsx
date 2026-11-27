@@ -90,6 +90,8 @@ import {
   recordAppOpen,
 } from './appOpenCounts';
 import { exactAppNameMatch, type SearchableApp } from './appSearchSuggestions';
+import { HubZoomButton } from './HubZoomButton';
+import { useHubZoom } from './useHubZoom';
 import {
   buildOmniboxOptions,
   findPrivateAppTab,
@@ -1401,6 +1403,8 @@ export function GlobalQortalNavBar({
   const isAppsMode = desktopViewMode === 'apps';
   const isDevMode = desktopViewMode === 'dev';
   const isHomeMode = desktopViewMode === 'home';
+  // The magnifier: the zoom of the Q-App or website on screen, off Hub's.
+  const hubZoom = useHubZoom(desktopViewMode, selectedTab);
   const chromeBackground =
     theme.palette.mode === 'dark'
       ? 'rgba(33, 36, 42, 0.95)'
@@ -1931,7 +1935,13 @@ export function GlobalQortalNavBar({
                   isInputFocusedRef.current = true;
                   setIsInputFocused(true);
                   window.setTimeout(() => {
-                    inputElementRef.current?.select();
+                    // Only while it still has the focus: select() would take
+                    // it back from a window opened from the bar (a group's
+                    // join link), whose focus trap takes it again, endlessly.
+                    const input = inputElementRef.current;
+                    if (input && document.activeElement === input) {
+                      input.select();
+                    }
                   }, 0);
                 }}
                 placeholder={t('core:navbar.search_placeholder')}
@@ -1976,6 +1986,12 @@ export function GlobalQortalNavBar({
                 justifyContent: 'flex-end',
               }}
             >
+              <HubZoomButton
+                zoom={hubZoom}
+                hoverBackground={buttonHoverBackground}
+                tooltipSlotProps={tooltipSlotProps}
+                tooltipTitle={tooltipTitle}
+              />
               <Tooltip
                 title={tooltipTitle(t('core:action.copy_link'))}
                 placement="bottom"
@@ -2139,6 +2155,8 @@ export function GlobalQortalNavBar({
                   sx={{
                     ...endButtonSx,
                     color: theme.palette.text.secondary,
+                    // Nothing to go to in an empty field.
+                    display: inputValue.trim() ? 'flex' : 'none',
                   }}
                 >
                   <ArrowOutwardIcon

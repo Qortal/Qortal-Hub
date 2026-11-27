@@ -7,9 +7,19 @@ vi.mock('./get', async () => {
   const { readFileSync } = await import('node:fs');
   const { resolve } = await import('node:path');
   const source = readFileSync(resolve(__dirname, 'qortal-requests.ts'), 'utf8');
+  // Anchor on the import that ends at `./get.ts`, not on the first `import {`
+  // after `qapp-file-reference`. A second single-line import was added between
+  // the two, so the old start position landed mid-statement: the first parsed
+  // name came out as `isPdfReaderPayload } from './pdf-reader';\nimport {\n  addForeignServer`,
+  // and `addForeignServer` was absorbed into it. That name then had no mock, so
+  // the ADD_FOREIGN_SERVER handler threw before calling anything, while
+  // removeForeignServer survived as its own entry. Taking the last `import {`
+  // before the closing line keeps this working however many imports are added
+  // above it.
+  const importEnd = source.indexOf("} from './get.ts'");
   const block = source.slice(
-    source.indexOf('import {', source.indexOf("from './qapp-file-reference'")),
-    source.indexOf("} from './get.ts'")
+    source.lastIndexOf('import {', importEnd),
+    importEnd
   );
   const names = block
     .replace('import {', '')

@@ -1,6 +1,12 @@
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
-import { Box, ButtonBase, CircularProgress, Typography, useTheme } from '@mui/material';
+import {
+  Box,
+  ButtonBase,
+  CircularProgress,
+  Typography,
+  useTheme,
+} from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -134,7 +140,10 @@ export const QAppWidgetStatePanel = ({
                     theme.palette.mode === 'dark'
                       ? alpha(theme.palette.common.white, 0.06)
                       : alpha(theme.palette.text.primary, 0.05),
-                  borderColor: alpha(theme.palette.border.main, theme.palette.mode === 'dark' ? 0.5 : 0.3),
+                  borderColor: alpha(
+                    theme.palette.border.main,
+                    theme.palette.mode === 'dark' ? 0.5 : 0.3
+                  ),
                   transform: 'translateY(-1px)',
                 },
                 '&:active': {
@@ -178,7 +187,10 @@ export const QAppWidgetStatePanel = ({
                       : 'transparent',
                   borderColor:
                     secondaryActionVariant === 'button'
-                      ? alpha(theme.palette.border.main, theme.palette.mode === 'dark' ? 0.34 : 0.2)
+                      ? alpha(
+                          theme.palette.border.main,
+                          theme.palette.mode === 'dark' ? 0.34 : 0.2
+                        )
                       : 'transparent',
                   color:
                     secondaryActionVariant === 'button'
@@ -228,11 +240,15 @@ export const QAppWidgetContainer = ({
   const resolvedRetryLabel = retryLabel ?? t('widget_container.retry');
   const resolvedEmptyTitle = emptyTitle ?? t('widget_container.empty_title');
   const resolvedEmptyMessage =
-    emptyMessage === undefined ? t('widget_container.empty_message') : emptyMessage;
+    emptyMessage === undefined
+      ? t('widget_container.empty_message')
+      : emptyMessage;
   const resolvedErrorTitle = errorTitle ?? t('widget_container.error_title');
   const resolvedLoadingLabel = loadingLabel ?? t('widget_container.loading');
   const resolvedLoadingMessage =
-    loadingMessage === undefined ? t('widget_container.loading_message') : loadingMessage;
+    loadingMessage === undefined
+      ? t('widget_container.loading_message')
+      : loadingMessage;
   const resolvedHasContent = hasContent ?? (!!children && !isEmpty);
 
   let state: ReactNode = null;

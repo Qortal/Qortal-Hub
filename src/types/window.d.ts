@@ -128,6 +128,25 @@ declare global {
         import('../components/Apps/publishProfiles').PublishProfile | null
       >;
     };
+    /** Zoom of the Hub and of each Q-App or website (hub-zoom.ts). */
+    hubZoom?: {
+      /** What the Hub page shows: the app tab on screen, and the lock. */
+      onScreen: (report: { tabId: string | null; locked: boolean }) => void;
+      /** The pointer is on the magnifier (its tab, or null: Hub), or left it. */
+      panelPointer: (tabId: string | null | undefined) => void;
+      get: (
+        tabId: string | null
+      ) => Promise<import('../components/Desktop/hubZoom').HubZoomState>;
+      change: (
+        target: { tabId: string } | 'hub',
+        action: 'in' | 'out' | 'reset'
+      ) => Promise<import('../components/Desktop/hubZoom').HubZoomState>;
+      onChanged: (
+        listener: (
+          change: import('../components/Desktop/hubZoom').HubZoomChange
+        ) => void
+      ) => () => void;
+    };
     coreSetup?: {
       isCoreRunning?: () => Promise<boolean>;
       isCoreRunningOnSystem?: () => Promise<boolean>;
@@ -1334,6 +1353,33 @@ declare global {
           failureReason?: 'verification_failed' | 'disk_full';
         }) => void
       ) => () => void;
+      showNotification: (payload: {
+        title: string;
+        body: string;
+        icon?: string;
+        notificationId?: string;
+        data?: Record<string, unknown>;
+      }) => Promise<{ success: boolean }>;
+      /** Publish the channel currently on screen so the main process can
+       *  suppress notifications for it at show time. A negative groupId
+       *  means "not viewing Q-Chat". */
+      setViewContext: (context: {
+        groupId: number;
+        channelId: string;
+        visible: boolean;
+      }) => Promise<{ success: boolean }>;
+      onNotificationClicked: (
+        cb: (notificationId: string, data?: Record<string, unknown>) => void
+      ) => () => void;
+      /** Dismiss the desktop notifications for a group, or for one of its
+       *  channels when `channelId` is given. A non-finite or negative
+       *  `groupId` targets direct messages instead. */
+      dismissNotifications: (
+        groupId: number,
+        channelId?: string
+      ) => Promise<{ success: boolean }>;
+      /** Dismiss the notification for a single Q-Chat event. */
+      dismissNotification: (eventId: string) => Promise<{ success: boolean }>;
     };
 
     reticulumResources?: {

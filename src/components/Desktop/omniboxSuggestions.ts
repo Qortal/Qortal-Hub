@@ -3,6 +3,7 @@ import {
   type PinnedApp,
   removeBrokenPinnedApps,
 } from '../../utils/pinnedAppsSettings';
+import { encodeQortalLinkName } from '../../utils/qortalLink';
 import {
   parseQortalLink,
   type QortalLink,
@@ -474,9 +475,13 @@ export const omniboxTabPage = (
   const name = asText(tab?.name);
   if (!link || !service || !name) return '';
   const lowerLink = link.toLowerCase();
-  const prefixes = [name, encodeURIComponent(name)].map((part) =>
-    `${QORTAL_PROTOCOL}${service}/${part}`.toLowerCase()
-  );
+  // The name as Hub's links have it (buildQortalResourceLink), and as plain
+  // encodeURIComponent or no encoding leaves it.
+  const prefixes = [
+    name,
+    encodeURIComponent(name),
+    encodeQortalLinkName(name),
+  ].map((part) => `${QORTAL_PROTOCOL}${service}/${part}`.toLowerCase());
   const prefix = prefixes.find(
     (start) =>
       lowerLink === start ||

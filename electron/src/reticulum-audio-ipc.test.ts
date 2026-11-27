@@ -51,6 +51,8 @@ describe('reticulum-audio-ipc', () => {
   it('rejects bad magic', () => {
     const buf = Buffer.alloc(20);
     buf.write('XXXX', 0, 4, 'ascii');
-    expect(() => decodeReticulumAudioMessage(buf)).toThrow(ReticulumAudioIpcError);
+    expect(() => decodeReticulumAudioMessage(buf)).toThrow(
+      ReticulumAudioIpcError
+    );
   });
 });

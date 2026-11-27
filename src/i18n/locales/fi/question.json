@@ -42,6 +42,7 @@
     "error": {
       "add_to_list": "lisäys luetteloon epäonnistui",
       "app_fee_not_sent": "julkaisu onnistui, mutta sovelluksen maksua ei lähetetty: {{ error }}",
+      "app_fee_outcome_unknown": "julkaisu onnistui, mutta Hub ei pystynyt selvittämään, maksettiinko sovelluksen maksu. Tarkista asia tapahtumistasi.",
       "at_info": "AT-tietoja ei löydy.",
       "buy_order": "kauppatoimeksiannon lähettäminen epäonnistui",
       "cancel_sell_order": "myyntitoimeksiannon peruuttaminen epäonnistui. Yritä uudelleen!",
@@ -104,6 +105,7 @@
       "node_info": "solmun tietojen nouto epäonnistui",
       "node_status": "solmun tilan nouto epäonnistui",
       "only_encrypted_data": "vain salattu data voi siirtyä yksityisiin palveluihin",
+      "payment_outcome_unknown": "Hub ei pystynyt selvittämään, menikö tämä maksu läpi. Tarkista tapahtumasi ennen kuin yrität uudelleen.",
       "payments_partially_sent": "{{ total }} maksusta {{ sent }} meni läpi ennen tätä virhettä. Tarkista tapahtumasi ennen kuin yrität uudelleen. {{ error }}",
       "perform_request": "pyynnön suorittaminen epäonnistui",
       "poll_create": "kyselyn luominen epäonnistui",
