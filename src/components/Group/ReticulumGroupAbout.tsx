@@ -153,7 +153,7 @@ export const ReticulumGroupAboutModal = () => {
     data?.isOpen === true ||
     data?.groupType === 0 ||
     data?.groupType === 'OPEN';
-  const groupScore = useReticulumGroupScore(groupId, isOpen);
+  const groupScore = useReticulumGroupScore(groupId);
   const avatarUrl =
     ownerName && groupId
       ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${ownerName}/qortal_group_avatar_${groupId}?async=true`

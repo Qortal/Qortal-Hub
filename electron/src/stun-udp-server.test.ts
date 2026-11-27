@@ -25,11 +25,16 @@ describe('StunUdpServer.tryBind', () => {
     };
     sock.bind = vi.fn((_p, _h, _cb) => {
       queueMicrotask(() =>
-        sock.emit('error', Object.assign(new Error('in use'), { code: 'EADDRINUSE' }))
+        sock.emit(
+          'error',
+          Object.assign(new Error('in use'), { code: 'EADDRINUSE' })
+        )
       );
     });
     sock.close = vi.fn();
-    vi.mocked(dgram.createSocket).mockReturnValue(sock as ReturnType<typeof dgram.createSocket>);
+    vi.mocked(dgram.createSocket).mockReturnValue(
+      sock as ReturnType<typeof dgram.createSocket>
+    );
 
     const srv = new StunUdpServer(47321);
     const ok = await srv.tryBind();
@@ -53,7 +58,9 @@ describe('StunUdpServer.tryBind', () => {
       });
     });
     sock.close = vi.fn();
-    vi.mocked(dgram.createSocket).mockReturnValue(sock as ReturnType<typeof dgram.createSocket>);
+    vi.mocked(dgram.createSocket).mockReturnValue(
+      sock as ReturnType<typeof dgram.createSocket>
+    );
 
     const srv = new StunUdpServer(47321);
     const ok = await srv.tryBind();

@@ -40,17 +40,11 @@ export const ProgressiveBlur = ({
     ? `linear-gradient(180deg, ${alpha(tintColor, 0)} 0%, ${alpha(
         tintColor,
         0.03
-      )} 38%, ${alpha(tintColor, 0.1)} 68%, ${alpha(
-        tintColor,
-        0.18
-      )} 100%)`
+      )} 38%, ${alpha(tintColor, 0.1)} 68%, ${alpha(tintColor, 0.18)} 100%)`
     : `linear-gradient(0deg, ${alpha(tintColor, 0)} 0%, ${alpha(
         tintColor,
         0.03
-      )} 38%, ${alpha(tintColor, 0.1)} 68%, ${alpha(
-        tintColor,
-        0.18
-      )} 100%)`;
+      )} 38%, ${alpha(tintColor, 0.1)} 68%, ${alpha(tintColor, 0.18)} 100%)`;
 
   return (
     <Box

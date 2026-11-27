@@ -3,12 +3,21 @@ import {
   calculateReticulumGroupScore,
   getCommunityLevel,
   getLegacyLevel,
+  refreshReticulumGroupScores,
 } from './reticulumGroupScore';
+
+vi.mock('../../App', () => ({
+  getBaseApiReact: () => 'http://node',
+}));
 
 const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
 describe('Reticulum Group Score', () => {
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    delete (window as any).reticulumChat;
+  });
 
   it('awards Legacy only for completed years and caps it at ten', () => {
     vi.useFakeTimers();
@@ -48,5 +57,78 @@ describe('Reticulum Group Score', () => {
 
     expect(result?.legacyScore).toBe(0);
     expect(result?.score).toBe(90);
+  });
+
+  it('uses observed Reticulum activity when scoring private groups', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-03T12:00:00Z'));
+    const setPublicGroupDirectory = vi
+      .fn()
+      .mockResolvedValue({ success: true });
+    const getPublicGroupActivitySnapshot = vi.fn().mockResolvedValue({
+      availableGroupIds: [2],
+      observedAt: Date.now(),
+      summaries: [
+        {
+          activeAuthors7d: 8,
+          confidence: 2,
+          groupId: 2,
+          messages24h: 20,
+          messages7d: 80,
+          observedAt: Date.now(),
+        },
+      ],
+    });
+    (window as any).reticulumChat = {
+      getPublicGroupActivitySnapshot,
+      setPublicGroupDirectory,
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        if (input.endsWith('/admin/info')) {
+          return {
+            json: async () => ({ currentTimestamp: Date.now() }),
+            ok: true,
+          };
+        }
+        return {
+          json: async () => [
+            {
+              balance: 100,
+              created: Date.now() - YEAR_MS,
+              groupId: 1,
+              groupType: 'OPEN',
+              memberCount: 10,
+            },
+            {
+              balance: 200,
+              created: Date.now() - YEAR_MS,
+              groupId: 2,
+              groupType: 'CLOSED',
+              memberCount: 20,
+            },
+          ],
+          ok: true,
+        };
+      })
+    );
+
+    const refresh = refreshReticulumGroupScores(true);
+    await vi.runAllTimersAsync();
+    const snapshot = await refresh;
+
+    expect(setPublicGroupDirectory).toHaveBeenCalledWith([1, 2]);
+    expect(getPublicGroupActivitySnapshot).toHaveBeenCalledTimes(2);
+    expect(snapshot.groups['2']).toMatchObject({
+      activity: {
+        activeAuthors7d: 8,
+        confidence: 2,
+        messages24h: 20,
+        messages7d: 80,
+      },
+      activityObserved: true,
+    });
+    expect(snapshot.groups['2'].activityScore).toBeGreaterThan(0);
   });
 });

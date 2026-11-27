@@ -486,15 +486,15 @@
 }
 
 :is(
-    :is(.dialog .mainContainer) button:not(:is(.toggle-button, .closeButton))
-  ):hover {
+  :is(.dialog .mainContainer) button:not(:is(.toggle-button, .closeButton))
+):hover {
   cursor: pointer;
   filter: var(--hover-filter);
 }
 
 .secondaryButton:is(
-    :is(.dialog .mainContainer) button:not(:is(.toggle-button, .closeButton))
-  ) {
+  :is(.dialog .mainContainer) button:not(:is(.toggle-button, .closeButton))
+) {
   color: var(--button-secondary-fg-color);
   background-color: var(--button-secondary-bg-color);
   border-color: var(--button-secondary-border-color);
@@ -509,8 +509,8 @@
 }
 
 .primaryButton:is(
-    :is(.dialog .mainContainer) button:not(:is(.toggle-button, .closeButton))
-  ) {
+  :is(.dialog .mainContainer) button:not(:is(.toggle-button, .closeButton))
+) {
   color: var(--button-primary-fg-color);
   background-color: var(--button-primary-bg-color);
   border-color: var(--button-primary-border-color);
@@ -1973,8 +1973,8 @@
 }
 
 .selectedEditor:is(
-    .annotationEditorLayer :is(.freeTextEditor, .inkEditor, .stampEditor)
-  ) {
+  .annotationEditorLayer :is(.freeTextEditor, .inkEditor, .stampEditor)
+) {
   border: var(--focus-outline);
   outline: var(--focus-outline-around);
 }
@@ -2116,24 +2116,24 @@
 }
 
 .hidden:is(
-    :is(
-        .annotationEditorLayer
-          :is(.freeTextEditor, .inkEditor, .stampEditor, .highlightEditor),
-        .textLayer
-      )
-      .editToolbar
-  ) {
+  :is(
+      .annotationEditorLayer
+        :is(.freeTextEditor, .inkEditor, .stampEditor, .highlightEditor),
+      .textLayer
+    )
+    .editToolbar
+) {
   display: none;
 }
 
 :is(
-    :is(
-        .annotationEditorLayer
-          :is(.freeTextEditor, .inkEditor, .stampEditor, .highlightEditor),
-        .textLayer
-      )
-      .editToolbar
-  ):has(:focus-visible) {
+  :is(
+      .annotationEditorLayer
+        :is(.freeTextEditor, .inkEditor, .stampEditor, .highlightEditor),
+      .textLayer
+    )
+    .editToolbar
+):has(:focus-visible) {
   border-color: transparent;
 }
 
@@ -2230,24 +2230,24 @@
 }
 
 :is(
-    :is(
-        :is(
-            :is(
-                .annotationEditorLayer
-                  :is(
-                    .freeTextEditor,
-                    .inkEditor,
-                    .stampEditor,
-                    .highlightEditor
-                  ),
-                .textLayer
-              )
-              .editToolbar
-          )
-          .buttons
-      )
-      .highlightButton
-  )::before {
+  :is(
+      :is(
+          :is(
+              .annotationEditorLayer
+                :is(
+                  .freeTextEditor,
+                  .inkEditor,
+                  .stampEditor,
+                  .highlightEditor
+                ),
+              .textLayer
+            )
+            .editToolbar
+        )
+        .buttons
+    )
+    .highlightButton
+)::before {
   content: '';
   -webkit-mask-image: var(--editor-toolbar-highlight-image);
   mask-image: var(--editor-toolbar-highlight-image);
@@ -2299,24 +2299,24 @@
 }
 
 :is(
-    :is(
-        :is(
-            :is(
-                .annotationEditorLayer
-                  :is(
-                    .freeTextEditor,
-                    .inkEditor,
-                    .stampEditor,
-                    .highlightEditor
-                  ),
-                .textLayer
-              )
-              .editToolbar
-          )
-          .buttons
-      )
-      .delete
-  )::before {
+  :is(
+      :is(
+          :is(
+              .annotationEditorLayer
+                :is(
+                  .freeTextEditor,
+                  .inkEditor,
+                  .stampEditor,
+                  .highlightEditor
+                ),
+              .textLayer
+            )
+            .editToolbar
+        )
+        .buttons
+    )
+    .delete
+)::before {
   content: '';
   -webkit-mask-image: var(--editor-toolbar-delete-image);
   mask-image: var(--editor-toolbar-delete-image);
@@ -2385,24 +2385,24 @@
 }
 
 :is(
-    :is(
-        :is(
-            :is(
-                .annotationEditorLayer
-                  :is(
-                    .freeTextEditor,
-                    .inkEditor,
-                    .stampEditor,
-                    .highlightEditor
-                  ),
-                .textLayer
-              )
-              .editToolbar
-          )
-          .buttons
-      )
-      > :not(.divider)
-  ):hover {
+  :is(
+      :is(
+          :is(
+              .annotationEditorLayer
+                :is(
+                  .freeTextEditor,
+                  .inkEditor,
+                  .stampEditor,
+                  .highlightEditor
+                ),
+              .textLayer
+            )
+            .editToolbar
+        )
+        .buttons
+    )
+    > :not(.divider)
+):hover {
   border-radius: 2px;
   background-color: var(--editor-toolbar-hover-bg-color);
   color: var(--editor-toolbar-hover-fg-color);
@@ -2433,24 +2433,24 @@
 }
 
 :is(
-    :is(
-        :is(
-            :is(
-                .annotationEditorLayer
-                  :is(
-                    .freeTextEditor,
-                    .inkEditor,
-                    .stampEditor,
-                    .highlightEditor
-                  ),
-                .textLayer
-              )
-              .editToolbar
-          )
-          .buttons
-      )
-      > :not(.divider)
-  ):focus-visible {
+  :is(
+      :is(
+          :is(
+              .annotationEditorLayer
+                :is(
+                  .freeTextEditor,
+                  .inkEditor,
+                  .stampEditor,
+                  .highlightEditor
+                ),
+              .textLayer
+            )
+            .editToolbar
+        )
+        .buttons
+    )
+    > :not(.divider)
+):focus-visible {
   border-radius: 2px;
   outline: 2px solid var(--editor-toolbar-focus-outline-color);
 }
@@ -2484,46 +2484,46 @@
 }
 
 :is(
-    :is(
-        :is(
-            :is(
-                .annotationEditorLayer
-                  :is(
-                    .freeTextEditor,
-                    .inkEditor,
-                    .stampEditor,
-                    .highlightEditor
-                  ),
-                .textLayer
-              )
-              .editToolbar
-          )
-          .buttons
-      )
-      .altText
-  ):disabled {
+  :is(
+      :is(
+          :is(
+              .annotationEditorLayer
+                :is(
+                  .freeTextEditor,
+                  .inkEditor,
+                  .stampEditor,
+                  .highlightEditor
+                ),
+              .textLayer
+            )
+            .editToolbar
+        )
+        .buttons
+    )
+    .altText
+):disabled {
   pointer-events: none;
 }
 
 :is(
-    :is(
-        :is(
-            :is(
-                .annotationEditorLayer
-                  :is(
-                    .freeTextEditor,
-                    .inkEditor,
-                    .stampEditor,
-                    .highlightEditor
-                  ),
-                .textLayer
-              )
-              .editToolbar
-          )
-          .buttons
-      )
-      .altText
-  )::before {
+  :is(
+      :is(
+          :is(
+              .annotationEditorLayer
+                :is(
+                  .freeTextEditor,
+                  .inkEditor,
+                  .stampEditor,
+                  .highlightEditor
+                ),
+              .textLayer
+            )
+            .editToolbar
+        )
+        .buttons
+    )
+    .altText
+)::before {
   content: '';
   -webkit-mask-image: var(--alt-text-add-image);
   mask-image: var(--alt-text-add-image);
@@ -2704,27 +2704,27 @@
 }
 
 .show:is(
-    :is(
-        :is(
-            :is(
-                :is(
-                    .annotationEditorLayer
-                      :is(
-                        .freeTextEditor,
-                        .inkEditor,
-                        .stampEditor,
-                        .highlightEditor
-                      ),
-                    .textLayer
-                  )
-                  .editToolbar
-              )
-              .buttons
-          )
-          .altText
-      )
-      .tooltip
-  ) {
+  :is(
+      :is(
+          :is(
+              :is(
+                  .annotationEditorLayer
+                    :is(
+                      .freeTextEditor,
+                      .inkEditor,
+                      .stampEditor,
+                      .highlightEditor
+                    ),
+                  .textLayer
+                )
+                .editToolbar
+            )
+            .buttons
+        )
+        .altText
+    )
+    .tooltip
+) {
   --alt-text-tooltip-bg: #f0f0f4;
   --alt-text-tooltip-fg: #15141a;
   --alt-text-tooltip-border: #8f8f9d;
@@ -2791,35 +2791,6 @@
 
 @media screen and (forced-colors: active) {
   .show:is(
-      :is(
-          :is(
-              :is(
-                  :is(
-                      .annotationEditorLayer
-                        :is(
-                          .freeTextEditor,
-                          .inkEditor,
-                          .stampEditor,
-                          .highlightEditor
-                        ),
-                      .textLayer
-                    )
-                    .editToolbar
-                )
-                .buttons
-            )
-            .altText
-        )
-        .tooltip
-    ) {
-    --alt-text-tooltip-bg: Canvas;
-    --alt-text-tooltip-fg: CanvasText;
-    --alt-text-tooltip-border: CanvasText;
-    --alt-text-tooltip-shadow: none;
-  }
-}
-
-.show:is(
     :is(
         :is(
             :is(
@@ -2841,6 +2812,35 @@
       )
       .tooltip
   ) {
+    --alt-text-tooltip-bg: Canvas;
+    --alt-text-tooltip-fg: CanvasText;
+    --alt-text-tooltip-border: CanvasText;
+    --alt-text-tooltip-shadow: none;
+  }
+}
+
+.show:is(
+  :is(
+      :is(
+          :is(
+              :is(
+                  .annotationEditorLayer
+                    :is(
+                      .freeTextEditor,
+                      .inkEditor,
+                      .stampEditor,
+                      .highlightEditor
+                    ),
+                  .textLayer
+                )
+                .editToolbar
+            )
+            .buttons
+        )
+        .altText
+    )
+    .tooltip
+) {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
@@ -3007,9 +3007,9 @@
 }
 
 .hidden:is(
-    :is(.annotationEditorLayer :is(.freeTextEditor, .inkEditor, .stampEditor))
-      > .resizers
-  ) {
+  :is(.annotationEditorLayer :is(.freeTextEditor, .inkEditor, .stampEditor))
+    > .resizers
+) {
   display: none;
 }
 
@@ -3027,362 +3027,338 @@
 }
 
 .topLeft:is(
-    :is(
-        :is(
-            .annotationEditorLayer
-              :is(.freeTextEditor, .inkEditor, .stampEditor)
-          )
-          > .resizers
-      )
-      > .resizer
-  ) {
+  :is(
+      :is(.annotationEditorLayer :is(.freeTextEditor, .inkEditor, .stampEditor))
+        > .resizers
+    )
+    > .resizer
+) {
   top: var(--resizer-shift);
   left: var(--resizer-shift);
 }
 
 .topMiddle:is(
-    :is(
-        :is(
-            .annotationEditorLayer
-              :is(.freeTextEditor, .inkEditor, .stampEditor)
-          )
-          > .resizers
-      )
-      > .resizer
-  ) {
+  :is(
+      :is(.annotationEditorLayer :is(.freeTextEditor, .inkEditor, .stampEditor))
+        > .resizers
+    )
+    > .resizer
+) {
   top: var(--resizer-shift);
   left: calc(50% + var(--resizer-shift));
 }
 
 .topRight:is(
-    :is(
-        :is(
-            .annotationEditorLayer
-              :is(.freeTextEditor, .inkEditor, .stampEditor)
-          )
-          > .resizers
-      )
-      > .resizer
-  ) {
+  :is(
+      :is(.annotationEditorLayer :is(.freeTextEditor, .inkEditor, .stampEditor))
+        > .resizers
+    )
+    > .resizer
+) {
   top: var(--resizer-shift);
   right: var(--resizer-shift);
 }
 
 .middleRight:is(
-    :is(
-        :is(
-            .annotationEditorLayer
-              :is(.freeTextEditor, .inkEditor, .stampEditor)
-          )
-          > .resizers
-      )
-      > .resizer
-  ) {
+  :is(
+      :is(.annotationEditorLayer :is(.freeTextEditor, .inkEditor, .stampEditor))
+        > .resizers
+    )
+    > .resizer
+) {
   top: calc(50% + var(--resizer-shift));
   right: var(--resizer-shift);
 }
 
 .bottomRight:is(
-    :is(
-        :is(
-            .annotationEditorLayer
-              :is(.freeTextEditor, .inkEditor, .stampEditor)
-          )
-          > .resizers
-      )
-      > .resizer
-  ) {
+  :is(
+      :is(.annotationEditorLayer :is(.freeTextEditor, .inkEditor, .stampEditor))
+        > .resizers
+    )
+    > .resizer
+) {
   bottom: var(--resizer-shift);
   right: var(--resizer-shift);
 }
 
 .bottomMiddle:is(
-    :is(
-        :is(
-            .annotationEditorLayer
-              :is(.freeTextEditor, .inkEditor, .stampEditor)
-          )
-          > .resizers
-      )
-      > .resizer
-  ) {
+  :is(
+      :is(.annotationEditorLayer :is(.freeTextEditor, .inkEditor, .stampEditor))
+        > .resizers
+    )
+    > .resizer
+) {
   bottom: var(--resizer-shift);
   left: calc(50% + var(--resizer-shift));
 }
 
 .bottomLeft:is(
-    :is(
-        :is(
-            .annotationEditorLayer
-              :is(.freeTextEditor, .inkEditor, .stampEditor)
-          )
-          > .resizers
-      )
-      > .resizer
-  ) {
+  :is(
+      :is(.annotationEditorLayer :is(.freeTextEditor, .inkEditor, .stampEditor))
+        > .resizers
+    )
+    > .resizer
+) {
   bottom: var(--resizer-shift);
   left: var(--resizer-shift);
 }
 
 .middleLeft:is(
-    :is(
-        :is(
-            .annotationEditorLayer
-              :is(.freeTextEditor, .inkEditor, .stampEditor)
-          )
-          > .resizers
-      )
-      > .resizer
-  ) {
+  :is(
+      :is(.annotationEditorLayer :is(.freeTextEditor, .inkEditor, .stampEditor))
+        > .resizers
+    )
+    > .resizer
+) {
   top: calc(50% + var(--resizer-shift));
   left: var(--resizer-shift);
 }
 
 .topLeft:is(
-    :is(
-        .annotationEditorLayer[data-main-rotation='0']
-          :is([data-editor-rotation='0'], [data-editor-rotation='180']),
-        .annotationEditorLayer[data-main-rotation='90']
-          :is([data-editor-rotation='270'], [data-editor-rotation='90']),
-        .annotationEditorLayer[data-main-rotation='180']
-          :is([data-editor-rotation='180'], [data-editor-rotation='0']),
-        .annotationEditorLayer[data-main-rotation='270']
-          :is([data-editor-rotation='90'], [data-editor-rotation='270'])
-      )
-      > .resizers
-      > .resizer
-  ),
+  :is(
+      .annotationEditorLayer[data-main-rotation='0']
+        :is([data-editor-rotation='0'], [data-editor-rotation='180']),
+      .annotationEditorLayer[data-main-rotation='90']
+        :is([data-editor-rotation='270'], [data-editor-rotation='90']),
+      .annotationEditorLayer[data-main-rotation='180']
+        :is([data-editor-rotation='180'], [data-editor-rotation='0']),
+      .annotationEditorLayer[data-main-rotation='270']
+        :is([data-editor-rotation='90'], [data-editor-rotation='270'])
+    )
+    > .resizers
+    > .resizer
+),
 .bottomRight:is(
-    :is(
-        .annotationEditorLayer[data-main-rotation='0']
-          :is([data-editor-rotation='0'], [data-editor-rotation='180']),
-        .annotationEditorLayer[data-main-rotation='90']
-          :is([data-editor-rotation='270'], [data-editor-rotation='90']),
-        .annotationEditorLayer[data-main-rotation='180']
-          :is([data-editor-rotation='180'], [data-editor-rotation='0']),
-        .annotationEditorLayer[data-main-rotation='270']
-          :is([data-editor-rotation='90'], [data-editor-rotation='270'])
-      )
-      > .resizers
-      > .resizer
-  ) {
+  :is(
+      .annotationEditorLayer[data-main-rotation='0']
+        :is([data-editor-rotation='0'], [data-editor-rotation='180']),
+      .annotationEditorLayer[data-main-rotation='90']
+        :is([data-editor-rotation='270'], [data-editor-rotation='90']),
+      .annotationEditorLayer[data-main-rotation='180']
+        :is([data-editor-rotation='180'], [data-editor-rotation='0']),
+      .annotationEditorLayer[data-main-rotation='270']
+        :is([data-editor-rotation='90'], [data-editor-rotation='270'])
+    )
+    > .resizers
+    > .resizer
+) {
   cursor: nwse-resize;
 }
 
 .topMiddle:is(
-    :is(
-        .annotationEditorLayer[data-main-rotation='0']
-          :is([data-editor-rotation='0'], [data-editor-rotation='180']),
-        .annotationEditorLayer[data-main-rotation='90']
-          :is([data-editor-rotation='270'], [data-editor-rotation='90']),
-        .annotationEditorLayer[data-main-rotation='180']
-          :is([data-editor-rotation='180'], [data-editor-rotation='0']),
-        .annotationEditorLayer[data-main-rotation='270']
-          :is([data-editor-rotation='90'], [data-editor-rotation='270'])
-      )
-      > .resizers
-      > .resizer
-  ),
+  :is(
+      .annotationEditorLayer[data-main-rotation='0']
+        :is([data-editor-rotation='0'], [data-editor-rotation='180']),
+      .annotationEditorLayer[data-main-rotation='90']
+        :is([data-editor-rotation='270'], [data-editor-rotation='90']),
+      .annotationEditorLayer[data-main-rotation='180']
+        :is([data-editor-rotation='180'], [data-editor-rotation='0']),
+      .annotationEditorLayer[data-main-rotation='270']
+        :is([data-editor-rotation='90'], [data-editor-rotation='270'])
+    )
+    > .resizers
+    > .resizer
+),
 .bottomMiddle:is(
-    :is(
-        .annotationEditorLayer[data-main-rotation='0']
-          :is([data-editor-rotation='0'], [data-editor-rotation='180']),
-        .annotationEditorLayer[data-main-rotation='90']
-          :is([data-editor-rotation='270'], [data-editor-rotation='90']),
-        .annotationEditorLayer[data-main-rotation='180']
-          :is([data-editor-rotation='180'], [data-editor-rotation='0']),
-        .annotationEditorLayer[data-main-rotation='270']
-          :is([data-editor-rotation='90'], [data-editor-rotation='270'])
-      )
-      > .resizers
-      > .resizer
-  ) {
+  :is(
+      .annotationEditorLayer[data-main-rotation='0']
+        :is([data-editor-rotation='0'], [data-editor-rotation='180']),
+      .annotationEditorLayer[data-main-rotation='90']
+        :is([data-editor-rotation='270'], [data-editor-rotation='90']),
+      .annotationEditorLayer[data-main-rotation='180']
+        :is([data-editor-rotation='180'], [data-editor-rotation='0']),
+      .annotationEditorLayer[data-main-rotation='270']
+        :is([data-editor-rotation='90'], [data-editor-rotation='270'])
+    )
+    > .resizers
+    > .resizer
+) {
   cursor: ns-resize;
 }
 
 .topRight:is(
-    :is(
-        .annotationEditorLayer[data-main-rotation='0']
-          :is([data-editor-rotation='0'], [data-editor-rotation='180']),
-        .annotationEditorLayer[data-main-rotation='90']
-          :is([data-editor-rotation='270'], [data-editor-rotation='90']),
-        .annotationEditorLayer[data-main-rotation='180']
-          :is([data-editor-rotation='180'], [data-editor-rotation='0']),
-        .annotationEditorLayer[data-main-rotation='270']
-          :is([data-editor-rotation='90'], [data-editor-rotation='270'])
-      )
-      > .resizers
-      > .resizer
-  ),
+  :is(
+      .annotationEditorLayer[data-main-rotation='0']
+        :is([data-editor-rotation='0'], [data-editor-rotation='180']),
+      .annotationEditorLayer[data-main-rotation='90']
+        :is([data-editor-rotation='270'], [data-editor-rotation='90']),
+      .annotationEditorLayer[data-main-rotation='180']
+        :is([data-editor-rotation='180'], [data-editor-rotation='0']),
+      .annotationEditorLayer[data-main-rotation='270']
+        :is([data-editor-rotation='90'], [data-editor-rotation='270'])
+    )
+    > .resizers
+    > .resizer
+),
 .bottomLeft:is(
-    :is(
-        .annotationEditorLayer[data-main-rotation='0']
-          :is([data-editor-rotation='0'], [data-editor-rotation='180']),
-        .annotationEditorLayer[data-main-rotation='90']
-          :is([data-editor-rotation='270'], [data-editor-rotation='90']),
-        .annotationEditorLayer[data-main-rotation='180']
-          :is([data-editor-rotation='180'], [data-editor-rotation='0']),
-        .annotationEditorLayer[data-main-rotation='270']
-          :is([data-editor-rotation='90'], [data-editor-rotation='270'])
-      )
-      > .resizers
-      > .resizer
-  ) {
+  :is(
+      .annotationEditorLayer[data-main-rotation='0']
+        :is([data-editor-rotation='0'], [data-editor-rotation='180']),
+      .annotationEditorLayer[data-main-rotation='90']
+        :is([data-editor-rotation='270'], [data-editor-rotation='90']),
+      .annotationEditorLayer[data-main-rotation='180']
+        :is([data-editor-rotation='180'], [data-editor-rotation='0']),
+      .annotationEditorLayer[data-main-rotation='270']
+        :is([data-editor-rotation='90'], [data-editor-rotation='270'])
+    )
+    > .resizers
+    > .resizer
+) {
   cursor: nesw-resize;
 }
 
 .middleRight:is(
-    :is(
-        .annotationEditorLayer[data-main-rotation='0']
-          :is([data-editor-rotation='0'], [data-editor-rotation='180']),
-        .annotationEditorLayer[data-main-rotation='90']
-          :is([data-editor-rotation='270'], [data-editor-rotation='90']),
-        .annotationEditorLayer[data-main-rotation='180']
-          :is([data-editor-rotation='180'], [data-editor-rotation='0']),
-        .annotationEditorLayer[data-main-rotation='270']
-          :is([data-editor-rotation='90'], [data-editor-rotation='270'])
-      )
-      > .resizers
-      > .resizer
-  ),
+  :is(
+      .annotationEditorLayer[data-main-rotation='0']
+        :is([data-editor-rotation='0'], [data-editor-rotation='180']),
+      .annotationEditorLayer[data-main-rotation='90']
+        :is([data-editor-rotation='270'], [data-editor-rotation='90']),
+      .annotationEditorLayer[data-main-rotation='180']
+        :is([data-editor-rotation='180'], [data-editor-rotation='0']),
+      .annotationEditorLayer[data-main-rotation='270']
+        :is([data-editor-rotation='90'], [data-editor-rotation='270'])
+    )
+    > .resizers
+    > .resizer
+),
 .middleLeft:is(
-    :is(
-        .annotationEditorLayer[data-main-rotation='0']
-          :is([data-editor-rotation='0'], [data-editor-rotation='180']),
-        .annotationEditorLayer[data-main-rotation='90']
-          :is([data-editor-rotation='270'], [data-editor-rotation='90']),
-        .annotationEditorLayer[data-main-rotation='180']
-          :is([data-editor-rotation='180'], [data-editor-rotation='0']),
-        .annotationEditorLayer[data-main-rotation='270']
-          :is([data-editor-rotation='90'], [data-editor-rotation='270'])
-      )
-      > .resizers
-      > .resizer
-  ) {
+  :is(
+      .annotationEditorLayer[data-main-rotation='0']
+        :is([data-editor-rotation='0'], [data-editor-rotation='180']),
+      .annotationEditorLayer[data-main-rotation='90']
+        :is([data-editor-rotation='270'], [data-editor-rotation='90']),
+      .annotationEditorLayer[data-main-rotation='180']
+        :is([data-editor-rotation='180'], [data-editor-rotation='0']),
+      .annotationEditorLayer[data-main-rotation='270']
+        :is([data-editor-rotation='90'], [data-editor-rotation='270'])
+    )
+    > .resizers
+    > .resizer
+) {
   cursor: ew-resize;
 }
 
 .topLeft:is(
-    :is(
-        .annotationEditorLayer[data-main-rotation='0']
-          :is([data-editor-rotation='90'], [data-editor-rotation='270']),
-        .annotationEditorLayer[data-main-rotation='90']
-          :is([data-editor-rotation='0'], [data-editor-rotation='180']),
-        .annotationEditorLayer[data-main-rotation='180']
-          :is([data-editor-rotation='270'], [data-editor-rotation='90']),
-        .annotationEditorLayer[data-main-rotation='270']
-          :is([data-editor-rotation='180'], [data-editor-rotation='0'])
-      )
-      > .resizers
-      > .resizer
-  ),
+  :is(
+      .annotationEditorLayer[data-main-rotation='0']
+        :is([data-editor-rotation='90'], [data-editor-rotation='270']),
+      .annotationEditorLayer[data-main-rotation='90']
+        :is([data-editor-rotation='0'], [data-editor-rotation='180']),
+      .annotationEditorLayer[data-main-rotation='180']
+        :is([data-editor-rotation='270'], [data-editor-rotation='90']),
+      .annotationEditorLayer[data-main-rotation='270']
+        :is([data-editor-rotation='180'], [data-editor-rotation='0'])
+    )
+    > .resizers
+    > .resizer
+),
 .bottomRight:is(
-    :is(
-        .annotationEditorLayer[data-main-rotation='0']
-          :is([data-editor-rotation='90'], [data-editor-rotation='270']),
-        .annotationEditorLayer[data-main-rotation='90']
-          :is([data-editor-rotation='0'], [data-editor-rotation='180']),
-        .annotationEditorLayer[data-main-rotation='180']
-          :is([data-editor-rotation='270'], [data-editor-rotation='90']),
-        .annotationEditorLayer[data-main-rotation='270']
-          :is([data-editor-rotation='180'], [data-editor-rotation='0'])
-      )
-      > .resizers
-      > .resizer
-  ) {
+  :is(
+      .annotationEditorLayer[data-main-rotation='0']
+        :is([data-editor-rotation='90'], [data-editor-rotation='270']),
+      .annotationEditorLayer[data-main-rotation='90']
+        :is([data-editor-rotation='0'], [data-editor-rotation='180']),
+      .annotationEditorLayer[data-main-rotation='180']
+        :is([data-editor-rotation='270'], [data-editor-rotation='90']),
+      .annotationEditorLayer[data-main-rotation='270']
+        :is([data-editor-rotation='180'], [data-editor-rotation='0'])
+    )
+    > .resizers
+    > .resizer
+) {
   cursor: nesw-resize;
 }
 
 .topMiddle:is(
-    :is(
-        .annotationEditorLayer[data-main-rotation='0']
-          :is([data-editor-rotation='90'], [data-editor-rotation='270']),
-        .annotationEditorLayer[data-main-rotation='90']
-          :is([data-editor-rotation='0'], [data-editor-rotation='180']),
-        .annotationEditorLayer[data-main-rotation='180']
-          :is([data-editor-rotation='270'], [data-editor-rotation='90']),
-        .annotationEditorLayer[data-main-rotation='270']
-          :is([data-editor-rotation='180'], [data-editor-rotation='0'])
-      )
-      > .resizers
-      > .resizer
-  ),
+  :is(
+      .annotationEditorLayer[data-main-rotation='0']
+        :is([data-editor-rotation='90'], [data-editor-rotation='270']),
+      .annotationEditorLayer[data-main-rotation='90']
+        :is([data-editor-rotation='0'], [data-editor-rotation='180']),
+      .annotationEditorLayer[data-main-rotation='180']
+        :is([data-editor-rotation='270'], [data-editor-rotation='90']),
+      .annotationEditorLayer[data-main-rotation='270']
+        :is([data-editor-rotation='180'], [data-editor-rotation='0'])
+    )
+    > .resizers
+    > .resizer
+),
 .bottomMiddle:is(
-    :is(
-        .annotationEditorLayer[data-main-rotation='0']
-          :is([data-editor-rotation='90'], [data-editor-rotation='270']),
-        .annotationEditorLayer[data-main-rotation='90']
-          :is([data-editor-rotation='0'], [data-editor-rotation='180']),
-        .annotationEditorLayer[data-main-rotation='180']
-          :is([data-editor-rotation='270'], [data-editor-rotation='90']),
-        .annotationEditorLayer[data-main-rotation='270']
-          :is([data-editor-rotation='180'], [data-editor-rotation='0'])
-      )
-      > .resizers
-      > .resizer
-  ) {
+  :is(
+      .annotationEditorLayer[data-main-rotation='0']
+        :is([data-editor-rotation='90'], [data-editor-rotation='270']),
+      .annotationEditorLayer[data-main-rotation='90']
+        :is([data-editor-rotation='0'], [data-editor-rotation='180']),
+      .annotationEditorLayer[data-main-rotation='180']
+        :is([data-editor-rotation='270'], [data-editor-rotation='90']),
+      .annotationEditorLayer[data-main-rotation='270']
+        :is([data-editor-rotation='180'], [data-editor-rotation='0'])
+    )
+    > .resizers
+    > .resizer
+) {
   cursor: ew-resize;
 }
 
 .topRight:is(
-    :is(
-        .annotationEditorLayer[data-main-rotation='0']
-          :is([data-editor-rotation='90'], [data-editor-rotation='270']),
-        .annotationEditorLayer[data-main-rotation='90']
-          :is([data-editor-rotation='0'], [data-editor-rotation='180']),
-        .annotationEditorLayer[data-main-rotation='180']
-          :is([data-editor-rotation='270'], [data-editor-rotation='90']),
-        .annotationEditorLayer[data-main-rotation='270']
-          :is([data-editor-rotation='180'], [data-editor-rotation='0'])
-      )
-      > .resizers
-      > .resizer
-  ),
+  :is(
+      .annotationEditorLayer[data-main-rotation='0']
+        :is([data-editor-rotation='90'], [data-editor-rotation='270']),
+      .annotationEditorLayer[data-main-rotation='90']
+        :is([data-editor-rotation='0'], [data-editor-rotation='180']),
+      .annotationEditorLayer[data-main-rotation='180']
+        :is([data-editor-rotation='270'], [data-editor-rotation='90']),
+      .annotationEditorLayer[data-main-rotation='270']
+        :is([data-editor-rotation='180'], [data-editor-rotation='0'])
+    )
+    > .resizers
+    > .resizer
+),
 .bottomLeft:is(
-    :is(
-        .annotationEditorLayer[data-main-rotation='0']
-          :is([data-editor-rotation='90'], [data-editor-rotation='270']),
-        .annotationEditorLayer[data-main-rotation='90']
-          :is([data-editor-rotation='0'], [data-editor-rotation='180']),
-        .annotationEditorLayer[data-main-rotation='180']
-          :is([data-editor-rotation='270'], [data-editor-rotation='90']),
-        .annotationEditorLayer[data-main-rotation='270']
-          :is([data-editor-rotation='180'], [data-editor-rotation='0'])
-      )
-      > .resizers
-      > .resizer
-  ) {
+  :is(
+      .annotationEditorLayer[data-main-rotation='0']
+        :is([data-editor-rotation='90'], [data-editor-rotation='270']),
+      .annotationEditorLayer[data-main-rotation='90']
+        :is([data-editor-rotation='0'], [data-editor-rotation='180']),
+      .annotationEditorLayer[data-main-rotation='180']
+        :is([data-editor-rotation='270'], [data-editor-rotation='90']),
+      .annotationEditorLayer[data-main-rotation='270']
+        :is([data-editor-rotation='180'], [data-editor-rotation='0'])
+    )
+    > .resizers
+    > .resizer
+) {
   cursor: nwse-resize;
 }
 
 .middleRight:is(
-    :is(
-        .annotationEditorLayer[data-main-rotation='0']
-          :is([data-editor-rotation='90'], [data-editor-rotation='270']),
-        .annotationEditorLayer[data-main-rotation='90']
-          :is([data-editor-rotation='0'], [data-editor-rotation='180']),
-        .annotationEditorLayer[data-main-rotation='180']
-          :is([data-editor-rotation='270'], [data-editor-rotation='90']),
-        .annotationEditorLayer[data-main-rotation='270']
-          :is([data-editor-rotation='180'], [data-editor-rotation='0'])
-      )
-      > .resizers
-      > .resizer
-  ),
+  :is(
+      .annotationEditorLayer[data-main-rotation='0']
+        :is([data-editor-rotation='90'], [data-editor-rotation='270']),
+      .annotationEditorLayer[data-main-rotation='90']
+        :is([data-editor-rotation='0'], [data-editor-rotation='180']),
+      .annotationEditorLayer[data-main-rotation='180']
+        :is([data-editor-rotation='270'], [data-editor-rotation='90']),
+      .annotationEditorLayer[data-main-rotation='270']
+        :is([data-editor-rotation='180'], [data-editor-rotation='0'])
+    )
+    > .resizers
+    > .resizer
+),
 .middleLeft:is(
-    :is(
-        .annotationEditorLayer[data-main-rotation='0']
-          :is([data-editor-rotation='90'], [data-editor-rotation='270']),
-        .annotationEditorLayer[data-main-rotation='90']
-          :is([data-editor-rotation='0'], [data-editor-rotation='180']),
-        .annotationEditorLayer[data-main-rotation='180']
-          :is([data-editor-rotation='270'], [data-editor-rotation='90']),
-        .annotationEditorLayer[data-main-rotation='270']
-          :is([data-editor-rotation='180'], [data-editor-rotation='0'])
-      )
-      > .resizers
-      > .resizer
-  ) {
+  :is(
+      .annotationEditorLayer[data-main-rotation='0']
+        :is([data-editor-rotation='90'], [data-editor-rotation='270']),
+      .annotationEditorLayer[data-main-rotation='90']
+        :is([data-editor-rotation='0'], [data-editor-rotation='180']),
+      .annotationEditorLayer[data-main-rotation='180']
+        :is([data-editor-rotation='270'], [data-editor-rotation='90']),
+      .annotationEditorLayer[data-main-rotation='270']
+        :is([data-editor-rotation='180'], [data-editor-rotation='0'])
+    )
+    > .resizers
+    > .resizer
+) {
   cursor: ns-resize;
 }
 
@@ -3681,28 +3657,28 @@
 }
 
 :is(
-    :is(
-        :is(
-            :is(:is(.dialog.newAltText #newAltTextContainer) #mainContent)
-              #descriptionInstruction
-          )
-          #newAltTextDescriptionContainer
-      )
-      textarea
-  )::-moz-placeholder {
+  :is(
+      :is(
+          :is(:is(.dialog.newAltText #newAltTextContainer) #mainContent)
+            #descriptionInstruction
+        )
+        #newAltTextDescriptionContainer
+    )
+    textarea
+)::-moz-placeholder {
   color: var(--text-secondary-color);
 }
 
 :is(
-    :is(
-        :is(
-            :is(:is(.dialog.newAltText #newAltTextContainer) #mainContent)
-              #descriptionInstruction
-          )
-          #newAltTextDescriptionContainer
-      )
-      textarea
-  )::placeholder {
+  :is(
+      :is(
+          :is(:is(.dialog.newAltText #newAltTextContainer) #mainContent)
+            #descriptionInstruction
+        )
+        #newAltTextDescriptionContainer
+    )
+    textarea
+)::placeholder {
   color: var(--text-secondary-color);
 }
 
@@ -3782,12 +3758,12 @@
 }
 
 :is(
-    :is(
-        :is(:is(.dialog.newAltText #newAltTextContainer) #mainContent)
-          #descriptionInstruction
-      )
-      #newAltTextDisclaimer
-  )::before {
+  :is(
+      :is(:is(.dialog.newAltText #newAltTextContainer) #mainContent)
+        #descriptionInstruction
+    )
+    #newAltTextDisclaimer
+)::before {
   content: '';
   display: inline-block;
   width: 17px;
@@ -3809,9 +3785,9 @@
 }
 
 :is(
-    :is(:is(.dialog.newAltText #newAltTextContainer) #mainContent)
-      #newAltTextDownloadModel
-  )::before {
+  :is(:is(.dialog.newAltText #newAltTextContainer) #mainContent)
+    #newAltTextDownloadModel
+)::before {
   content: '';
   display: inline-block;
   width: 16px;
@@ -3962,9 +3938,9 @@
 }
 
 :is(
-    :is(:is(:is(.annotationEditorLayer .highlightEditor) .editToolbar) .buttons)
-      .colorPicker
-  )::after {
+  :is(:is(:is(.annotationEditorLayer .highlightEditor) .editToolbar) .buttons)
+    .colorPicker
+)::after {
   content: '';
   -webkit-mask-image: var(--editor-toolbar-colorpicker-arrow-image);
   mask-image: var(--editor-toolbar-colorpicker-arrow-image);
@@ -3986,9 +3962,9 @@
 }
 
 :is(
-    :is(:is(:is(.annotationEditorLayer .highlightEditor) .editToolbar) .buttons)
-      .colorPicker
-  ):has(.dropdown:not(.hidden)) {
+  :is(:is(:is(.annotationEditorLayer .highlightEditor) .editToolbar) .buttons)
+    .colorPicker
+):has(.dropdown:not(.hidden)) {
   background-color: var(--editor-toolbar-hover-bg-color);
 }
 
@@ -4041,18 +4017,18 @@
 }
 
 :is(
-    :is(
-        :is(
-            :is(
-                :is(:is(.annotationEditorLayer .highlightEditor) .editToolbar)
-                  .buttons
-              )
-              .colorPicker
-          )
-          .dropdown
-      )
-      button
-  ):is(:active, :focus-visible) {
+  :is(
+      :is(
+          :is(
+              :is(:is(.annotationEditorLayer .highlightEditor) .editToolbar)
+                .buttons
+            )
+            .colorPicker
+        )
+        .dropdown
+    )
+    button
+):is(:active, :focus-visible) {
   outline: none;
 }
 
@@ -4151,8 +4127,8 @@
 }
 
 :is(
-    :is(:is(#highlightParamsToolbarContainer .colorPicker) .dropdown) button
-  ):is(:active, :focus-visible) {
+  :is(:is(#highlightParamsToolbarContainer .colorPicker) .dropdown) button
+):is(:active, :focus-visible) {
   outline: none;
 }
 
@@ -4226,13 +4202,13 @@
 }
 
 :is(
-    :is(#highlightParamsToolbarContainer #editorHighlightThickness)
-      .thicknessPicker
-  )::before,
+  :is(#highlightParamsToolbarContainer #editorHighlightThickness)
+    .thicknessPicker
+)::before,
 :is(
-    :is(#highlightParamsToolbarContainer #editorHighlightThickness)
-      .thicknessPicker
-  )::after {
+  :is(#highlightParamsToolbarContainer #editorHighlightThickness)
+    .thicknessPicker
+)::after {
   content: '';
   width: 8px;
   aspect-ratio: 1;
@@ -4242,9 +4218,9 @@
 }
 
 :is(
-    :is(#highlightParamsToolbarContainer #editorHighlightThickness)
-      .thicknessPicker
-  )::after {
+  :is(#highlightParamsToolbarContainer #editorHighlightThickness)
+    .thicknessPicker
+)::after {
   width: 24px;
 }
 
@@ -5777,46 +5753,46 @@ dialog :link {
 }
 
 :is(
-    :is(
-        :is(.toolbarButtonWithContainer .editorParamsToolbar)
-          .editorParamsToolbarContainer
-      )
-      .editorParamsSlider
-  )::-moz-range-progress {
+  :is(
+      :is(.toolbarButtonWithContainer .editorParamsToolbar)
+        .editorParamsToolbarContainer
+    )
+    .editorParamsSlider
+)::-moz-range-progress {
   background-color: black;
 }
 
 :is(
-    :is(
-        :is(.toolbarButtonWithContainer .editorParamsToolbar)
-          .editorParamsToolbarContainer
-      )
-      .editorParamsSlider
-  )::-webkit-slider-runnable-track,
+  :is(
+      :is(.toolbarButtonWithContainer .editorParamsToolbar)
+        .editorParamsToolbarContainer
+    )
+    .editorParamsSlider
+)::-webkit-slider-runnable-track,
 :is(
-    :is(
-        :is(.toolbarButtonWithContainer .editorParamsToolbar)
-          .editorParamsToolbarContainer
-      )
-      .editorParamsSlider
-  )::-moz-range-track {
+  :is(
+      :is(.toolbarButtonWithContainer .editorParamsToolbar)
+        .editorParamsToolbarContainer
+    )
+    .editorParamsSlider
+)::-moz-range-track {
   background-color: black;
 }
 
 :is(
-    :is(
-        :is(.toolbarButtonWithContainer .editorParamsToolbar)
-          .editorParamsToolbarContainer
-      )
-      .editorParamsSlider
-  )::-webkit-slider-thumb,
+  :is(
+      :is(.toolbarButtonWithContainer .editorParamsToolbar)
+        .editorParamsToolbarContainer
+    )
+    .editorParamsSlider
+)::-webkit-slider-thumb,
 :is(
-    :is(
-        :is(.toolbarButtonWithContainer .editorParamsToolbar)
-          .editorParamsToolbarContainer
-      )
-      .editorParamsSlider
-  )::-moz-range-thumb {
+  :is(
+      :is(.toolbarButtonWithContainer .editorParamsToolbar)
+        .editorParamsToolbarContainer
+    )
+    .editorParamsSlider
+)::-moz-range-thumb {
   background-color: white;
 }
 
@@ -6011,8 +5987,8 @@ dialog :link {
 }
 
 :is(#findbar #findbarMessageContainer):has(
-    > :is(#findResultsCount, #findMsg):not(:empty)
-  ) {
+  > :is(#findResultsCount, #findMsg):not(:empty)
+) {
   display: inline flex;
 }
 

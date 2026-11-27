@@ -83,27 +83,24 @@ export function ElectronPersistentStorageHydration() {
         reticulumHighlightOwnMessagesPayload,
         reticulumChatTextScalePayload,
         reticulumLegacyThreadsEnabledPayload,
-      ] =
-        await Promise.all([
-          appStorage.get(
-            ELECTRON_PERSISTENT_ATOM_KEYS.customWsSubscriptionsByAddress
-          ),
-          appStorage.get(ELECTRON_PERSISTENT_ATOM_KEYS.notificationSeenInApp),
-          appStorage.get(
-            ELECTRON_PERSISTENT_ATOM_KEYS.seenAllNotificationsByAddress
-          ),
-          appStorage.get(ELECTRON_PERSISTENT_ATOM_KEYS.dmFriends),
-          appStorage.get(ELECTRON_PERSISTENT_ATOM_KEYS.disableDevLogs),
-          appStorage.get(
-            ELECTRON_PERSISTENT_ATOM_KEYS.reticulumHighlightOwnMessages
-          ),
-          appStorage.get(
-            ELECTRON_PERSISTENT_ATOM_KEYS.reticulumChatTextScale
-          ),
-          appStorage.get(
-            ELECTRON_PERSISTENT_ATOM_KEYS.reticulumLegacyThreadsEnabled
-          ),
-        ]);
+      ] = await Promise.all([
+        appStorage.get(
+          ELECTRON_PERSISTENT_ATOM_KEYS.customWsSubscriptionsByAddress
+        ),
+        appStorage.get(ELECTRON_PERSISTENT_ATOM_KEYS.notificationSeenInApp),
+        appStorage.get(
+          ELECTRON_PERSISTENT_ATOM_KEYS.seenAllNotificationsByAddress
+        ),
+        appStorage.get(ELECTRON_PERSISTENT_ATOM_KEYS.dmFriends),
+        appStorage.get(ELECTRON_PERSISTENT_ATOM_KEYS.disableDevLogs),
+        appStorage.get(
+          ELECTRON_PERSISTENT_ATOM_KEYS.reticulumHighlightOwnMessages
+        ),
+        appStorage.get(ELECTRON_PERSISTENT_ATOM_KEYS.reticulumChatTextScale),
+        appStorage.get(
+          ELECTRON_PERSISTENT_ATOM_KEYS.reticulumLegacyThreadsEnabled
+        ),
+      ]);
       if (subsPayload != null) {
         if (Array.isArray(subsPayload)) {
           setCustomSubscriptionsByAddress({ __legacy: subsPayload });
@@ -143,9 +140,7 @@ export function ElectronPersistentStorageHydration() {
         setDisableDevLogs(disableDevLogsPayload);
       }
       if (typeof reticulumHighlightOwnMessagesPayload === 'boolean') {
-        setReticulumHighlightOwnMessages(
-          reticulumHighlightOwnMessagesPayload
-        );
+        setReticulumHighlightOwnMessages(reticulumHighlightOwnMessagesPayload);
       }
       if (
         reticulumChatTextScalePayload === 'default' ||

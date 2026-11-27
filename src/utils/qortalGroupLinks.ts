@@ -47,7 +47,9 @@ export function buildQortalGroupCalendarLink(
   eventId: string
 ): string {
   const parsedGroupId = readGroupId(String(groupId));
-  const normalizedEventId = String(eventId || '').trim().toLowerCase();
+  const normalizedEventId = String(eventId || '')
+    .trim()
+    .toLowerCase();
   if (
     !parsedGroupId ||
     !new RegExp(`^${EVENT_ID_PATTERN}$`, 'i').test(normalizedEventId)

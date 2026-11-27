@@ -431,14 +431,12 @@ export const DesktopSideBar = ({
   };
   useEffect(() => {
     if (alwaysOpen || isArc) emitOverlayState(false);
-    // Only when the mode or the layout changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Only when the mode or the layout changes: the rest come through refs.
   }, [alwaysOpen, isArc]);
   useEffect(() => {
     // Resized while over the content: the tab strip moves aside as far.
     if (isVisible) emitOverlayState(true);
-    // Only when the width changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Only when the width changes: isVisible comes through a ref.
   }, [panelWidth]);
   useEffect(() => {
     // A taller or shorter handle keeps its middle where it was put.
@@ -538,7 +536,6 @@ export const DesktopSideBar = ({
     window.addEventListener('pointermove', onPointerMove);
     return () => window.removeEventListener('pointermove', onPointerMove);
     // hideSidebar works through refs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVisible, alwaysOpen]);
 
   useEffect(() => {

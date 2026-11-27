@@ -39,6 +39,16 @@ dependent Blobs there (`slice`, `new Blob`, multipart construction) triggered
 read-only reference accessor is restricted to FileReader and the PDF viewer.
 Never pass its result into multipart construction or slice it in Hub.
 
+`SHOW_PDF_READER` does not require the declared type to be exactly
+`application/pdf`. Q-Apps often build a Blob with no type, receive a QDN
+response without a useful `Content-Type`, or hand over the metadata separately.
+The check normalizes case and MIME parameters, accepts the alternative PDF
+types (`application/x-pdf`, `text/pdf`, …), and also accepts an empty or generic
+(`application/octet-stream`) declaration, or a `.pdf` file name. Only a
+declaration that positively rules out PDF — such as `image/png` — is rejected
+when no file name identifies it. PDF.js still validates the actual bytes before
+rendering.
+
 Hub recognizes internal file capabilities by object identity in a private
 WeakSet, never by Q-App-supplied marker properties. Internal background dispatch
 preserves those capabilities within the trusted Hub document instead of

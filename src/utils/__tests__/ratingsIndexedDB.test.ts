@@ -110,10 +110,14 @@ describe('ratingsIndexedDB', () => {
     const { saveRatingsCacheToDB, loadRatingsCacheFromDB } =
       await import('../ratingsIndexedDB');
 
-    saveRatingsCacheToDB(new Map([['app-q-tube', makeEntry({ totalVotes: 3 })]]));
+    saveRatingsCacheToDB(
+      new Map([['app-q-tube', makeEntry({ totalVotes: 3 })]])
+    );
     await vi.runAllTimersAsync();
 
-    saveRatingsCacheToDB(new Map([['app-q-tube', makeEntry({ totalVotes: 9 })]]));
+    saveRatingsCacheToDB(
+      new Map([['app-q-tube', makeEntry({ totalVotes: 9 })]])
+    );
     await vi.runAllTimersAsync();
 
     vi.useRealTimers();

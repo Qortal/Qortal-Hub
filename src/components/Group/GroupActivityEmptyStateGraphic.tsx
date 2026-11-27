@@ -168,7 +168,12 @@ const QortalRequestBubbleSvg = ({
         fill="rgba(132, 175, 240, 0.05)"
         filter={`url(#${haloFilterId})`}
       />
-      <circle cx={centerX} cy={centerY} r="30.4" fill={`url(#${requesterFillId})`} />
+      <circle
+        cx={centerX}
+        cy={centerY}
+        r="30.4"
+        fill={`url(#${requesterFillId})`}
+      />
       <circle
         cx={centerX}
         cy={centerY}
@@ -176,7 +181,12 @@ const QortalRequestBubbleSvg = ({
         stroke={`url(#${requesterRingId})`}
         strokeWidth="1.35"
       />
-      <circle cx={centerX} cy={centerY} r="11.4" fill="rgba(196, 218, 251, 0.05)" />
+      <circle
+        cx={centerX}
+        cy={centerY}
+        r="11.4"
+        fill="rgba(196, 218, 251, 0.05)"
+      />
       <g
         transform={`translate(${centerX} ${centerY - 0.8}) scale(${(
           0.87 * logoScale
@@ -322,27 +332,69 @@ export const GroupActivityEmptyStateGraphic = ({
         role="presentation"
       >
         <defs>
-          <filter id={ambientFilterId} x="44" y="44" width="232" height="74" filterUnits="userSpaceOnUse">
+          <filter
+            id={ambientFilterId}
+            x="44"
+            y="44"
+            width="232"
+            height="74"
+            filterUnits="userSpaceOnUse"
+          >
             <feGaussianBlur stdDeviation="10" />
           </filter>
-          <filter id={haloFilterId} x="-20" y="-20" width="220" height="220" filterUnits="userSpaceOnUse">
+          <filter
+            id={haloFilterId}
+            x="-20"
+            y="-20"
+            width="220"
+            height="220"
+            filterUnits="userSpaceOnUse"
+          >
             <feGaussianBlur stdDeviation="3.8" />
           </filter>
-          <radialGradient id={fieldGradientId} cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(160 80) rotate(90) scale(28 96)">
+          <radialGradient
+            id={fieldGradientId}
+            cx="0"
+            cy="0"
+            r="1"
+            gradientUnits="userSpaceOnUse"
+            gradientTransform="translate(160 80) rotate(90) scale(28 96)"
+          >
             <stop stopColor="rgba(132, 175, 240, 0.06)" />
             <stop offset="0.46" stopColor="rgba(132, 175, 240, 0.022)" />
             <stop offset="1" stopColor="rgba(132, 175, 240, 0)" />
           </radialGradient>
-          <radialGradient id={groupFillId} cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(244 80) rotate(90) scale(31)">
+          <radialGradient
+            id={groupFillId}
+            cx="0"
+            cy="0"
+            r="1"
+            gradientUnits="userSpaceOnUse"
+            gradientTransform="translate(244 80) rotate(90) scale(31)"
+          >
             <stop stopColor="#536E95" />
             <stop offset="0.48" stopColor="#3A5072" />
             <stop offset="1" stopColor="#2A3A52" />
           </radialGradient>
-          <linearGradient id={groupRingId} x1="217" y1="52" x2="271" y2="106" gradientUnits="userSpaceOnUse">
+          <linearGradient
+            id={groupRingId}
+            x1="217"
+            y1="52"
+            x2="271"
+            y2="106"
+            gradientUnits="userSpaceOnUse"
+          >
             <stop stopColor="rgba(176, 206, 250, 0.2)" />
             <stop offset="1" stopColor="rgba(176, 206, 250, 0.08)" />
           </linearGradient>
-          <linearGradient id={bridgeFadeGradientId} x1={bridgeMinX} y1="80" x2={bridgeMaxX} y2="80" gradientUnits="userSpaceOnUse">
+          <linearGradient
+            id={bridgeFadeGradientId}
+            x1={bridgeMinX}
+            y1="80"
+            x2={bridgeMaxX}
+            y2="80"
+            gradientUnits="userSpaceOnUse"
+          >
             {isInviteVariant ? (
               <>
                 <stop offset="0" stopColor="rgba(255, 255, 255, 0)" />
@@ -359,8 +411,21 @@ export const GroupActivityEmptyStateGraphic = ({
               </>
             )}
           </linearGradient>
-          <mask id={bridgeFadeMaskId} x={bridgeMinX} y="72" width={bridgeMaxX - bridgeMinX} height="16" maskUnits="userSpaceOnUse">
-            <rect x={bridgeMinX} y="72" width={bridgeMaxX - bridgeMinX} height="16" fill={`url(#${bridgeFadeGradientId})`} />
+          <mask
+            id={bridgeFadeMaskId}
+            x={bridgeMinX}
+            y="72"
+            width={bridgeMaxX - bridgeMinX}
+            height="16"
+            maskUnits="userSpaceOnUse"
+          >
+            <rect
+              x={bridgeMinX}
+              y="72"
+              width={bridgeMaxX - bridgeMinX}
+              height="16"
+              fill={`url(#${bridgeFadeGradientId})`}
+            />
           </mask>
         </defs>
 
@@ -406,12 +471,34 @@ export const GroupActivityEmptyStateGraphic = ({
         />
 
         <g className="group-empty-node group-empty-node--group">
-          <circle cx="244" cy="80" r="33.2" fill="rgba(132, 175, 240, 0.05)" filter={`url(#${haloFilterId})`} />
+          <circle
+            cx="244"
+            cy="80"
+            r="33.2"
+            fill="rgba(132, 175, 240, 0.05)"
+            filter={`url(#${haloFilterId})`}
+          />
           <circle cx="244" cy="80" r="30.4" fill={`url(#${groupFillId})`} />
-          <circle cx="244" cy="80" r="29.2" stroke={`url(#${groupRingId})`} strokeWidth="1.35" />
-          <circle cx="234.8" cy="79.5" r="4.7" fill="rgba(196, 218, 251, 0.18)" />
+          <circle
+            cx="244"
+            cy="80"
+            r="29.2"
+            stroke={`url(#${groupRingId})`}
+            strokeWidth="1.35"
+          />
+          <circle
+            cx="234.8"
+            cy="79.5"
+            r="4.7"
+            fill="rgba(196, 218, 251, 0.18)"
+          />
           <circle cx="244" cy="74.3" r="5.2" fill="rgba(196, 218, 251, 0.22)" />
-          <circle cx="253.2" cy="79.5" r="4.7" fill="rgba(196, 218, 251, 0.18)" />
+          <circle
+            cx="253.2"
+            cy="79.5"
+            r="4.7"
+            fill="rgba(196, 218, 251, 0.18)"
+          />
           <path
             d="M232.4 90.8C235 84.4 239.6 81.6 244 81.6C248.4 81.6 253 84.4 255.6 90.8"
             stroke="rgba(196, 218, 251, 0.14)"
@@ -431,8 +518,18 @@ export const GroupActivityEmptyStateGraphic = ({
                 stroke="rgba(132, 175, 240, 0.18)"
                 strokeWidth="1.4"
               />
-              <circle cx="208.6" cy="56.2" r="0.92" fill="rgba(132, 175, 240, 0.19)" />
-              <circle cx="214.7" cy="56.2" r="0.92" fill="rgba(132, 175, 240, 0.19)" />
+              <circle
+                cx="208.6"
+                cy="56.2"
+                r="0.92"
+                fill="rgba(132, 175, 240, 0.19)"
+              />
+              <circle
+                cx="214.7"
+                cy="56.2"
+                r="0.92"
+                fill="rgba(132, 175, 240, 0.19)"
+              />
               <path
                 d="M208.2 60.1C209.5 61.6 210.6 62.2 211.7 62.2C212.8 62.2 214 61.6 215.2 60.1"
                 stroke="rgba(132, 175, 240, 0.2)"
@@ -452,7 +549,12 @@ export const GroupActivityEmptyStateGraphic = ({
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
-              <circle cx="211.6" cy="72.7" r="1.95" fill="rgba(132, 175, 240, 0.26)" />
+              <circle
+                cx="211.6"
+                cy="72.7"
+                r="1.95"
+                fill="rgba(132, 175, 240, 0.26)"
+              />
             </g>
           </g>
         )}

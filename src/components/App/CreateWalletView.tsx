@@ -12,7 +12,12 @@ import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import { PasswordField, ErrorText } from '../index';
-import { AuthButton, AuthScreen, AuthSectionLabel, authPasswordFieldSx } from '../Auth/AuthShell';
+import {
+  AuthButton,
+  AuthScreen,
+  AuthSectionLabel,
+  authPasswordFieldSx,
+} from '../Auth/AuthShell';
 
 type CreateWalletViewProps = {
   creationStep: number;

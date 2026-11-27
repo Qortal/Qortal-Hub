@@ -1,7 +1,6 @@
 export const AUTO_LOCK_TIMEOUT_OPTIONS = [0, 10, 30, 60, 180] as const;
 
-export type AutoLockTimeoutMinutes =
-  (typeof AUTO_LOCK_TIMEOUT_OPTIONS)[number];
+export type AutoLockTimeoutMinutes = (typeof AUTO_LOCK_TIMEOUT_OPTIONS)[number];
 
 export const DEFAULT_AUTO_LOCK_TIMEOUT_MINUTES: AutoLockTimeoutMinutes = 30;
 
@@ -33,7 +32,6 @@ export function isAutoLockDue(
   timeoutMinutes: AutoLockTimeoutMinutes
 ): boolean {
   return (
-    timeoutMinutes > 0 &&
-    now - lastActivityAt >= timeoutMinutes * 60 * 1_000
+    timeoutMinutes > 0 && now - lastActivityAt >= timeoutMinutes * 60 * 1_000
   );
 }

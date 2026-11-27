@@ -65,7 +65,6 @@ export const useStableRatingOrder = <T extends RatedApp>(
     storedRef.current = { namesKey, orderKeys: sorted.map(appKey) };
     return sorted;
     // `sort` is a module function: it never changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apps, ratingsMap]);
 };
 

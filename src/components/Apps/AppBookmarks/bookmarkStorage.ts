@@ -135,7 +135,8 @@ export async function loadBookmarksForAddress(
   return {
     folders: Array.isArray(data?.folders) ? data.folders : [],
     bookmarks: Array.isArray(data?.bookmarks) ? data.bookmarks : [],
-    updatedAt: typeof data?.updatedAt === 'number' ? data.updatedAt : Date.now(),
+    updatedAt:
+      typeof data?.updatedAt === 'number' ? data.updatedAt : Date.now(),
   };
 }
 
@@ -170,7 +171,8 @@ export function upsertBookmark(
 ): AppBookmarksForAddress {
   const key = getBookmarkKey(bookmark);
   const index = data.bookmarks.findIndex(
-    (existing) => getBookmarkKey(existing) === key || existing.id === bookmark.id
+    (existing) =>
+      getBookmarkKey(existing) === key || existing.id === bookmark.id
   );
   const bookmarks = [...data.bookmarks];
 
@@ -226,9 +228,10 @@ export function removeFolder(
     ...data,
     folders: data.folders.filter((folder) => folder.id !== folderId),
     bookmarks: data.bookmarks.map((bookmark) =>
-      bookmark.folderId === folderId ? { ...bookmark, folderId: null } : bookmark
+      bookmark.folderId === folderId
+        ? { ...bookmark, folderId: null }
+        : bookmark
     ),
     updatedAt: Date.now(),
   };
 }
-

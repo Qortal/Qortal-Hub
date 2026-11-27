@@ -616,7 +616,6 @@ export const AppReviewsSection = ({
           b.review.created - a.review.created
     );
     // ratingFor reads owners and votes, both in the deps below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threads, sort, owners, ratingByAddress, myRating]);
 
   const visibleCount = threads.filter(

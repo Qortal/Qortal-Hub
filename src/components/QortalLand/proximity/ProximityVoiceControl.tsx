@@ -183,7 +183,9 @@ export function ProximityVoiceControl(props: Props) {
     if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
     if (focusAddress) {
       window.setTimeout(() => {
-        const focusKey = peers.find((peer) => peer.address === focusAddress)?.key || focusAddress;
+        const focusKey =
+          peers.find((peer) => peer.address === focusAddress)?.key ||
+          focusAddress;
         peerRowRefs.current
           .get(focusKey)
           ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -257,11 +259,12 @@ export function ProximityVoiceControl(props: Props) {
     }
   };
 
-  const voiceTooltip = hasVoiceSession || nearbyVoiceCount > 0
-    ? `Proximity Voice\n${nearbyVoiceCount} player${
-        nearbyVoiceCount === 1 ? '' : 's'
-      } nearby`
-    : 'Proximity Voice\nVoice is off';
+  const voiceTooltip =
+    hasVoiceSession || nearbyVoiceCount > 0
+      ? `Proximity Voice\n${nearbyVoiceCount} player${
+          nearbyVoiceCount === 1 ? '' : 's'
+        } nearby`
+      : 'Proximity Voice\nVoice is off';
 
   return (
     <>
@@ -271,10 +274,7 @@ export function ProximityVoiceControl(props: Props) {
         title={
           <Box>
             {voiceTooltip.split('\n').map((line) => (
-              <Typography
-                key={line}
-                sx={{ fontSize: 11.5, lineHeight: 1.45 }}
-              >
+              <Typography key={line} sx={{ fontSize: 11.5, lineHeight: 1.45 }}>
                 {line}
               </Typography>
             ))}
@@ -468,8 +468,7 @@ export function ProximityVoiceControl(props: Props) {
                   height: 40,
                   textTransform: 'none',
                   '&:hover': {
-                    background:
-                      'linear-gradient(100deg, #20d9e9, #48f7f5)',
+                    background: 'linear-gradient(100deg, #20d9e9, #48f7f5)',
                   },
                 }}
               >
@@ -481,11 +480,7 @@ export function ProximityVoiceControl(props: Props) {
                 fullWidth
                 onClick={() => void toggleMute().catch(() => {})}
                 startIcon={
-                  pausedByUser ? (
-                    <MicNoneRoundedIcon />
-                  ) : (
-                    <MicOffRoundedIcon />
-                  )
+                  pausedByUser ? <MicNoneRoundedIcon /> : <MicOffRoundedIcon />
                 }
                 sx={{
                   border: '1px solid rgba(188, 204, 226, 0.26)',
@@ -690,8 +685,7 @@ export function ProximityVoiceControl(props: Props) {
                           focusedAddress === peer.address
                             ? 'rgba(44, 248, 255, 0.09)'
                             : 'transparent',
-                        borderBottom:
-                          '1px solid rgba(255, 255, 255, 0.065)',
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.065)',
                         borderRadius: '8px',
                         display: 'grid',
                         gap: 1,
@@ -792,11 +786,7 @@ export function ProximityVoiceControl(props: Props) {
                             peer.muted ? `Unmute ${name}` : `Mute ${name}`
                           }
                           onClick={() =>
-                            onPeerPolicy(
-                              peer.key,
-                              !peer.muted,
-                              peer.volume
-                            )
+                            onPeerPolicy(peer.key, !peer.muted, peer.volume)
                           }
                           size="small"
                           sx={{

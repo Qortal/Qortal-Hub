@@ -31,6 +31,7 @@
     "scroll_bottom": "滚动到底部",
     "scroll_unread_messages": "滚动到未读消息",
     "select_group": "选择群组",
+    "update_group": "update group",
     "visit_q_mintership": "访问 Q-Mintership"
   },
   "activity_dashboard": {
@@ -61,16 +62,19 @@
     "approval_single": "一位",
     "approval_threshold_description": "批准群组决定所需的管理员比例。",
     "approval_threshold_label": "批准阈值",
+    "button_update": "Update Group",
     "creating": "正在创建...",
     "description_create": "取个名字，描述你的群组，然后开始吧。",
     "description_invites": "查看你收到的邀请。",
     "description_placeholder": "这个群组是关于什么的？",
     "description_too_long": "描述不能超过 {{max}} 个字符",
+    "description_update": "Modify group settings and update configuration.",
     "max_delay_label": "最长批准延迟",
     "min_delay_label": "最短批准延迟",
     "modes_aria": "群组管理模式",
     "name_hint": "使用清晰、易于识别的名称。",
-    "name_placeholder": "例如：Qortal 开发者"
+    "name_placeholder": "例如：Qortal 开发者",
+    "updating": "Updating..."
   },
   "admin_space": {
     "ask_description": "This key encrypts content visible only to admins.",
@@ -209,13 +213,22 @@
     "create_category": "创建分类",
     "create_channel": "创建频道",
     "hidden_users": "已隐藏的用户",
+    "hide_muted_channels": "Hide Muted Channels",
     "invite_link_copied": "已复制邀请链接",
     "invite_link_copy_failed": "无法复制邀请链接",
     "leave_group": "退出群组",
+    "mark_all_groups_read": "mark all groups as read",
     "mark_all_read": "全部标为已读",
     "mark_as_read": "标记为已读",
+    "mute_channel": "Mute Channel",
+    "mute_group": "Mute Group",
     "mute_push_notifications": "静音推送通知",
-    "unmute_push_notifications": "取消静音推送通知"
+    "mute_section": "Mute Section",
+    "muted_for": "Muted for {{hours}}",
+    "notification_settings": "notification settings",
+    "unmute": "Unmute",
+    "unmute_push_notifications": "取消静音推送通知",
+    "update_group": "Update group"
   },
   "dashboard": {
     "account_overview": "账户概览",
@@ -848,6 +861,9 @@
       "group_member_admin": "已成功设为管理员。更改可能需几分钟生效",
       "group_promotion": "推广发布成功。可能需要几分钟显示",
       "group_remove_member": "已取消管理员身份。更改可能需几分钟生效",
+      "group_update_label": "updated group {{group_name}}: success!",
+      "group_update_name": "updated group {{group_name}}: awaiting confirmation",
+      "group_updated": "successfully updated group. It may take a couple of minutes for the changes to propagate",
       "invitation_cancellation": "邀请已成功取消。更改可能需几分钟生效",
       "invitation_request": "已接受加入请求：等待确认",
       "loading_threads": "正在加载主题，请稍候...",
@@ -890,6 +906,26 @@
     "try_again": "重试",
     "unencrypted": "未加密",
     "verification_failed": "验证失败"
+  },
+  "mute": {
+    "for_15_minutes": "For 15 Minutes",
+    "for_1_hour": "For 1 Hour",
+    "for_24_hours": "For 24 Hours",
+    "for_3_hours": "For 3 Hours",
+    "for_8_hours": "For 8 Hours",
+    "until_i_turn_it_back_on": "Until I turn it back on"
+  },
+  "notification_settings": {
+    "all_messages": "all messages",
+    "all_messages_body": "New message in #{{channelName}}",
+    "all_messages_title": "New message in {{groupName}}",
+    "hide_muted_channels": "Hide Muted Channels",
+    "none": "none",
+    "notify_on_reactions": "Notify on Reactions",
+    "notify_on_replies": "notify on replies",
+    "notify_on_welcome_posts": "notify on welcome posts",
+    "only_mentions": "only @mentions",
+    "suppress_everyone_here": "suppress @everyone and @here"
   },
   "onboarding": {
     "action": {

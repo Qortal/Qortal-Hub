@@ -8,7 +8,13 @@ import {
 } from '../components/Apps/AppPage/appHidden';
 
 // Types
-export type SortOption = 'alphabetical' | 'newest' | 'oldest' | 'highest_rated' | 'most_rated' | 'recently_updated';
+export type SortOption =
+  | 'alphabetical'
+  | 'newest'
+  | 'oldest'
+  | 'highest_rated'
+  | 'most_rated'
+  | 'recently_updated';
 
 export type StatusFilterOption = 'all' | 'installed' | 'not_installed';
 
@@ -102,7 +108,6 @@ type ShownAppPage = { service: string; name: string } | null;
  */
 export const shownAppPageAtom = atom<ShownAppPage>(null as ShownAppPage);
 
-
 // Current tab atom
 export type AppsLibraryTab =
   | 'categories'
@@ -110,6 +115,15 @@ export type AppsLibraryTab =
   | 'my-apps'
   | 'official';
 export const currentAppsTabAtom = atomWithReset<AppsLibraryTab>('official');
+
+// When opening AppPublish from "Update" on a published app card, pass name + service
+export type PublishEditTarget = {
+  name: string;
+  service: 'APP' | 'WEBSITE';
+};
+export const publishEditTargetAtom = atomWithReset<PublishEditTarget | null>(
+  null
+);
 
 // Helper function to filter and sort apps
 export const filterAndSortApps = (
@@ -123,7 +137,14 @@ export const filterAndSortApps = (
     ratingsMap?: Map<string, AppRatingData>;
   }
 ) => {
-  const { sort, category, status, search, installedApps = new Set(), ratingsMap } = options;
+  const {
+    sort,
+    category,
+    status,
+    search,
+    installedApps = new Set(),
+    ratingsMap,
+  } = options;
   // Derive cache key the same way getCacheKey does (service-name, lowercased)
   const getRatingKey = (app: any) =>
     `${(app.service ?? '').toLowerCase()}-${(app.name ?? '').toLowerCase()}`;
@@ -181,8 +202,16 @@ export const filterAndSortApps = (
       break;
     case 'most_rated':
       filtered.sort((a, b) => {
-        const votesA = ratingsMap?.get(getRatingKey(a))?.totalVotes ?? a.totalVotes ?? a.ratingCount ?? 0;
-        const votesB = ratingsMap?.get(getRatingKey(b))?.totalVotes ?? b.totalVotes ?? b.ratingCount ?? 0;
+        const votesA =
+          ratingsMap?.get(getRatingKey(a))?.totalVotes ??
+          a.totalVotes ??
+          a.ratingCount ??
+          0;
+        const votesB =
+          ratingsMap?.get(getRatingKey(b))?.totalVotes ??
+          b.totalVotes ??
+          b.ratingCount ??
+          0;
         return votesB - votesA;
       });
       break;

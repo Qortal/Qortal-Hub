@@ -2,7 +2,12 @@ import { Box } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import Logo1Dark from '../../assets/svgs/Logo1Dark.svg';
 import { Spacer } from '../../common/Spacer';
-import { CustomButton, TextItalic, TextP, TextSpan } from '../../styles/App-styles.ts';
+import {
+  CustomButton,
+  TextItalic,
+  TextP,
+  TextSpan,
+} from '../../styles/App-styles.ts';
 
 type ConnectionRequestScreenProps = {
   hostname?: string;

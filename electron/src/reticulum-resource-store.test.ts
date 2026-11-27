@@ -15,7 +15,9 @@ import {
 } from './reticulum-resource-store';
 
 function tempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'reticulum-resource-store-test-'));
+  return fs.mkdtempSync(
+    path.join(os.tmpdir(), 'reticulum-resource-store-test-')
+  );
 }
 
 function tempStore(): { dir: string; store: ReticulumResourceStore } {
@@ -47,7 +49,9 @@ describe('reticulum resource store', () => {
     expect(getReticulumResourceFreeDiskReserveBytes(10 * gibibyte)).toBe(
       RETICULUM_RESOURCE_MIN_FREE_DISK_BYTES
     );
-    expect(getReticulumResourceFreeDiskReserveBytes(40 * gibibyte)).toBe(2 * gibibyte);
+    expect(getReticulumResourceFreeDiskReserveBytes(40 * gibibyte)).toBe(
+      2 * gibibyte
+    );
     expect(getReticulumResourceFreeDiskReserveBytes(100 * gibibyte)).toBe(
       RETICULUM_RESOURCE_MAX_FREE_DISK_BYTES
     );
@@ -83,7 +87,9 @@ describe('reticulum resource store', () => {
     const assembledPath = store.assembleResource(manifest.fileHash);
     expect(path.basename(assembledPath)).toBe('assembled.enc');
     expect(fs.readFileSync(assembledPath)).toEqual(contents);
-    expect(store.getVerifiedAssembledPath(manifest.fileHash)).toBe(assembledPath);
+    expect(store.getVerifiedAssembledPath(manifest.fileHash)).toBe(
+      assembledPath
+    );
   });
 
   it('imports and verifies a local file through the worker path', async () => {
@@ -92,14 +98,28 @@ describe('reticulum resource store', () => {
     const sourcePath = path.join(dir, 'async-source.bin');
     const contents = Buffer.alloc(2 * 1024 * 1024, 23);
     fs.writeFileSync(sourcePath, contents);
-    vi.spyOn((store as any).workerPool, 'run').mockImplementation(async (input: any) => {
-      if (input.kind === 'hash_file') {
-        return { id: 1, kind: input.kind, ok: true, hash: cryptoHash(contents), durationMs: 1 };
+    vi.spyOn((store as any).workerPool, 'run').mockImplementation(
+      async (input: any) => {
+        if (input.kind === 'hash_file') {
+          return {
+            id: 1,
+            kind: input.kind,
+            ok: true,
+            hash: cryptoHash(contents),
+            durationMs: 1,
+          };
+        }
+        fs.mkdirSync(path.dirname(input.destinationPath), { recursive: true });
+        fs.copyFileSync(input.sourcePath, input.destinationPath);
+        return {
+          id: 2,
+          kind: input.kind,
+          ok: true,
+          hash: cryptoHash(contents),
+          durationMs: 1,
+        };
       }
-      fs.mkdirSync(path.dirname(input.destinationPath), { recursive: true });
-      fs.copyFileSync(input.sourcePath, input.destinationPath);
-      return { id: 2, kind: input.kind, ok: true, hash: cryptoHash(contents), durationMs: 1 };
-    });
+    );
 
     const manifest = await store.importLocalFileAsync({
       sourcePath,
@@ -112,7 +132,9 @@ describe('reticulum resource store', () => {
     });
 
     expect(manifest.fileHash).toBe(cryptoHash(contents));
-    const imported = fs.readFileSync(store.getVerifiedAssembledPath(manifest.fileHash)!);
+    const imported = fs.readFileSync(
+      store.getVerifiedAssembledPath(manifest.fileHash)!
+    );
     expect(imported.length).toBe(contents.length);
     expect(cryptoHash(imported)).toBe(cryptoHash(contents));
   });
@@ -141,10 +163,14 @@ describe('reticulum resource store', () => {
 
     store.readByteRange(manifest.fileHash, 0, contents.length);
 
-    const row = rawDb.prepare(`
+    const row = rawDb
+      .prepare(
+        `
       SELECT last_accessed_at, last_served_at
       FROM reticulum_resources WHERE file_hash = ?
-    `).get(manifest.fileHash) as {
+    `
+      )
+      .get(manifest.fileHash) as {
       last_accessed_at: number | null;
       last_served_at: number | null;
     };
@@ -192,7 +218,9 @@ describe('reticulum resource store', () => {
       locallyAuthored: true,
     });
 
-    expect(store.getManifest(firstManifest.fileHash)?.fileHash).toBe(firstManifest.fileHash);
+    expect(store.getManifest(firstManifest.fileHash)?.fileHash).toBe(
+      firstManifest.fileHash
+    );
     expect(store.listReferences(firstManifest.fileHash)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -210,12 +238,20 @@ describe('reticulum resource store', () => {
       ])
     );
     expect(
-      store.getReferenceManifest(firstManifest.fileHash, 'group', 81, 'event-group-81')
-        ?.metadata?.groupId
+      store.getReferenceManifest(
+        firstManifest.fileHash,
+        'group',
+        81,
+        'event-group-81'
+      )?.metadata?.groupId
     ).toBe(81);
     expect(
-      store.getReferenceManifest(firstManifest.fileHash, 'group', 82, 'event-group-82')
-        ?.metadata?.groupId
+      store.getReferenceManifest(
+        firstManifest.fileHash,
+        'group',
+        82,
+        'event-group-82'
+      )?.metadata?.groupId
     ).toBe(82);
     const assembledPath = store.assembleResource(firstManifest.fileHash);
     expect(path.basename(assembledPath)).toBe('shared.bin');
@@ -278,9 +314,9 @@ describe('reticulum resource store', () => {
     expect(() =>
       store.storeManifest({ ...manifest, sizeBytes: manifest.sizeBytes + 1 })
     ).toThrow(/size conflicts/);
-    expect(() =>
-      store.storeManifest({ ...manifest, encrypted: true })
-    ).toThrow(/encryption conflicts/);
+    expect(() => store.storeManifest({ ...manifest, encrypted: true })).toThrow(
+      /encryption conflicts/
+    );
   });
 
   it('keeps cleanup bookkeeping idempotent across repeated resource updates', () => {
@@ -331,7 +367,11 @@ describe('reticulum resource store', () => {
     const dir = tempDir();
     const dbPath = path.join(dir, 'resources.db');
     const rootDir = path.join(dir, 'resources');
-    const first = new ReticulumResourceStore({ dbPath, rootDir, now: () => 100_000 });
+    const first = new ReticulumResourceStore({
+      dbPath,
+      rootDir,
+      now: () => 100_000,
+    });
     const contents = Buffer.from('existing resource database');
     const manifest: ReticulumResourceManifest = {
       namespace: 'reticulum-group-resource',
@@ -356,7 +396,11 @@ describe('reticulum resource store', () => {
     `);
     first.close();
 
-    const reopened = new ReticulumResourceStore({ dbPath, rootDir, now: () => 100_000 });
+    const reopened = new ReticulumResourceStore({
+      dbPath,
+      rootDir,
+      now: () => 100_000,
+    });
     stores.push(reopened);
 
     expect(() =>
@@ -417,17 +461,25 @@ describe('reticulum resource store', () => {
       encrypted: false,
     });
     const rawDb = (store as unknown as { db: BetterSqliteDatabase }).db;
-    rawDb.prepare(`
+    rawDb
+      .prepare(
+        `
       UPDATE reticulum_resources SET provenance = 'remote_downloaded'
       WHERE file_hash = ?
-    `).run(remoteManifest.fileHash);
+    `
+      )
+      .run(remoteManifest.fileHash);
     const authoredCap = Math.floor(RETICULUM_RESOURCE_MIN_LIMIT_BYTES * 0.2);
-    rawDb.prepare(`
+    rawDb
+      .prepare(
+        `
       UPDATE reticulum_resources SET resident_bytes = ? WHERE file_hash = ?
-    `).run(
-      authoredCap - remoteManifest.sizeBytes + 1,
-      authoredManifest.fileHash
-    );
+    `
+      )
+      .run(
+        authoredCap - remoteManifest.sizeBytes + 1,
+        authoredManifest.fileHash
+      );
 
     expect(() =>
       store.importLocalFile({
@@ -519,17 +571,28 @@ describe('reticulum resource store', () => {
       createdAt: now,
       metadata: { groupId: 716 },
     };
-    store.storeManifest(downloadedManifest, { provenance: 'remote_downloaded' });
-    store.storeByteRange(downloadedManifest.fileHash, 0, contents.length, contents);
+    store.storeManifest(downloadedManifest, {
+      provenance: 'remote_downloaded',
+    });
+    store.storeByteRange(
+      downloadedManifest.fileHash,
+      0,
+      contents.length,
+      contents
+    );
     store.assembleResource(downloadedManifest.fileHash);
 
     await store.cleanupStorage('completed-download-grace');
 
-    expect(store.getVerifiedAssembledPath(downloadedManifest.fileHash)).toBeTruthy();
+    expect(
+      store.getVerifiedAssembledPath(downloadedManifest.fileHash)
+    ).toBeTruthy();
     expect(store.getStorageStatus().totalResidentBytes).toBe(contents.length);
     now += 30 * 60_000 + 1;
     await store.cleanupStorage('completed-download-grace-expired');
-    expect(store.getVerifiedAssembledPath(downloadedManifest.fileHash)).toBe(null);
+    expect(store.getVerifiedAssembledPath(downloadedManifest.fileHash)).toBe(
+      null
+    );
   });
 
   it('preserves transfer-reserved capacity when admitting local attachments', () => {
@@ -611,7 +674,12 @@ describe('reticulum resource store', () => {
     });
 
     expect(
-      store.hasLiveReference(manifest.fileHash, 'dm', 'conversation-a', 'event-direct-a')
+      store.hasLiveReference(
+        manifest.fileHash,
+        'dm',
+        'conversation-a',
+        'event-direct-a'
+      )
     ).toBe(true);
     expect(store.listReferences(manifest.fileHash)).toEqual([
       expect.objectContaining({
@@ -643,12 +711,23 @@ describe('reticulum resource store', () => {
     store.storeManifest(manifest);
     const partialPath = store.ensurePartialFile(manifest.fileHash);
     expect(fs.statSync(partialPath).size).toBe(0);
-    expect(store.getManifest(manifest.fileHash)?.fileHash).toBe(manifest.fileHash);
-    expect(() => store.assembleResource(manifest.fileHash)).toThrow(/missing byte ranges/);
+    expect(store.getManifest(manifest.fileHash)?.fileHash).toBe(
+      manifest.fileHash
+    );
+    expect(() => store.assembleResource(manifest.fileHash)).toThrow(
+      /missing byte ranges/
+    );
 
-    store.storeByteRange(manifest.fileHash, first.length, contents.length, second);
+    store.storeByteRange(
+      manifest.fileHash,
+      first.length,
+      contents.length,
+      second
+    );
     expect(store.getCompletedBytes(manifest.fileHash)).toBe(second.length);
-    expect(() => store.assembleResource(manifest.fileHash)).toThrow(/missing byte ranges/);
+    expect(() => store.assembleResource(manifest.fileHash)).toThrow(
+      /missing byte ranges/
+    );
 
     store.storeByteRange(manifest.fileHash, 0, first.length, first);
     const assembledPath = store.assembleResource(manifest.fileHash);
@@ -682,24 +761,43 @@ describe('reticulum resource store', () => {
       contents.length,
       third
     );
-    expect(store.getCompletedBytes(manifest.fileHash)).toBe(first.length + third.length);
-    store.storeByteRange(manifest.fileHash, first.length, first.length + second.length, second);
+    expect(store.getCompletedBytes(manifest.fileHash)).toBe(
+      first.length + third.length
+    );
+    store.storeByteRange(
+      manifest.fileHash,
+      first.length,
+      first.length + second.length,
+      second
+    );
     expect(store.getCompletedBytes(manifest.fileHash)).toBe(contents.length);
     expect(store.getCompletedRanges(manifest.fileHash)).toEqual([
-      expect.objectContaining({ startByte: 0, endByteExclusive: contents.length }),
+      expect.objectContaining({
+        startByte: 0,
+        endByteExclusive: contents.length,
+      }),
     ]);
 
-    store.storeByteRange(manifest.fileHash, first.length, first.length + second.length, second);
+    store.storeByteRange(
+      manifest.fileHash,
+      first.length,
+      first.length + second.length,
+      second
+    );
     expect(store.getCompletedBytes(manifest.fileHash)).toBe(contents.length);
     expect(
-      fs.existsSync(path.join(dir, 'resources', 'blobs', manifest.fileHash, 'ranges.json'))
+      fs.existsSync(
+        path.join(dir, 'resources', 'blobs', manifest.fileHash, 'ranges.json')
+      )
     ).toBe(false);
   });
 
   it('removes obsolete partial bytes when the same resource is imported locally', () => {
     const { dir, store } = tempStore();
     stores.push(store);
-    const contents = Buffer.from('complete local copy replaces partial download');
+    const contents = Buffer.from(
+      'complete local copy replaces partial download'
+    );
     const sourcePath = path.join(dir, 'complete.bin');
     fs.writeFileSync(sourcePath, contents);
     const manifest: ReticulumResourceManifest = {
@@ -728,7 +826,9 @@ describe('reticulum resource store', () => {
     expect(store.getPartialPath(manifest.fileHash)).toBeNull();
     expect(store.getCompletedRanges(manifest.fileHash)).toEqual([]);
     expect(fs.existsSync(partialPath!)).toBe(false);
-    expect(fs.readFileSync(store.getVerifiedAssembledPath(manifest.fileHash)!)).toEqual(contents);
+    expect(
+      fs.readFileSync(store.getVerifiedAssembledPath(manifest.fileHash)!)
+    ).toEqual(contents);
   });
 
   it('rejects invalid received byte ranges before writing to the partial file', () => {
@@ -746,11 +846,16 @@ describe('reticulum resource store', () => {
     };
 
     store.storeManifest(manifest);
-    expect(() => store.storeByteRange(manifest.fileHash, 0, 5, Buffer.from('no'))).toThrow(
-      /Range size mismatch/
-    );
     expect(() =>
-      store.storeByteRange(manifest.fileHash, 0, contents.length + 1, Buffer.alloc(contents.length + 1))
+      store.storeByteRange(manifest.fileHash, 0, 5, Buffer.from('no'))
+    ).toThrow(/Range size mismatch/);
+    expect(() =>
+      store.storeByteRange(
+        manifest.fileHash,
+        0,
+        contents.length + 1,
+        Buffer.alloc(contents.length + 1)
+      )
     ).toThrow(/Invalid byte range/);
     expect(store.getCompletedRanges(manifest.fileHash)).toEqual([]);
   });
@@ -774,7 +879,9 @@ describe('reticulum resource store', () => {
     const oldTime = new Date(10_000);
     fs.utimesSync(assembledPath, oldTime, oldTime);
 
-    expect(store.getVerifiedAssembledPath(manifest.fileHash)).toBe(assembledPath);
+    expect(store.getVerifiedAssembledPath(manifest.fileHash)).toBe(
+      assembledPath
+    );
     expect(store.assembleResource(manifest.fileHash)).toBe(assembledPath);
     expect(fs.readFileSync(assembledPath)).toEqual(contents);
     expect(fs.statSync(assembledPath).mtimeMs).toBe(10_000);
@@ -800,7 +907,9 @@ describe('reticulum resource store', () => {
     fs.rmSync(assembledPath!, { force: true });
 
     expect(store.getVerifiedAssembledPath(manifest.fileHash)).toBe(null);
-    expect(() => store.assembleResource(manifest.fileHash)).toThrow(/partial file/);
+    expect(() => store.assembleResource(manifest.fileHash)).toThrow(
+      /partial file/
+    );
   });
 
   it('reconciles missing resident bytes when the store reopens', async () => {
@@ -828,9 +937,14 @@ describe('reticulum resource store', () => {
     stores.push(reopened);
 
     expect(reopened.getVerifiedAssembledPath(manifest.fileHash)).toBe(null);
-    await vi.waitFor(() => {
-      expect(reopened.getStorageStatus().totalResidentBytes).toBe(0);
-    });
+    // Startup reconciliation runs in the background. The default 1s poll budget
+    // is exceeded on a loaded CI runner, so allow a generous margin.
+    await vi.waitFor(
+      () => {
+        expect(reopened.getStorageStatus().totalResidentBytes).toBe(0);
+      },
+      { timeout: 10_000 }
+    );
     expect(reopened.getManifest(manifest.fileHash)).toBeTruthy();
   });
 
@@ -849,7 +963,11 @@ describe('reticulum resource store', () => {
       createdAt: 100_000,
       metadata: { groupId: 716 },
     };
-    const first = new ReticulumResourceStore({ dbPath, rootDir, now: () => 100_000 });
+    const first = new ReticulumResourceStore({
+      dbPath,
+      rootDir,
+      now: () => 100_000,
+    });
     first.storeManifest(manifest, { provenance: 'remote_downloaded' });
     first.recordReference({
       manifest,
@@ -868,13 +986,26 @@ describe('reticulum resource store', () => {
     fs.mkdirSync(path.dirname(assembledPath), { recursive: true });
     fs.writeFileSync(assembledPath, contents);
 
-    const reopened = new ReticulumResourceStore({ dbPath, rootDir, now: () => 100_000 });
+    const reopened = new ReticulumResourceStore({
+      dbPath,
+      rootDir,
+      now: () => 100_000,
+    });
     stores.push(reopened);
 
-    await vi.waitFor(() => {
-      expect(reopened.getVerifiedAssembledPath(manifest.fileHash)).toBe(assembledPath);
-      expect(reopened.getStorageStatus().totalResidentBytes).toBe(contents.length);
-    });
+    // Recovery scans the blobs directory on open, which is I/O bound and easily
+    // exceeds the 1s default poll budget on a shared CI filesystem.
+    await vi.waitFor(
+      () => {
+        expect(reopened.getVerifiedAssembledPath(manifest.fileHash)).toBe(
+          assembledPath
+        );
+        expect(reopened.getStorageStatus().totalResidentBytes).toBe(
+          contents.length
+        );
+      },
+      { timeout: 10_000 }
+    );
   });
 
   it('assembles public resources to the original safe filename', () => {
@@ -908,9 +1039,14 @@ describe('reticulum resource store', () => {
       now: () => 100_000,
     });
     stores.push(store);
-    const tempPath = store.createPlaintextTempPath(cryptoHash(Buffer.from('resource')), '.range.bin');
+    const tempPath = store.createPlaintextTempPath(
+      cryptoHash(Buffer.from('resource')),
+      '.range.bin'
+    );
 
-    expect(path.dirname(tempPath)).toBe(path.join(tempRoot, 'qortal-reticulum-resources'));
+    expect(path.dirname(tempPath)).toBe(
+      path.join(tempRoot, 'qortal-reticulum-resources')
+    );
     fs.writeFileSync(tempPath, Buffer.from('ok'));
     expect(fs.readFileSync(tempPath, 'utf8')).toBe('ok');
   });
@@ -938,7 +1074,9 @@ describe('reticulum resource store', () => {
 
     await store.discardResourceDataAsync(manifest.fileHash);
 
-    expect(store.getManifest(manifest.fileHash)?.fileHash).toBe(manifest.fileHash);
+    expect(store.getManifest(manifest.fileHash)?.fileHash).toBe(
+      manifest.fileHash
+    );
     expect(store.getCompletedRanges(manifest.fileHash)).toEqual([]);
     expect(partialPath && fs.existsSync(partialPath)).toBe(false);
   });
@@ -1005,7 +1143,9 @@ describe('reticulum resource store', () => {
     );
     releaseFirst(false);
 
-    const releaseAfterCapacityReturns = await (store as any).reservePhysicalDisk(30);
+    const releaseAfterCapacityReturns = await (
+      store as any
+    ).reservePhysicalDisk(30);
     releaseAfterCapacityReturns(false);
   });
 
@@ -1083,21 +1223,23 @@ describe('reticulum resource store', () => {
     const assemblyGate = new Promise<void>((resolve) => {
       continueAssembly = resolve;
     });
-    vi.spyOn((store as any).workerPool, 'run').mockImplementation(async (input: any) => {
-      if (input.kind !== 'finalize_resource') {
-        throw new Error(`Unexpected worker task ${input.kind}`);
+    vi.spyOn((store as any).workerPool, 'run').mockImplementation(
+      async (input: any) => {
+        if (input.kind !== 'finalize_resource') {
+          throw new Error(`Unexpected worker task ${input.kind}`);
+        }
+        await assemblyGate;
+        fs.mkdirSync(path.dirname(input.destinationPath), { recursive: true });
+        fs.renameSync(input.sourcePath, input.destinationPath);
+        return {
+          id: 1,
+          kind: input.kind,
+          ok: true,
+          hash: manifest.fileHash,
+          durationMs: 1,
+        };
       }
-      await assemblyGate;
-      fs.mkdirSync(path.dirname(input.destinationPath), { recursive: true });
-      fs.renameSync(input.sourcePath, input.destinationPath);
-      return {
-        id: 1,
-        kind: input.kind,
-        ok: true,
-        hash: manifest.fileHash,
-        durationMs: 1,
-      };
-    });
+    );
 
     const assembly = store.assembleResourceAsync(manifest.fileHash);
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -1137,7 +1279,11 @@ describe('reticulum resource store', () => {
     const dir = tempDir();
     const dbPath = path.join(dir, 'resources.db');
     const rootDir = path.join(dir, 'resources');
-    const first = new ReticulumResourceStore({ dbPath, rootDir, now: () => 100_000 });
+    const first = new ReticulumResourceStore({
+      dbPath,
+      rootDir,
+      now: () => 100_000,
+    });
     expect((first as any).getResourceMeta('schema_version')).toBe('2');
     expect((first as any).getResourceMeta('accounting_version')).toBe('2');
     first.close();
@@ -1146,7 +1292,11 @@ describe('reticulum resource store', () => {
       'rebuildStorageAccounting'
     );
 
-    const reopened = new ReticulumResourceStore({ dbPath, rootDir, now: () => 100_000 });
+    const reopened = new ReticulumResourceStore({
+      dbPath,
+      rootDir,
+      now: () => 100_000,
+    });
     stores.push(reopened);
 
     expect(rebuild).not.toHaveBeenCalled();
@@ -1159,7 +1309,8 @@ describe('reticulum resource store', () => {
     const prototype = ReticulumResourceStore.prototype as any;
     const originalEnsureResourceColumn = prototype.ensureResourceColumn;
     const originalEnsureReferenceColumn = prototype.ensureReferenceColumn;
-    const originalCreatePostMigrationIndexes = prototype.createPostMigrationIndexes;
+    const originalCreatePostMigrationIndexes =
+      prototype.createPostMigrationIndexes;
     const resourceColumnSpy = vi
       .spyOn(prototype, 'ensureResourceColumn')
       .mockImplementation(function (
@@ -1197,8 +1348,12 @@ describe('reticulum resource store', () => {
 
       expect(calls.indexOf('resource:managed')).toBeGreaterThanOrEqual(0);
       expect(calls.indexOf('reference:expires_at')).toBeGreaterThanOrEqual(0);
-      expect(calls.indexOf('indexes')).toBeGreaterThan(calls.indexOf('resource:managed'));
-      expect(calls.indexOf('indexes')).toBeGreaterThan(calls.indexOf('reference:expires_at'));
+      expect(calls.indexOf('indexes')).toBeGreaterThan(
+        calls.indexOf('resource:managed')
+      );
+      expect(calls.indexOf('indexes')).toBeGreaterThan(
+        calls.indexOf('reference:expires_at')
+      );
     } finally {
       resourceColumnSpy.mockRestore();
       referenceColumnSpy.mockRestore();
@@ -1329,7 +1484,9 @@ describe('reticulum resource store', () => {
         expiresAt: firstExpiry,
       })
     ).toBe(1);
-    expect(store.listReferences(manifest.fileHash)[0]?.expiresAt).toBe(firstExpiry);
+    expect(store.listReferences(manifest.fileHash)[0]?.expiresAt).toBe(
+      firstExpiry
+    );
 
     store.setReferenceExpiry({
       scopeType: 'group',
@@ -1337,7 +1494,9 @@ describe('reticulum resource store', () => {
       eventId: 'pending-expiry-event',
       expiresAt: laterExpiry,
     });
-    expect(store.listReferences(manifest.fileHash)[0]?.expiresAt).toBe(laterExpiry);
+    expect(store.listReferences(manifest.fileHash)[0]?.expiresAt).toBe(
+      laterExpiry
+    );
 
     store.setReferenceExpiry({
       scopeType: 'group',
@@ -1345,7 +1504,9 @@ describe('reticulum resource store', () => {
       eventId: 'pending-expiry-event',
       expiresAt: null,
     });
-    expect(store.listReferences(manifest.fileHash)[0]?.expiresAt).toBeUndefined();
+    expect(
+      store.listReferences(manifest.fileHash)[0]?.expiresAt
+    ).toBeUndefined();
   });
 
   it('evicts bytes after the last message reference is deleted but keeps the manifest', async () => {
@@ -1379,7 +1540,9 @@ describe('reticulum resource store', () => {
 
     expect(result.freedBytes).toBe(contents.length);
     expect(store.getVerifiedAssembledPath(manifest.fileHash)).toBe(null);
-    expect(store.getManifest(manifest.fileHash)?.fileHash).toBe(manifest.fileHash);
+    expect(store.getManifest(manifest.fileHash)?.fileHash).toBe(
+      manifest.fileHash
+    );
     expect(store.listReferences(manifest.fileHash)[0]?.state).toBe('deleted');
   });
 
@@ -1459,7 +1622,11 @@ describe('reticulum resource store', () => {
     store.storeManifest(manifest, { provenance: 'remote_downloaded' });
     store.storeByteRange(manifest.fileHash, 0, contents.length, contents);
     store.assembleResource(manifest.fileHash);
-    const leaseId = store.acquireLease(manifest.fileHash, 'viewer', 60 * 60_000);
+    const leaseId = store.acquireLease(
+      manifest.fileHash,
+      'viewer',
+      60 * 60_000
+    );
     now += 30 * 60_000 + 1;
     (store as any).physicalReclaimBytes = 1;
 
@@ -1467,7 +1634,9 @@ describe('reticulum resource store', () => {
     expect(store.getVerifiedAssembledPath(manifest.fileHash)).toBeTruthy();
 
     store.releaseLease(leaseId);
-    expect((await store.cleanupStorage('test-after-release')).freedBytes).toBe(contents.length);
+    expect((await store.cleanupStorage('test-after-release')).freedBytes).toBe(
+      contents.length
+    );
     expect(store.getManifest(manifest.fileHash)).toBeTruthy();
   });
 
@@ -1542,7 +1711,8 @@ describe('reticulum resource store', () => {
 
   it('reclaims old authored attachments only after a confirmed replica exists', async () => {
     const dir = tempDir();
-    const now = RETICULUM_RESOURCE_AUTHORED_RECOVERY_MIN_IDLE_MS + 10 * 24 * 60 * 60_000;
+    const now =
+      RETICULUM_RESOURCE_AUTHORED_RECOVERY_MIN_IDLE_MS + 10 * 24 * 60 * 60_000;
     const store = new ReticulumResourceStore({
       dbPath: path.join(dir, 'resources.db'),
       rootDir: path.join(dir, 'resources'),
@@ -1595,7 +1765,8 @@ describe('reticulum resource store', () => {
 
   it('never reclaims the sole known live authored copy', async () => {
     const dir = tempDir();
-    const now = RETICULUM_RESOURCE_AUTHORED_RECOVERY_MIN_IDLE_MS + 10 * 24 * 60 * 60_000;
+    const now =
+      RETICULUM_RESOURCE_AUTHORED_RECOVERY_MIN_IDLE_MS + 10 * 24 * 60 * 60_000;
     const store = new ReticulumResourceStore({
       dbPath: path.join(dir, 'resources.db'),
       rootDir: path.join(dir, 'resources'),
@@ -1640,7 +1811,8 @@ describe('reticulum resource store', () => {
 
   it('prefers authored attachments with two replicas and preserves recently used files', async () => {
     const dir = tempDir();
-    const now = RETICULUM_RESOURCE_AUTHORED_RECOVERY_MIN_IDLE_MS + 10 * 24 * 60 * 60_000;
+    const now =
+      RETICULUM_RESOURCE_AUTHORED_RECOVERY_MIN_IDLE_MS + 10 * 24 * 60 * 60_000;
     const store = new ReticulumResourceStore({
       dbPath: path.join(dir, 'resources.db'),
       rootDir: path.join(dir, 'resources'),
@@ -1652,8 +1824,11 @@ describe('reticulum resource store', () => {
     });
     stores.push(store);
     const rawDb = (store as unknown as { db: BetterSqliteDatabase }).db;
-    const sizeBytesByIndex = [30, 30, 40].map((megabytes) => megabytes * 1024 * 1024);
-    const oldCreatedAt = now - RETICULUM_RESOURCE_AUTHORED_RECOVERY_MIN_IDLE_MS - 1;
+    const sizeBytesByIndex = [30, 30, 40].map(
+      (megabytes) => megabytes * 1024 * 1024
+    );
+    const oldCreatedAt =
+      now - RETICULUM_RESOURCE_AUTHORED_RECOVERY_MIN_IDLE_MS - 1;
     const manifests = ['two-replicas', 'one-replica', 'recently-used'].map(
       (name, index): ReticulumResourceManifest => ({
         namespace: 'reticulum-group-resource',
@@ -1695,14 +1870,27 @@ describe('reticulum resource store', () => {
       scopeId: 716,
       retentionUntil: now + 24 * 60 * 60_000,
     });
-    rawDb.prepare(`
+    rawDb
+      .prepare(
+        `
       UPDATE reticulum_resources SET last_accessed_at = ? WHERE file_hash = ?
-    `).run(now - 24 * 60 * 60_000, manifests[2].fileHash);
+    `
+      )
+      .run(now - 24 * 60 * 60_000, manifests[2].fileHash);
 
     const result = await store.cleanupStorage('authored-replica-priority');
-    const residentBytes = (fileHash: string) => Number((rawDb.prepare(`
+    const residentBytes = (fileHash: string) =>
+      Number(
+        (
+          rawDb
+            .prepare(
+              `
       SELECT resident_bytes FROM reticulum_resources WHERE file_hash = ?
-    `).get(fileHash) as { resident_bytes: number }).resident_bytes);
+    `
+            )
+            .get(fileHash) as { resident_bytes: number }
+        ).resident_bytes
+      );
 
     expect(result.freedBytes).toBe(sizeBytesByIndex[0]);
     expect(residentBytes(manifests[0].fileHash)).toBe(0);
@@ -1751,9 +1939,14 @@ describe('reticulum resource store', () => {
       );
       await writeStarted;
       const discard = store.discardResourceDataAsync(manifest.fileHash);
-      await vi.waitFor(() => {
-        expect((store as any).evictingFileHashes.has(manifest.fileHash)).toBe(true);
-      });
+      await vi.waitFor(
+        () => {
+          expect((store as any).evictingFileHashes.has(manifest.fileHash)).toBe(
+            true
+          );
+        },
+        { timeout: 10_000 }
+      );
 
       continueWrite();
       await expect(write).rejects.toThrow(/reclaimed/);
@@ -1779,7 +1972,9 @@ describe('reticulum resource store', () => {
     });
     stores.push(store);
     const firstHash = cryptoHash(Buffer.from('first pending authored import'));
-    const secondHash = cryptoHash(Buffer.from('second pending authored import'));
+    const secondHash = cryptoHash(
+      Buffer.from('second pending authored import')
+    );
     const importSize = 60 * 1024 * 1024;
 
     const releaseFirst = (store as any).reserveAuthoredImport(
@@ -1809,7 +2004,11 @@ describe('reticulum resource store', () => {
     const dbPath = path.join(dir, 'resources.db');
     const rootDir = path.join(dir, 'resources');
     let now = 100_000;
-    const first = new ReticulumResourceStore({ dbPath, rootDir, now: () => now });
+    const first = new ReticulumResourceStore({
+      dbPath,
+      rootDir,
+      now: () => now,
+    });
     first.reserveCapacity({
       provenance: 'remote_downloaded',
       sizeBytes: 4_096,
@@ -1822,25 +2021,31 @@ describe('reticulum resource store', () => {
     const prototype = ReticulumResourceStore.prototype as any;
     const originalPrune = prototype.pruneTransientState;
     const originalRebuild = prototype.rebuildStorageAccounting;
-    const pruneSpy = vi.spyOn(prototype, 'pruneTransientState').mockImplementation(function (
-      this: ReticulumResourceStore
-    ) {
-      startupCalls.push('prune');
-      return originalPrune.call(this);
-    });
-    const rebuildSpy = vi.spyOn(prototype, 'rebuildStorageAccounting').mockImplementation(function (
-      this: ReticulumResourceStore
-    ) {
-      startupCalls.push('rebuild');
-      return originalRebuild.call(this);
-    });
+    const pruneSpy = vi
+      .spyOn(prototype, 'pruneTransientState')
+      .mockImplementation(function (this: ReticulumResourceStore) {
+        startupCalls.push('prune');
+        return originalPrune.call(this);
+      });
+    const rebuildSpy = vi
+      .spyOn(prototype, 'rebuildStorageAccounting')
+      .mockImplementation(function (this: ReticulumResourceStore) {
+        startupCalls.push('rebuild');
+        return originalRebuild.call(this);
+      });
 
     try {
-      const reopened = new ReticulumResourceStore({ dbPath, rootDir, now: () => now });
+      const reopened = new ReticulumResourceStore({
+        dbPath,
+        rootDir,
+        now: () => now,
+      });
       stores.push(reopened);
 
       expect(startupCalls.indexOf('prune')).toBeGreaterThanOrEqual(0);
-      expect(startupCalls.indexOf('rebuild')).toBeGreaterThan(startupCalls.indexOf('prune'));
+      expect(startupCalls.indexOf('rebuild')).toBeGreaterThan(
+        startupCalls.indexOf('prune')
+      );
     } finally {
       pruneSpy.mockRestore();
       rebuildSpy.mockRestore();
@@ -1853,26 +2058,35 @@ describe('reticulum resource store', () => {
     const rawDb = (store as unknown as { db: BetterSqliteDatabase }).db;
     for (let index = 0; index < 130; index += 1) {
       const contents = Buffer.from(`cleanup-candidate-${index}`);
-      store.storeManifest({
-        namespace: 'reticulum-group-resource',
-        fileName: `candidate-${index}.bin`,
-        mimeType: 'application/octet-stream',
-        sizeBytes: 1,
-        fileHash: cryptoHash(contents),
-        encrypted: false,
-        createdAt: 100_000,
-      }, {
-        provenance: 'remote_downloaded',
-        residentBytes: 1,
-      });
+      store.storeManifest(
+        {
+          namespace: 'reticulum-group-resource',
+          fileName: `candidate-${index}.bin`,
+          mimeType: 'application/octet-stream',
+          sizeBytes: 1,
+          fileHash: cryptoHash(contents),
+          encrypted: false,
+          createdAt: 100_000,
+        },
+        {
+          provenance: 'remote_downloaded',
+          residentBytes: 1,
+        }
+      );
     }
     vi.spyOn(store as any, 'readStorageStats').mockReturnValue(null);
-    vi.spyOn(store as any, 'evictResidentBytes').mockImplementation(async (row: any) => {
-      rawDb.prepare(`
+    vi.spyOn(store as any, 'evictResidentBytes').mockImplementation(
+      async (row: any) => {
+        rawDb
+          .prepare(
+            `
         UPDATE reticulum_resources SET resident_bytes = 0 WHERE file_hash = ?
-      `).run(row.file_hash);
-      return Number(row.resident_bytes || 0);
-    });
+      `
+          )
+          .run(row.file_hash);
+        return Number(row.resident_bytes || 0);
+      }
+    );
     (store as any).physicalReclaimBytes = 130;
 
     const result = await store.cleanupStorage('mutable-cleanup-pages');

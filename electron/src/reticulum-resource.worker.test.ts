@@ -21,12 +21,17 @@ describe('reticulum resource worker operations', () => {
   });
 
   it('hashes and finalizes a verified resource', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reticulum-resource-worker-test-'));
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'reticulum-resource-worker-test-')
+    );
     directories.push(dir);
     const sourcePath = path.join(dir, 'download.partial');
     const destinationPath = path.join(dir, 'assembled', 'file.bin');
     const contents = Buffer.from('verified worker resource');
-    const expectedHash = nodeCrypto.createHash('sha256').update(contents).digest('hex');
+    const expectedHash = nodeCrypto
+      .createHash('sha256')
+      .update(contents)
+      .digest('hex');
     fs.writeFileSync(sourcePath, contents);
 
     expect(hashReticulumResourceFile(sourcePath)).toBe(expectedHash);
@@ -60,12 +65,17 @@ describe('reticulum resource worker operations', () => {
   });
 
   it('moves a completed download into place without a second full-size copy', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reticulum-resource-worker-test-'));
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'reticulum-resource-worker-test-')
+    );
     directories.push(dir);
     const sourcePath = path.join(dir, 'download.partial');
     const destinationPath = path.join(dir, 'assembled', 'file.bin');
     const contents = Buffer.from('move completed worker resource');
-    const expectedHash = nodeCrypto.createHash('sha256').update(contents).digest('hex');
+    const expectedHash = nodeCrypto
+      .createHash('sha256')
+      .update(contents)
+      .digest('hex');
     fs.writeFileSync(sourcePath, contents);
 
     expect(
@@ -84,7 +94,9 @@ describe('reticulum resource worker operations', () => {
   });
 
   it('rejects a final resource with the wrong hash', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reticulum-resource-worker-test-'));
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'reticulum-resource-worker-test-')
+    );
     directories.push(dir);
     const sourcePath = path.join(dir, 'download.partial');
     fs.writeFileSync(sourcePath, Buffer.from('invalid resource'));
@@ -102,7 +114,9 @@ describe('reticulum resource worker operations', () => {
   });
 
   it('deletes cleanup paths idempotently', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reticulum-resource-worker-test-'));
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'reticulum-resource-worker-test-')
+    );
     directories.push(dir);
     const first = path.join(dir, 'first');
     const second = path.join(dir, 'second');
@@ -114,7 +128,9 @@ describe('reticulum resource worker operations', () => {
   });
 
   it('writes and hashes only the requested source range', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reticulum-resource-worker-test-'));
+    const dir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'reticulum-resource-worker-test-')
+    );
     directories.push(dir);
     const sourcePath = path.join(dir, 'source.bin');
     const destinationPath = path.join(dir, 'ranges', 'range.bin');
