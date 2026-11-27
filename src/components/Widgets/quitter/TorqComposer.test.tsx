@@ -185,6 +185,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -537,6 +538,54 @@ describe('TorqComposer while Home is hidden', () => {
 
     expect(URL.revokeObjectURL).not.toHaveBeenCalled();
     expect(document.querySelector('img[src="blob:preview-1"]')).not.toBeNull();
+  });
+
+  // React ran the composer's cleanup when Home was hidden, and doesn't run it
+  // again when the hidden composer is removed (signing out, another account).
+  it('frees the photo previews when it goes while Home is hidden', () => {
+    vi.useFakeTimers();
+    const home = renderOnHome();
+    openComposer();
+    addImages([jpeg('a.jpg'), jpeg('b.jpg')]);
+
+    home.leaveHome();
+    home.unmount();
+    vi.advanceTimersByTime(60_000);
+
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(2);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:preview-1');
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:preview-2');
+  });
+
+  it('keeps the photo previews however long Home stays hidden', () => {
+    vi.useFakeTimers();
+    const home = renderOnHome();
+    openComposer();
+    addImages([jpeg()]);
+
+    home.leaveHome();
+    act(() => vi.advanceTimersByTime(10 * 60_000));
+    home.backToHome();
+
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    expect(document.querySelector('img[src="blob:preview-1"]')).not.toBeNull();
+  });
+
+  it('frees each photo preview once, after leaving and coming back to Home', () => {
+    vi.useFakeTimers();
+    const home = renderOnHome();
+    openComposer();
+    addImages([jpeg('a.jpg'), jpeg('b.jpg')]);
+
+    home.leaveHome();
+    home.backToHome();
+    home.leaveHome();
+    home.unmount();
+    vi.advanceTimersByTime(60_000);
+
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(2);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:preview-1');
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:preview-2');
   });
 
   it('stops a post still compressing its photos when the composer goes', async () => {
