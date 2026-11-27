@@ -13,6 +13,25 @@ export function convertQortalLinks(inputHtml: string) {
   return outputHtml;
 }
 
+/**
+ * A name, or an identifier, as it goes into a qortal:// link Hub shows or
+ * copies. Hub reads a page link, and any link in a page's text, without the
+ * `.`, `!` or `)` a sentence leaves after it ("…/Q-Blog," still opens), and a
+ * page's text ends a link at a quote. encodeURIComponent leaves those as they
+ * are, so a name ending in one lost it, and one with a quote was cut there.
+ * So `!'()*` are escaped too, as RFC 3986 asks of a URI component, and a dot
+ * at the end; a dot inside, as in "v2.0", stays. Readers decode them back.
+ */
+export function encodeQortalLinkName(name: string): string {
+  const encoded = encodeURIComponent(name).replace(
+    /[!'()*]/g,
+    (mark) => `%${mark.charCodeAt(0).toString(16).toUpperCase()}`
+  );
+  let end = encoded.length;
+  while (end > 0 && encoded[end - 1] === '.') end -= 1;
+  return encoded.slice(0, end) + '%2E'.repeat(encoded.length - end);
+}
+
 type QortalResourceLinkInput = {
   service?: string;
   name?: string;
@@ -26,10 +45,10 @@ export function buildQortalResourceLink({
   path = '',
   identifier,
 }: QortalResourceLinkInput): string {
-  const encodedName = encodeURIComponent(name || '');
+  const encodedName = encodeQortalLinkName(name || '');
   const normalizedPath = path || '';
   const identifierSuffix = identifier
-    ? `${normalizedPath.includes('?') ? '&' : '?'}identifier=${encodeURIComponent(identifier)}`
+    ? `${normalizedPath.includes('?') ? '&' : '?'}identifier=${encodeQortalLinkName(identifier)}`
     : '';
 
   return `${QORTAL_PROTOCOL}${service}/${encodedName}${normalizedPath}${identifierSuffix}`;
