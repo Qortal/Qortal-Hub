@@ -222,6 +222,13 @@ widgets:
 app, like `qortal://use-group/…` does for groups. Chat messages open it; the
 page's Share button copies it or the app's own `qortal://<SERVICE>/<name>`.
 
+Hub reads a page link without the `.`, `!` or `)` a sentence leaves after it
+(`…/Q-Blog,` still opens). A page's text reads every link that way, and ends
+one at a quote. So in the page link and the app link of the Share menu, and in
+the top bar's address of an open app (its identifier too), the name is
+percent-encoded with `!'()*` escaped as well, and a dot at its end:
+`Publisher!` is `Publisher%21`, `v2.` is `v2%2E`, and `v2.0` stays.
+
 ## Screenshots, taken by the publisher
 
 In the desktop app, Hub can show the app in a dialog (as published, or a

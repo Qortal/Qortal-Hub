@@ -31,6 +31,7 @@
     "scroll_bottom": "一番下までスクロール",
     "scroll_unread_messages": "未読メッセージへスクロール",
     "select_group": "グループを選択",
+    "update_group": "update group",
     "visit_q_mintership": "Q-Mintership を訪問"
   },
   "activity_dashboard": {
@@ -61,16 +62,19 @@
     "approval_single": "1人",
     "approval_threshold_description": "グループの決定を承認するために必要な管理者の割合です。",
     "approval_threshold_label": "承認しきい値",
+    "button_update": "Update Group",
     "creating": "作成中...",
     "description_create": "名前を選び、グループを説明して始めましょう。",
     "description_invites": "受け取った招待を確認しましょう。",
     "description_placeholder": "このグループはどのようなグループですか？",
     "description_too_long": "説明は{{max}}文字以内にしてください",
+    "description_update": "Modify group settings and update configuration.",
     "max_delay_label": "承認の最大待ち時間",
     "min_delay_label": "承認の最小待ち時間",
     "modes_aria": "グループ管理モード",
     "name_hint": "分かりやすく覚えやすい名前を使いましょう。",
-    "name_placeholder": "例: Qortal開発者"
+    "name_placeholder": "例: Qortal開発者",
+    "updating": "Updating..."
   },
   "admin_space": {
     "ask_description": "This key encrypts content visible only to admins.",
@@ -209,13 +213,22 @@
     "create_category": "カテゴリを作成",
     "create_channel": "チャンネルを作成",
     "hidden_users": "非表示のユーザー",
+    "hide_muted_channels": "Hide Muted Channels",
     "invite_link_copied": "招待リンクをコピーしました",
     "invite_link_copy_failed": "招待リンクをコピーできませんでした",
     "leave_group": "グループを退出",
+    "mark_all_groups_read": "mark all groups as read",
     "mark_all_read": "すべて既読にする",
     "mark_as_read": "既読にする",
+    "mute_channel": "Mute Channel",
+    "mute_group": "Mute Group",
     "mute_push_notifications": "プッシュ通知をオフ",
-    "unmute_push_notifications": "プッシュ通知をオン"
+    "mute_section": "Mute Section",
+    "muted_for": "Muted for {{hours}}",
+    "notification_settings": "notification settings",
+    "unmute": "Unmute",
+    "unmute_push_notifications": "プッシュ通知をオン",
+    "update_group": "Update group"
   },
   "dashboard": {
     "account_overview": "アカウント概要",
@@ -848,6 +861,9 @@
       "group_member_admin": "メンバーを管理者に昇格しました。反映には数分かかる場合があります",
       "group_promotion": "プロモーションを公開しました。反映までに数分かかる場合があります",
       "group_remove_member": "管理者権限を削除しました。反映には数分かかる場合があります",
+      "group_update_label": "updated group {{group_name}}: success!",
+      "group_update_name": "updated group {{group_name}}: awaiting confirmation",
+      "group_updated": "successfully updated group. It may take a couple of minutes for the changes to propagate",
       "invitation_cancellation": "招待をキャンセルしました。反映には数分かかる場合があります",
       "invitation_request": "参加リクエストを承認しました：確認待ち",
       "loading_threads": "スレッドを読み込み中...お待ちください",
@@ -890,6 +906,26 @@
     "try_again": "再試行",
     "unencrypted": "暗号化されていません",
     "verification_failed": "検証に失敗しました"
+  },
+  "mute": {
+    "for_15_minutes": "For 15 Minutes",
+    "for_1_hour": "For 1 Hour",
+    "for_24_hours": "For 24 Hours",
+    "for_3_hours": "For 3 Hours",
+    "for_8_hours": "For 8 Hours",
+    "until_i_turn_it_back_on": "Until I turn it back on"
+  },
+  "notification_settings": {
+    "all_messages": "all messages",
+    "all_messages_body": "New message in #{{channelName}}",
+    "all_messages_title": "New message in {{groupName}}",
+    "hide_muted_channels": "Hide Muted Channels",
+    "none": "none",
+    "notify_on_reactions": "Notify on Reactions",
+    "notify_on_replies": "notify on replies",
+    "notify_on_welcome_posts": "notify on welcome posts",
+    "only_mentions": "only @mentions",
+    "suppress_everyone_here": "suppress @everyone and @here"
   },
   "onboarding": {
     "action": {

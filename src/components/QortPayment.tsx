@@ -11,8 +11,8 @@ import {
 } from '@mui/material';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import { useEffect, useState } from 'react';
-import { getFee } from '../background/background.ts';
+import { useEffect, useRef, useState } from 'react';
+import { getFee, resolveRecipient } from '../background/background.ts';
 import { useTranslation } from 'react-i18next';
 import BoundedNumericTextField from '../common/BoundedNumericTextField.tsx';
 import { ErrorText } from './ErrorText/ErrorText.tsx';
@@ -20,6 +20,12 @@ import { getBlueTier1ButtonSx } from '../styles/blueMaterial';
 import { executeEvent } from '../utils/events';
 import { formatQortAmount } from '../utils/numberFunctions';
 import { QORTINO_DONATION_COMPLETED_EVENT } from './Group/qortinoDonationEasterEgg';
+import {
+  checkValueTransferFee,
+  parseDecimalAmount,
+  recipientDisplayLabel,
+} from '../transactions/paymentSafety';
+import { PAYMENT_OUTCOME_UNKNOWN_CODE } from '../transactions/paymentAnswer';
 
 export const QortPayment = ({
   balance,
@@ -54,6 +60,16 @@ export const QortPayment = ({
     setPaymentTo(defaultPaymentTo || '');
   }, [defaultPaymentTo]);
 
+  // The overlay can close while a payment is in flight; how it ended is then
+  // told in Hub's notification.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const fieldLabelSx = {
     color: secondaryTextColor,
     fontSize: compact ? '0.75rem' : '0.77rem',
@@ -83,6 +99,17 @@ export const QortPayment = ({
     }
 
     return rawMessage;
+  };
+  const showSendError = (message: string, outcomeUnknown: boolean) => {
+    if (isMountedRef.current) {
+      setSendPaymentError(message);
+      return;
+    }
+    executeEvent('openGlobalSnackBar', {
+      message,
+      type: outcomeUnknown ? 'warning' : 'error',
+      duration: 8000,
+    });
   };
 
   const textFieldSurfaceSx = {
@@ -150,27 +177,67 @@ export const QortPayment = ({
         return;
       }
 
-      const fee = await getFee('PAYMENT');
+      let parsedAmount;
+      try {
+        parsedAmount = parseDecimalAmount(paymentAmount);
+      } catch (error) {
+        setSendPaymentError(formatSendPaymentError(error));
+        return;
+      }
+
+      // A name is resolved before asking, so the confirmation shows who is
+      // paid (the name and the full address) and the payment goes to that
+      // address without a second lookup.
+      let recipient;
+      try {
+        recipient = await resolveRecipient(paymentTo.trim());
+      } catch (error) {
+        setSendPaymentError(formatSendPaymentError(error));
+        return;
+      }
+
+      // The fee the confirmation shows; sendCoin refuses a higher one.
+      let fee;
+      try {
+        fee = checkValueTransferFee((await getFee('PAYMENT')).fee);
+      } catch (error) {
+        setSendPaymentError(formatSendPaymentError(error));
+        return;
+      }
 
       await show({
-        message: t('core:message.question.transfer_qort', {
-          amount: Number(paymentAmount),
+        message: t('core:message.question.transfer_qort_to', {
+          amount: parsedAmount.text,
+          recipient: recipientDisplayLabel(recipient),
           postProcess: 'capitalizeFirstChar',
         }),
-        paymentFee: fee.fee + ' QORT',
+        paymentFee: fee + ' QORT',
       });
 
       setIsLoadingSendCoin(true);
 
       window
         .sendMessage('sendCoin', {
-          amount: Number(paymentAmount),
-          receiver: paymentTo.trim(),
+          amount: parsedAmount.value,
+          receiver: recipient.address,
           password: paymentPassword,
+          approvedFee: fee,
         })
         .then((response) => {
-          if (response?.error) {
-            setSendPaymentError(formatSendPaymentError(response.error));
+          // Only `true` says the payment was sent. After signing every answer
+          // gives a reason, so one without a reason failed before signing.
+          if (response !== true) {
+            const { error, code } = (response ?? {}) as {
+              error?: unknown;
+              code?: unknown;
+            };
+            showSendError(
+              formatSendPaymentError(error) ||
+                t('question:message.error.send', {
+                  postProcess: 'capitalizeFirstChar',
+                }),
+              code === PAYMENT_OUTCOME_UNKNOWN_CODE
+            );
           } else {
             executeEvent(QORTINO_DONATION_COMPLETED_EVENT, {
               recipient: paymentTo.trim(),
@@ -180,8 +247,14 @@ export const QortPayment = ({
           setIsLoadingSendCoin(false);
         })
         .catch((error) => {
+          // No answer in time: the payment may still have gone through.
           console.error('Failed to send coin:', error);
-          setSendPaymentError(formatSendPaymentError(error));
+          showSendError(
+            t('question:message.error.payment_outcome_unknown', {
+              postProcess: 'capitalizeFirstChar',
+            }),
+            true
+          );
           setIsLoadingSendCoin(false);
         });
     } catch (error) {

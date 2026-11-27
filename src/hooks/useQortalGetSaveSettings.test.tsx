@@ -1,6 +1,6 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, render, renderHook, waitFor } from '@testing-library/react';
 import { Provider, createStore } from 'jotai';
 import { useQortalGetSaveSettings } from './useQortalGetSaveSettings';
 import { useRetrieveDataLocalStorage } from './useRetrieveDataLocalStorage';
@@ -8,6 +8,7 @@ import {
   canSaveSettingToQdnAtom,
   sortablePinnedAppsAtom,
 } from '../atoms/global';
+import { oneAtATime } from '../components/Apps/AppsLauncher/savedAppsSync';
 import { saveToLocalStorage } from '../components/Apps/AppsNavBarDesktop';
 import {
   HOME_LAYOUT_DEFAULT,
@@ -150,5 +151,49 @@ describe('useQortalGetSaveSettings at sign-in', () => {
     expect(readHomeLayout('QAlice')).toEqual(
       expect.objectContaining({ hidden: ['feed'], workspaces: ['k1'] })
     );
+  });
+});
+
+describe('useQortalGetSaveSettings as App renders', () => {
+  /** App, which renders again for whatever else it shows. */
+  const App = ({ tick }: { tick: number }) => {
+    useRetrieveDataLocalStorage('QAlice');
+    useQortalGetSaveSettings('Alice', true, 'QAlice');
+    return <span>{tick}</span>;
+  };
+
+  /** The account's settings looked up on the node so far. */
+  const reads = () =>
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(([url]) =>
+        String(url).includes('identifier=ext_saved_settings')
+      ).length;
+
+  it('reads the settings once at sign-in, not again at each render', async () => {
+    publishedOnQdn(Date.now() - 60_000, pins('Saved on QDN'));
+    const store = createStore();
+    const page = render(
+      <Provider store={store}>
+        <App tick={0} />
+      </Provider>
+    );
+    await waitFor(() => expect(store.get(canSaveSettingToQdnAtom)).toBe(true));
+    await act(async () => {
+      await oneAtATime(async () => undefined);
+    });
+    expect(reads()).toBe(1);
+
+    for (const tick of [1, 2, 3]) {
+      page.rerender(
+        <Provider store={store}>
+          <App tick={tick} />
+        </Provider>
+      );
+    }
+    await act(async () => {
+      await oneAtATime(async () => undefined);
+    });
+    expect(reads()).toBe(1);
   });
 });

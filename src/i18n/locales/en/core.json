@@ -431,6 +431,11 @@
     "unpin_from_bookmarks": "unpin from bookmarks",
     "unsaved_publish": "the details in its publish form are not published yet, and closing the tab discards them."
   },
+  "approval_dialog": {
+    "requested_by": "Requested by",
+    "unknown_app": "Unknown Q-App",
+    "unknown_app_hint": "Qortal Hub could not tell which Q-App sent this request. Decline it unless you just asked for this yourself."
+  },
   "apps_bar": {
     "empty": "Pin an app or add a bookmark, and it shows here.",
     "label": "Pinned apps and bookmarks",
@@ -948,7 +953,7 @@
       "register_name": "would you like to register this name?",
       "reset_pinned": "don't like your current local changes? Would you like to reset to the default pinned apps?",
       "reset_qdn": "don't like your current local changes? Would you like to reset to your saved QDN pinned apps?",
-      "transfer_qort": "would you like to transfer {{ amount }} QORT"
+      "transfer_qort_to": "would you like to transfer {{ amount }} QORT to {{ recipient }}?"
     },
     "success": {
       "order_submitted": "your buy order was submitted",
@@ -1051,7 +1056,14 @@
       "name": "Name",
       "website": "Website"
     },
-    "suggestions": "Suggestions"
+    "suggestions": "Suggestions",
+    "zoom": {
+      "button": "zoom: {{percent}}",
+      "kept": "kept for {{name}} on this computer",
+      "same_as_hub": "same as Hub",
+      "zoom_in": "zoom in",
+      "zoom_out": "zoom out"
+    }
   },
   "new_post_in": "new post in {{ title }}",
   "node_state": {
@@ -1835,6 +1847,7 @@
       "image_metadata_unremovable": "image {{index}} can't be posted: its location and camera details can't be removed from this format. Save it as JPEG or PNG and try again.",
       "images_too_large": "these images are too large to post together. Remove an image and try again.",
       "name_required": "a Qortal name is required to publish",
+      "not_posted_left_home": "not posted: you left Home before it was sent. Publish again when you're ready.",
       "post_too_large": "this post is over 5 MB, so {{app}} would not show it. Shorten it or remove an image.",
       "publish_failed": "failed to publish",
       "too_many_images": "maximum {{count}} images per post"

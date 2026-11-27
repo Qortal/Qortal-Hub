@@ -1,5 +1,6 @@
 import {
   CSSProperties,
+  useCallback,
   useEffect,
   useEffectEvent,
   useRef,
@@ -253,7 +254,10 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
           0.114
         )} 30%, ${alpha(GROUP_ACTIVITY_BLUE.primary, 0.036)} 56%, transparent 80%)`;
 
-  const clearInitialPreviewTimers = useEffectEvent(() => {
+  // Only ever touches refs, and is called from effects and from the
+  // pointer handlers below, so it is a plain stable callback rather than an
+  // effect event (which may only be called from effects).
+  const clearInitialPreviewTimers = useCallback(() => {
     if (initialPreviewStartTimerRef.current) {
       clearTimeout(initialPreviewStartTimerRef.current);
       initialPreviewStartTimerRef.current = null;
@@ -262,7 +266,7 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
       clearTimeout(initialPreviewEndTimerRef.current);
       initialPreviewEndTimerRef.current = null;
     }
-  });
+  }, []);
 
   useEffect(() => {
     const syncOnboardingCardLock = () => {
@@ -908,7 +912,7 @@ const AppTile = ({
     ? undefined
     : isQTrade
       ? qTradeLogo
-      : `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${appName}/qortal_avatar?async=true`;
+      : `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${encodeURIComponent(appName)}/qortal_avatar?async=true`;
   const [imageSrc, setImageSrc] = useState(baseAvatarUrl);
   const [hasTileVideoError, setHasTileVideoError] = useState(false);
   const hasRetriedRef = useRef(false);

@@ -93,6 +93,18 @@ describe('SidePanelArc', () => {
     expect(slotAngle('qdn:APP:app 0')).not.toBe(before);
   });
 
+  it('leaves Ctrl+wheel to the zoom', () => {
+    renderArc(apps(12));
+    const before = slotAngle('qdn:APP:app 0');
+    const arc = document.querySelector(
+      '[data-side-panel-layout="arc"]'
+    ) as HTMLElement;
+
+    fireEvent.wheel(arc, { ctrlKey: true, deltaY: 120 });
+
+    expect(slotAngle('qdn:APP:app 0')).toBe(before);
+  });
+
   it('grows and shrinks with the buttons, around the same middle', () => {
     renderArc(apps(3), 1.25);
     const outer = Math.round(ARC_OUTER_PX * 1.25);

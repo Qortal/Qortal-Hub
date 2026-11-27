@@ -1,8 +1,11 @@
 // Real Electron regression for the Hub's zoom (src/hub-zoom.ts): View's zoom
 // items and the zoom keys zoom the Hub page, also from inside a Q-App, and
-// every Q-App follows, also one opened or reopened later. Q-Apps are loopback
-// HTTP <webview>s in partitions of their own, one of them in a hidden tab, as
-// in the Hub. Isolated userData.
+// every Q-App follows, also one opened or reopened later. Then each app's own
+// zoom: the pointer decides what a key zooms, an app keeps its zoom on top of
+// the Hub's, across its pages and reopening, and its Home widget, in the same
+// partition, keeps the Hub's. Q-Apps are loopback HTTP <webview>s in
+// partitions of their own, one of them in a hidden tab, as in the Hub.
+// Isolated userData.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -10,6 +13,7 @@ const os = require('node:os');
 const http = require('node:http');
 const { app, BrowserWindow, Menu, protocol } = require('electron');
 const {
+  configureAppZoom,
   followHubZoom,
   installZoomKeys,
   MAX_ZOOM_LEVEL,
@@ -209,6 +213,120 @@ app.whenReady().then(async () => {
     await pressTimes(40, '-');
     await expectAll(MIN_ZOOM_LEVEL, 'down to the bottom');
 
+    // Each app's own zoom. Which app a webview shows, as setup.ts says it:
+    // the shown Q-App and the hidden one are tabs; a widget of the shown one,
+    // in its partition and at its site, follows the Hub.
+    const appOf = (guest) => {
+      const id = new URL(guest.getURL() || 'about:blank').pathname.slice(1);
+      if (id === 'shown' || id.startsWith('shown-')) {
+        return { kind: 'app', key: 'APP shown', tabId: 'tab-shown' };
+      }
+      if (id === 'hidden') {
+        return { kind: 'app', key: 'APP hidden', tabId: 'tab-hidden' };
+      }
+      return id === 'widget' ? { kind: 'hub' } : null;
+    };
+    configureAppZoom({ appOf, getHubPage: hubPage });
+    item('Actual Size').click();
+    const widget = await (async () => {
+      const attached = new Promise((resolve) =>
+        main.webContents.once('did-attach-webview', (_event, guest) =>
+          guest.once('did-finish-load', () => resolve(guest))
+        )
+      );
+      await main.webContents.executeJavaScript(
+        `document.body.insertAdjacentHTML('beforeend', ${JSON.stringify(
+          `<div><webview id="widget" partition="persist:shown" src="http://127.0.0.1:${port}/widget"></webview></div>`
+        )})`
+      );
+      return attached;
+    })();
+    await delay(100);
+    const now = () => ({
+      hub: main.webContents.getZoomLevel(),
+      shown: shown.getZoomLevel(),
+      hidden: hidden.getZoomLevel(),
+      widget: widget.getZoomLevel(),
+    });
+    assert.deepEqual(
+      [shown, hidden, widget].map((guest) => guest.getZoomMode()),
+      ['isolated', 'isolated', 'isolated'],
+      'every webview zooms on its own'
+    );
+    // Where the pointer is, as each page reports it to main: a mouse move
+    // reaches the page under the pointer only. (This window is hidden, so
+    // the test sends each move to that page itself.)
+    const pointerOn = async (contents) => {
+      contents.sendInputEvent({ type: 'mouseMove', x: 10, y: 10 });
+      await delay(60);
+    };
+    let shownNow = shown;
+    const overShown = () => pointerOn(shownNow);
+    const overHub = () => pointerOn(main.webContents);
+
+    await overShown();
+    await type(main.webContents, '=');
+    assert.deepEqual(
+      now(),
+      { hub: 0, shown: 0.5, hidden: 0, widget: 0 },
+      'a key with the pointer on an app zooms that app only, not its widget'
+    );
+    await type(shown, '=');
+    assert.deepEqual(now(), { hub: 0, shown: 1, hidden: 0, widget: 0 });
+
+    await overHub();
+    await type(shown, '=');
+    assert.deepEqual(
+      now(),
+      { hub: 0.5, shown: 1.5, hidden: 0.5, widget: 0.5 },
+      'the pointer on Hub zooms Hub; the app keeps its own zoom on top'
+    );
+
+    // Kept across the app's own pages and a reload.
+    await new Promise((resolve) => {
+      shown.once('did-finish-load', resolve);
+      shown.loadURL(`http://127.0.0.1:${port}/shown-page-2`);
+    });
+    await delay(100);
+    assert.equal(shown.getZoomLevel(), 1.5, 'kept on another page');
+    await new Promise((resolve) => {
+      shown.once('did-finish-load', resolve);
+      shown.reload();
+    });
+    await delay(100);
+    assert.equal(shown.getZoomLevel(), 1.5, 'kept on a reload');
+    assert.equal(widget.getZoomLevel(), 0.5, 'its widget still at the Hub’s');
+
+    // Closed and opened again: at its own zoom, on top of the Hub's.
+    await main.webContents.executeJavaScript(
+      "document.getElementById('shown').parentElement.remove()"
+    );
+    await delay(100);
+    const reopened = await (async () => {
+      const attached = new Promise((resolve) =>
+        main.webContents.once('did-attach-webview', (_event, guest) =>
+          guest.once('did-finish-load', () => resolve(guest))
+        )
+      );
+      await main.webContents.executeJavaScript(
+        `document.body.insertAdjacentHTML('afterbegin', ${JSON.stringify(qapp('shown', '127.0.0.1'))})`
+      );
+      return attached;
+    })();
+    await delay(100);
+    assert.equal(reopened.getZoomLevel(), 1.5, 'reopened at its own zoom');
+    shownNow = reopened;
+
+    // Ctrl+0 with the pointer on the app: back to the Hub's zoom.
+    await overShown();
+    await type(main.webContents, '0');
+    assert.equal(reopened.getZoomLevel(), 0.5, 'Ctrl+0 on the app');
+    await overHub();
+    await type(main.webContents, '0');
+    assert.equal(reopened.getZoomLevel(), 0, 'Ctrl+0 on Hub');
+    assert.equal(main.webContents.getZoomLevel(), 0);
+    configureAppZoom({ appOf: () => null, getHubPage: hubPage });
+
     // The title bar's menu opens at a zoomed click: whole window pixels.
     item('Zoom In').click();
     const menu = Menu.getApplicationMenu();
@@ -219,7 +337,7 @@ app.whenReady().then(async () => {
     menu.closePopup(main);
 
     console.log(
-      'PASS: View menu, zoom keys in the Hub page and in a Q-App, Q-Apps following (hidden, opened later and reopened), limits, and the menu popup point'
+      "PASS: View menu, zoom keys in the Hub page and in a Q-App, Q-Apps following (hidden, opened later and reopened), limits, each app's own zoom (by the pointer, on top of the Hub's, kept across pages and reopening, its widget apart), and the menu popup point"
     );
   } catch (error) {
     console.error(error);

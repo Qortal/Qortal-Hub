@@ -26,7 +26,7 @@ src/components/QortalLand/QortalLand.tsx
 Enable PNG prop overlays with either:
 
 ```js
-localStorage.setItem('qortalland.devPngProps', '1')
+localStorage.setItem('qortalland.devPngProps', '1');
 ```
 
 or by adding this query parameter:
@@ -38,7 +38,7 @@ or by adding this query parameter:
 Disable overlays with:
 
 ```js
-localStorage.removeItem('qortalland.devPngProps')
+localStorage.removeItem('qortalland.devPngProps');
 ```
 
 or:
@@ -46,4 +46,3 @@ or:
 ```text
 ?qortallandAssets=procedural
 ```
-

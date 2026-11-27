@@ -6,10 +6,7 @@ const AVATARS_DIR = 'avatars';
  * Resize an image file to a square avatar and return base64 WebP (no prefix).
  * Crops to center square, then scales to target size.
  */
-export function resizeImageToAvatar(
-  file: File,
-  size: number
-): Promise<string> {
+export function resizeImageToAvatar(file: File, size: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const objectUrl = URL.createObjectURL(file);

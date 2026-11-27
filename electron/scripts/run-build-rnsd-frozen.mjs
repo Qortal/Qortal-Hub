@@ -19,11 +19,18 @@ if (!fs.existsSync(script)) {
 
 /** @type {readonly (readonly string[])[]} */
 const attempts =
-  process.env.QORTAL_RETICULUM_BUILD_ARCH === 'x64' && process.platform === 'darwin'
-    ? [['arch', '-x86_64', '/Applications/Xcode.app/Contents/Developer/usr/bin/python3']]
+  process.env.QORTAL_RETICULUM_BUILD_ARCH === 'x64' &&
+  process.platform === 'darwin'
+    ? [
+        [
+          'arch',
+          '-x86_64',
+          '/Applications/Xcode.app/Contents/Developer/usr/bin/python3',
+        ],
+      ]
     : process.platform === 'win32'
-    ? [['py', '-3'], ['python3'], ['python']]
-    : [['python3'], ['python']];
+      ? [['py', '-3'], ['python3'], ['python']]
+      : [['python3'], ['python']];
 
 const scriptArgs = [];
 if (process.env.QORTAL_RETICULUM_OUTPUT_DIR) {

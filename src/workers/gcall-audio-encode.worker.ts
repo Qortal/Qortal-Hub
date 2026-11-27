@@ -652,14 +652,15 @@ function handleSetInputPort(message: {
   sharedFrameSamples?: number;
 }): void {
   inputPort = message.port;
-  const sharedArrayBufferAvailable =
-    typeof SharedArrayBuffer !== 'undefined';
+  const sharedArrayBufferAvailable = typeof SharedArrayBuffer !== 'undefined';
   sharedSamples =
-    sharedArrayBufferAvailable && message.sharedSamples instanceof SharedArrayBuffer
+    sharedArrayBufferAvailable &&
+    message.sharedSamples instanceof SharedArrayBuffer
       ? new Float32Array(message.sharedSamples)
       : null;
   sharedState =
-    sharedArrayBufferAvailable && message.sharedState instanceof SharedArrayBuffer
+    sharedArrayBufferAvailable &&
+    message.sharedState instanceof SharedArrayBuffer
       ? new Int32Array(message.sharedState)
       : null;
   sharedSlotCount = Math.max(0, message.sharedSlotCount ?? 0);

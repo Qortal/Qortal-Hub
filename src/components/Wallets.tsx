@@ -9,14 +9,12 @@ import {
 } from 'react';
 import {
   Avatar,
-  Badge,
   Box,
   ButtonBase,
   IconButton,
   Input,
   InputAdornment,
   TextField,
-  Tooltip,
   Typography,
   useTheme,
 } from '@mui/material';
@@ -34,7 +32,6 @@ import LoginRoundedIcon from '@mui/icons-material/LoginRounded';
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
-import ManageSearchRoundedIcon from '@mui/icons-material/ManageSearchRounded';
 import {
   getWallets,
   storeWallets,
@@ -75,6 +72,8 @@ type WalletsProps = {
   mode?: 'entry' | 'import';
   onImportViewChange?: (view: ImportView) => void;
   onReady?: () => void;
+  /** Focus the account filter once the login screen has settled. */
+  autoFocusFilter?: boolean;
   onWalletUnlockStart?: (snapshot: AuthUnlockTransitionSnapshot) => void;
 };
 
@@ -86,6 +85,7 @@ export const Wallets = ({
   mode = 'import',
   onImportViewChange,
   onReady,
+  autoFocusFilter = false,
   onWalletUnlockStart,
 }: WalletsProps) => {
   const { t } = useTranslation(['auth']);
@@ -111,9 +111,11 @@ export const Wallets = ({
   const [primaryNamesByAddress, setPrimaryNamesByAddress] = useState<
     Record<string, string>
   >({});
-  const [walletEntrySearchOpen, setWalletEntrySearchOpen] = useState(false);
   const [walletEntryFilterQuery, setWalletEntryFilterQuery] = useState('');
   const accountsScrollRef = useRef<HTMLDivElement | null>(null);
+  const filterInputRef = useRef<HTMLInputElement | null>(null);
+  /** Autofocus is a one-shot: re-renders must not steal focus back. */
+  const filterAutoFocusedRef = useRef(false);
   /** True while reordering wallets; dragover hits header/footer/etc. unless we listen on document */
   const walletReorderDragActiveRef = useRef(false);
   const attemptedLastWalletAutoSelectRef = useRef(
@@ -307,10 +309,30 @@ export const Wallets = ({
 
   useEffect(() => {
     if (wallets.length <= 8) {
-      setWalletEntrySearchOpen(false);
       setWalletEntryFilterQuery('');
+      // The field is gone at this count, so a later reappearance may focus it.
+      filterAutoFocusedRef.current = false;
     }
   }, [wallets.length]);
+
+  /**
+   * Focus the account filter once the login screen has settled, so typing
+   * narrows the list without a click. The condition is derived inline rather
+   * than reusing `showsEntryWalletFilter`, which is computed after the loading
+   * early return below.
+   */
+  useEffect(() => {
+    if (filterAutoFocusedRef.current) return;
+    if (!autoFocusFilter) return;
+    if (mode !== 'entry') return;
+    if (editingWalletIndex !== null) return;
+    if (wallets.length <= 8) return;
+    const input = filterInputRef.current;
+    if (!input) return;
+    filterAutoFocusedRef.current = true;
+    // No scroll: the login screen is mid-reveal and must not jump.
+    input.focus({ preventScroll: true });
+  }, [autoFocusFilter, editingWalletIndex, mode, wallets.length]);
 
   const selectedWalletFunc = (
     wallet,
@@ -707,82 +729,52 @@ export const Wallets = ({
       sx={{ display: 'flex', flexDirection: 'column', gap: 1, width: '100%' }}
     >
       {showsEntryWalletFilter && (
-        <Box
-          sx={{
-            alignItems: 'center',
-            display: 'flex',
-            gap: 0.75,
-            width: '100%',
+        <TextField
+          fullWidth
+          inputProps={{ 'aria-label': t('auth:entry.filter_accounts_aria') }}
+          inputRef={filterInputRef}
+          placeholder={t('auth:entry.filter_placeholder')}
+          size="small"
+          value={walletEntryFilterQuery}
+          variant="outlined"
+          InputProps={{
+            endAdornment: walletEntryFilterQuery ? (
+              <InputAdornment position="end">
+                <IconButton
+                  aria-label={t('auth:entry.filter_clear')}
+                  edge="end"
+                  size="small"
+                  sx={{ color: theme.palette.text.secondary }}
+                  onClick={() => {
+                    setWalletEntryFilterQuery('');
+                    // The clear button unmounts with the query: keep the caret
+                    // in the field instead of dropping focus to the page.
+                    filterInputRef.current?.focus();
+                  }}
+                >
+                  <ClearRoundedIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </InputAdornment>
+            ) : undefined,
           }}
-        >
-          <Tooltip placement="top" title={t('auth:entry.filter_accounts_aria')}>
-            <IconButton
-              aria-expanded={walletEntrySearchOpen}
-              aria-label={t('auth:entry.filter_accounts_aria')}
-              size="small"
-              tabIndex={walletEntrySearchOpen ? 0 : -1}
-              onClick={() => setWalletEntrySearchOpen((open) => !open)}
-              sx={{
-                '&:hover': {
-                  backgroundColor: alpha(theme.palette.primary.main, 0.1),
-                },
-                border: `1px solid ${
-                  walletEntrySearchOpen || walletEntryFilterQuery.trim()
-                    ? alpha(theme.palette.primary.main, 0.45)
-                    : alpha(theme.palette.text.primary, 0.12)
-                }`,
-                borderRadius: '9px',
-                color: theme.palette.text.secondary,
-                flexShrink: 0,
-                height: 34,
-                width: 34,
-              }}
-            >
-              <Badge
-                color="primary"
-                invisible={!walletEntryFilterQuery.trim()}
-                variant="dot"
-              >
-                <ManageSearchRoundedIcon sx={{ fontSize: 21 }} />
-              </Badge>
-            </IconButton>
-          </Tooltip>
-          {walletEntrySearchOpen && (
-            <TextField
-              autoFocus
-              fullWidth
-              placeholder={t('auth:entry.filter_placeholder')}
-              size="small"
-              value={walletEntryFilterQuery}
-              variant="outlined"
-              InputProps={{
-                endAdornment: walletEntryFilterQuery ? (
-                  <InputAdornment position="end">
-                    <IconButton
-                      aria-label={t('auth:entry.filter_clear')}
-                      edge="end"
-                      size="small"
-                      sx={{ color: theme.palette.text.secondary }}
-                      onClick={() => setWalletEntryFilterQuery('')}
-                    >
-                      <ClearRoundedIcon sx={{ fontSize: 18 }} />
-                    </IconButton>
-                  </InputAdornment>
-                ) : undefined,
-              }}
-              onChange={(e) => setWalletEntryFilterQuery(e.target.value)}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  backgroundColor: alpha(theme.palette.background.paper, 0.45),
-                  borderRadius: '9px',
-                  fontSize: '0.875rem',
-                  minHeight: 36,
-                },
-                minWidth: 0,
-              }}
-            />
-          )}
-        </Box>
+          onChange={(e) => setWalletEntryFilterQuery(e.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && walletEntryFilterQuery) {
+              event.stopPropagation();
+              setWalletEntryFilterQuery('');
+              filterInputRef.current?.focus();
+            }
+          }}
+          sx={{
+            '& .MuiOutlinedInput-root': {
+              backgroundColor: alpha(theme.palette.background.paper, 0.45),
+              borderRadius: '9px',
+              fontSize: '0.875rem',
+              minHeight: 36,
+            },
+            minWidth: 0,
+          }}
+        />
       )}
       {accountsList}
     </Box>

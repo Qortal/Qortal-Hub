@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent } from 'react';
 import {
   Box,
@@ -43,7 +43,11 @@ import ShortUniqueId from 'short-unique-id';
 import { atomWithStorage } from 'jotai/utils';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
-import { executeEvent } from '../../../utils/events';
+import {
+  executeEvent,
+  subscribeToEvent,
+  unsubscribeFromEvent,
+} from '../../../utils/events';
 import { useAppsBarSettings } from '../../Desktop/AppsBar/useAppsBar';
 import type {
   AppBookmark,
@@ -52,6 +56,7 @@ import type {
   BookmarkableAppTab,
 } from './bookmarkTypes';
 import {
+  APP_BOOKMARKS_CHANGED_EVENT,
   buildBookmarkLink,
   findBookmarkForCandidate,
   getBookmarkCandidateFromTab,
@@ -122,6 +127,8 @@ export function AppBookmarksButton({
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [data, setData] = useState<AppBookmarksForAddress>(emptyData);
   const [hasLoaded, setHasLoaded] = useState(false);
+  /** Bumped by every read and write: an older read's answer is dropped. */
+  const latestLoadRef = useRef(0);
   const [isLoading, setIsLoading] = useState(false);
   const [form, setForm] = useState<BookmarkFormState | null>(null);
   const [bookmarkNameError, setBookmarkNameError] = useState(false);
@@ -285,11 +292,30 @@ export function AppBookmarksButton({
     setRenamingFolder(null);
   };
 
+  // The store changed elsewhere (the launcher, or the account's settings
+  // taken in from QDN): what is shown, and changed from here, is read again,
+  // so a change made here never writes an old list back.
+  useEffect(() => {
+    if (!address || !hasLoaded) return;
+    const onChanged = (event: CustomEvent<{ address?: string }>) => {
+      if (event.detail?.address !== address) return;
+      const loadId = ++latestLoadRef.current;
+      loadBookmarksForAddress(address)
+        .then((loaded) => {
+          if (loadId === latestLoadRef.current) setData(loaded);
+        })
+        .catch((error) => console.error(error));
+    };
+    subscribeToEvent(APP_BOOKMARKS_CHANGED_EVENT, onChanged);
+    return () => unsubscribeFromEvent(APP_BOOKMARKS_CHANGED_EVENT, onChanged);
+  }, [address, hasLoaded]);
+
   const persist = async (nextData: AppBookmarksForAddress) => {
     if (!address) {
       setData(nextData);
       return;
     }
+    latestLoadRef.current += 1;
     const saved = await saveBookmarksForAddress(address, nextData);
     setData(saved);
   };
@@ -299,6 +325,7 @@ export function AppBookmarksButton({
     if (!address) return;
 
     setIsLoading(true);
+    latestLoadRef.current += 1;
     try {
       const loaded = await loadBookmarksForAddress(address);
       setData(loaded);

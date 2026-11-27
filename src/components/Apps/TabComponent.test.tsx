@@ -224,4 +224,18 @@ describe('TabComponent', () => {
       'Close all tabs',
     ]);
   });
+
+  it('loads the picture of an app whose name has # or / in it', () => {
+    // Registered names can hold #, ?, / and spaces: each part of the link
+    // carries the name as one path segment.
+    renderTab({
+      app: { name: 'Puzzle #2 / Extra', service: 'APP', tabId: 'tab-2' },
+      widthPx: 180,
+    });
+
+    expect(document.querySelector('img')).toHaveAttribute(
+      'src',
+      'http://node.test/arbitrary/THUMBNAIL/Puzzle%20%232%20%2F%20Extra/qortal_avatar?async=true'
+    );
+  });
 });

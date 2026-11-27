@@ -43,10 +43,18 @@ describe('ProximityVoiceControl', () => {
   it('opens the minimal disabled state and enables open-mic voice', async () => {
     const onEnable = vi.fn(async () => {});
     const onMode = vi.fn();
-    render(<ProximityVoiceControl {...baseProps} onEnable={onEnable} onMode={onMode} />);
+    render(
+      <ProximityVoiceControl
+        {...baseProps}
+        onEnable={onEnable}
+        onMode={onMode}
+      />
+    );
 
     fireEvent.click(screen.getByRole('button', { name: /Proximity Voice/ }));
-    expect(screen.getByRole('dialog', { name: 'Proximity voice' })).toBeTruthy();
+    expect(
+      screen.getByRole('dialog', { name: 'Proximity voice' })
+    ).toBeTruthy();
     expect(screen.getByText('Voice is off')).toBeTruthy();
     expect(screen.getByText('Nobody nearby')).toBeTruthy();
 
@@ -81,7 +89,9 @@ describe('ProximityVoiceControl', () => {
   });
 
   it('shows device and 75% volume settings in the voice panel', async () => {
-    render(<ProximityVoiceControl {...baseProps} state="ready" mode="open-mic" />);
+    render(
+      <ProximityVoiceControl {...baseProps} state="ready" mode="open-mic" />
+    );
 
     fireEvent.click(screen.getByRole('button', { name: /Proximity Voice/ }));
     expect(screen.getByText('Output')).toBeTruthy();
@@ -94,7 +104,9 @@ describe('ProximityVoiceControl', () => {
 
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: 'Proximity voice' })).toBeNull();
+      expect(
+        screen.queryByRole('dialog', { name: 'Proximity voice' })
+      ).toBeNull();
     });
   });
 });

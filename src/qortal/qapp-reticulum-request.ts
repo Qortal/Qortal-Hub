@@ -52,7 +52,12 @@ export async function dispatchQAppReticulumRequest(
     name: identity.name,
     service: identity.service,
   };
-  const appInfo = { tabId: context.tabId, name: context.appName };
+  // The approval names the app with its service, as every other one does.
+  const appInfo = {
+    tabId: context.tabId,
+    name: context.appName,
+    service: context.appService,
+  };
 
   if (message.action === 'RNS_REQUEST') {
     if (!api.qappReticulumRequest)

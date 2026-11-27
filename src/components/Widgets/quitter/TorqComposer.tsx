@@ -128,13 +128,32 @@ export const TorqComposer = ({
   imagesRef.current = images;
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
+  const tcRef = useRef(tc);
+  tcRef.current = tc;
+  // The composer's element. Kept when Home's <Activity> hides it, as React
+  // detaches refs then too: still in the page means hidden, not gone.
+  const elementRef = useRef<HTMLElement | null>(null);
+  const keepElement = useCallback((node: HTMLElement | null) => {
+    if (node) elementRef.current = node;
+  }, []);
+  const isGone = () => elementRef.current?.isConnected === false;
 
-  // Leaving Home drops the draft: free its previews, and stop a publish that
-  // has not reached the approval dialog yet.
+  // Home stays mounted in <Activity>: leaving it runs this cleanup too, and
+  // keeps the composer as it was. A post with the approval dialog or on its
+  // way to QDN carries on, and shows how it went when Home is back. One
+  // still being prepared stops, as Cancel stops it, and says so: its dialog
+  // would open over another app's tab. The draft stays; its previews are
+  // freed once the composer is gone (another account, the window removed).
   useEffect(
     () => () => {
-      if (phaseRef.current === 'preparing') abortRef.current?.abort();
-      abortRef.current = null;
+      if (phaseRef.current === 'preparing') {
+        abortRef.current?.abort();
+        abortRef.current = null;
+        setPhase('idle');
+        setProgress(null);
+        setError(tcRef.current('error.not_posted_left_home'));
+      }
+      if (!isGone()) return;
       imagesRef.current.forEach((image) =>
         URL.revokeObjectURL(image.previewUrl)
       );
@@ -233,8 +252,9 @@ export const TorqComposer = ({
     if (!canPost) return;
     const abort = new AbortController();
     abortRef.current = abort;
-    // False once cancelled or unmounted: what this publish says goes nowhere.
-    const isCurrent = () => abortRef.current === abort;
+    // False once cancelled or gone: what this publish says goes nowhere.
+    // Hidden with Home, it still counts.
+    const isCurrent = () => abortRef.current === abort && !isGone();
     setPhase('preparing');
     setError('');
     setProgress({ message: tc('progress.preparing_post'), percent: 0 });
@@ -329,6 +349,7 @@ export const TorqComposer = ({
   if (!isOpen) {
     return (
       <Box
+        ref={keepElement}
         sx={{
           ...entrySx,
           flexWrap: 'wrap',
@@ -402,6 +423,7 @@ export const TorqComposer = ({
 
   return (
     <Box
+      ref={keepElement}
       aria-labelledby={titleId}
       component="section"
       sx={{

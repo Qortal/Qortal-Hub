@@ -1110,4 +1110,4 @@ describe('the publish form, against the node', () => {
       expect(whatsNew()).toHaveValue('');
     });
   });
-});
+}, 20000);

@@ -18,17 +18,11 @@
   line-height: 1.55;
 }
 
-.reticulum-chat-text-scale--medium
-  .tiptap-chat-composer--compact
-  .tiptap
-  p {
+.reticulum-chat-text-scale--medium .tiptap-chat-composer--compact .tiptap p {
   font-size: 16px;
 }
 
-.reticulum-chat-text-scale--high
-  .tiptap-chat-composer--compact
-  .tiptap
-  p {
+.reticulum-chat-text-scale--high .tiptap-chat-composer--compact .tiptap p {
   font-size: 17px;
 }
 
@@ -179,7 +173,11 @@
 
 .tiptap th {
   font-weight: 600;
-  background: color-mix(in srgb, var(--background-secondary, #fff) 88%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--background-secondary, #fff) 88%,
+    transparent
+  );
 }
 
 .tiptap ul {
@@ -228,8 +226,7 @@
 
 /* Qortal protocol links (e.g. qortal://use-group/...) */
 .tiptap .qortal-link,
-.tiptap span[data-url^='qortal://']
-{
+.tiptap span[data-url^='qortal://'] {
   color: var(--primary-main, #5f9ea0);
   text-decoration: none;
   background: color-mix(in srgb, var(--primary-main, #5f9ea0) 14%, transparent);
@@ -242,8 +239,7 @@
     opacity 0.15s ease;
 }
 .tiptap .qortal-link:hover,
-.tiptap span[data-url^='qortal://']:hover
-{
+.tiptap span[data-url^='qortal://']:hover {
   background: color-mix(in srgb, var(--primary-main, #5f9ea0) 22%, transparent);
   opacity: 0.95;
 }
@@ -265,8 +261,7 @@
 .tiptap.isReply a,
 .tiptap.isReply .qortal-link,
 .tiptap.isReply .auto-link,
-.tiptap.isReply span[data-url^='qortal://']
-{
+.tiptap.isReply span[data-url^='qortal://'] {
   color: inherit !important;
   background: none !important;
   pointer-events: none !important;
@@ -277,8 +272,7 @@
 }
 .tiptap.isReply a:hover,
 .tiptap.isReply .qortal-link:hover,
-.tiptap.isReply span[data-url^='qortal://']:hover
-{
+.tiptap.isReply span[data-url^='qortal://']:hover {
   opacity: 1;
   background: none !important;
 }
@@ -396,9 +390,7 @@
   white-space: pre-wrap;
 }
 
-.reticulum-discussion-composer
-  .tiptap-chat-composer--compact
-  > .MuiBox-root {
+.reticulum-discussion-composer .tiptap-chat-composer--compact > .MuiBox-root {
   gap: 8px;
   min-height: 56px;
 }
@@ -423,10 +415,7 @@
   padding: 15px 18px;
 }
 
-.reticulum-discussion-composer
-  .tiptap-chat-composer--compact
-  .tiptap
-  p {
+.reticulum-discussion-composer .tiptap-chat-composer--compact .tiptap p {
   color: #f3f5f9;
   font-size: 16px;
   font-weight: 400;
@@ -793,7 +782,8 @@
   border-color: rgba(36, 50, 72, 0.24);
 }
 
-.qchat-mention-menu[data-color-mode='light'] .qchat-mention-menu__section-label {
+.qchat-mention-menu[data-color-mode='light']
+  .qchat-mention-menu__section-label {
   color: rgba(45, 57, 76, 0.68);
 }
 
@@ -805,23 +795,29 @@
   background: rgba(37, 99, 235, 0.07);
 }
 
-.qchat-mention-menu[data-color-mode='light'] .qchat-mention-menu__row.is-selected {
+.qchat-mention-menu[data-color-mode='light']
+  .qchat-mention-menu__row.is-selected {
   background: rgba(37, 99, 235, 0.14);
   border-color: rgba(37, 99, 235, 0.42);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58);
 }
 
 .qchat-mention-menu[data-color-mode='light'] .qchat-mention-menu__primary,
-.qchat-mention-menu[data-color-mode='light'] .qchat-mention-menu__row.is-selected .qchat-mention-menu__primary {
+.qchat-mention-menu[data-color-mode='light']
+  .qchat-mention-menu__row.is-selected
+  .qchat-mention-menu__primary {
   color: #202938;
 }
 
 .qchat-mention-menu[data-color-mode='light'] .qchat-mention-menu__secondary,
-.qchat-mention-menu[data-color-mode='light'] .qchat-mention-menu__row.is-selected .qchat-mention-menu__secondary {
+.qchat-mention-menu[data-color-mode='light']
+  .qchat-mention-menu__row.is-selected
+  .qchat-mention-menu__secondary {
   color: rgba(45, 57, 76, 0.76);
 }
 
-.qchat-mention-menu[data-color-mode='light'] .qchat-mention-menu__icon--channel {
+.qchat-mention-menu[data-color-mode='light']
+  .qchat-mention-menu__icon--channel {
   background: rgba(49, 72, 110, 0.08);
   border-color: rgba(49, 72, 110, 0.2);
   color: #314e78;

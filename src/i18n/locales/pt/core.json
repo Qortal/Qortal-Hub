@@ -431,6 +431,11 @@
     "unpin_from_bookmarks": "desafixar dos marcadores",
     "unsaved_publish": "os dados do formulário de publicação ainda não foram publicados, e fechar a aba os descarta."
   },
+  "approval_dialog": {
+    "requested_by": "Solicitado por",
+    "unknown_app": "Q-App desconhecido",
+    "unknown_app_hint": "O Qortal Hub não conseguiu identificar qual Q-App enviou esta solicitação. Recuse-a, a menos que você mesmo tenha acabado de pedir isso."
+  },
   "apps_bar": {
     "empty": "Fixe uma aplicação ou adicione um marcador e aparecerá aqui.",
     "label": "Aplicações fixadas e marcadores",
@@ -909,7 +914,7 @@
       "publishing": "publicando... Por favor, aguarde.",
       "qdn": "usar salvamento na QDN",
       "rating": "avaliação para {{ service }} {{ name }}",
-      "register_name": "você precisa de um nome registrado na QDN para salvar seus aplicativos fixados na QDN.",
+      "register_name": "você precisa de um nome Qortal registrado para salvar seus aplicativos fixados na QDN.",
       "replied_to": "respondeu para {{ person }}",
       "replied_to_deleted_message": "respondeu a uma mensagem eliminada",
       "replied_to_you": "↩ respondeu-te",
@@ -948,7 +953,7 @@
       "register_name": "você gostaria de registrar este nome?",
       "reset_pinned": "não gostou das alterações locais atuais? Deseja redefinir para os aplicativos fixados padrão?",
       "reset_qdn": "não gostou das alterações locais atuais? Deseja redefinir para os aplicativos fixados salvos na QDN?",
-      "transfer_qort": "você gostaria de transferir {{ amount }} QORTs?"
+      "transfer_qort_to": "você gostaria de transferir {{ amount }} QORT para {{ recipient }}?"
     },
     "success": {
       "order_submitted": "sua ordem de compra foi enviada",
@@ -1051,7 +1056,14 @@
       "name": "Nome",
       "website": "Site"
     },
-    "suggestions": "Sugestões"
+    "suggestions": "Sugestões",
+    "zoom": {
+      "button": "zoom: {{percent}}",
+      "kept": "guardado para {{name}} neste computador",
+      "same_as_hub": "igual ao Hub",
+      "zoom_in": "aumentar",
+      "zoom_out": "diminuir"
+    }
   },
   "new_post_in": "nova postagem em {{ title }}",
   "node_state": {
@@ -1835,6 +1847,7 @@
       "image_metadata_unremovable": "a imagem {{index}} não pode ser postada: não é possível remover a localização e os dados da câmera deste formato. Salve-a como JPEG ou PNG e tente novamente.",
       "images_too_large": "estas imagens são grandes demais para postar juntas. Remova uma imagem e tente novamente.",
       "name_required": "é necessário um nome Qortal para publicar",
+      "not_posted_left_home": "não publicado: você saiu do Início antes do envio. Publique novamente quando quiser.",
       "post_too_large": "esta postagem tem mais de 5 MB, então o {{app}} não a mostraria. Encurte-a ou remova uma imagem.",
       "publish_failed": "falha ao publicar",
       "too_many_images": "máximo de {{count}} imagens por postagem"

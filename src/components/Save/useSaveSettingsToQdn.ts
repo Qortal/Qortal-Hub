@@ -14,27 +14,11 @@ import {
   getPublishRecord,
 } from '../../hooks/useQortalGetSaveSettings';
 import { objectToBase64 } from '../../qdn/encryption/group-encryption';
+import { serializePinnedAppsForQdn } from '../../utils/pinnedAppsSettings';
 import {
-  mergePinnedApps,
-  type PinnedApp,
-  removeBrokenPinnedApps,
-  serializePinnedAppsForQdn,
-} from '../../utils/pinnedAppsSettings';
-import { PINNED_APPS_STORAGE_KEY } from '../../utils/pinnedAppsStorage';
-import { loadBookmarksForAddress } from '../Apps/AppBookmarks/bookmarkStorage';
-import type { AppBookmarksForAddress } from '../Apps/AppBookmarks/bookmarkTypes';
-import { loadLauncherView } from '../Apps/AppsLauncher/launcherItems';
-import { saveToLocalStorage } from '../Apps/AppsNavBarDesktop';
-import {
-  type SavedLauncher,
-  saveLauncherSyncMark,
-  toSavedBookmarks,
-  toSavedLauncherSettings,
-} from '../Apps/AppsLauncher/launcherQdn';
-import {
-  savedLauncherAtom,
-  useTakeInSavedLauncher,
-} from '../Apps/AppsLauncher/launcherQdnSync';
+  loadSavedAppsBase,
+  useSavedAppsSync,
+} from '../Apps/AppsLauncher/savedAppsSync';
 import {
   markLayoutsSaved,
   NO_SAVED_LAYOUTS,
@@ -80,14 +64,13 @@ const errorOf = (reason: unknown, fallback: string) => {
 };
 
 /**
- * Saves the account's settings to QDN: the pinned apps, and with them the
- * bookmarks, the bookmark folders, the order of the launcher's tiles, Home's
- * layout and the side panel.
+ * Saves the account's settings to QDN: the pinned apps, folders and bookmarks
+ * (saved apps, with the fields older Hubs and GO read), Home's layout and the
+ * side panel.
  *
  * - Settings saved on another device since they were read here are taken
- *   in first, so they are not written over: their bookmarks and arrangement
- *   are taken in, and the pins they hold are added to this device's own, so
- *   an app pinned there is not removed by saving a change made here. They
+ *   in first, item by item, so a save never undoes what another device did:
+ *   an app pinned or removed there stays so, unless changed here since. They
  *   also become what Revert goes back to, even if this save is called off.
  *   With `overwrite`, settings that could not be read are written over.
  * - Home's layout and the side panel go as this device has them. When one
@@ -102,12 +85,9 @@ export const useSaveSettingsToQdn = (
   name: string | null | undefined
 ) => {
   const pinnedApps = useAtomValue(sortablePinnedAppsAtom);
-  const setPinnedApps = useSetAtom(sortablePinnedAppsAtom);
   const setOldPinnedApps = useSetAtom(oldPinnedAppsAtom);
   const setSettingsQdnLastUpdated = useSetAtom(settingsQDNLastUpdatedAtom);
-  const savedLauncher = useAtomValue(savedLauncherAtom);
-  const setSavedLauncher = useSetAtom(savedLauncherAtom);
-  const takeIn = useTakeInSavedLauncher();
+  const savedApps = useSavedAppsSync();
   const savedLayouts = useAtomValue(savedLayoutsAtom);
   const setSavedLayouts = useSetAtom(savedLayoutsAtom);
   const { show } = useContext(QORTAL_APP_CONTEXT);
@@ -121,7 +101,6 @@ export const useSaveSettingsToQdn = (
         postProcess: 'capitalizeFirstChar',
       });
 
-      let pins = pinnedApps;
       // The layouts as saved, as last read: a layout never changed here
       // goes as it was saved.
       let layoutsSaved: SavedLayouts =
@@ -129,35 +108,23 @@ export const useSaveSettingsToQdn = (
           ? savedLayouts.saved
           : NO_SAVED_LAYOUTS;
       if (address && name && !overwrite) {
-        const known =
-          savedLauncher.address === address ? savedLauncher.savedAt : 0;
         const record = await getPublishRecord(name);
-        if (record.hasPublishRecord && record.timestamp > known) {
+        // Only a copy newer than the one read here: a node that is behind
+        // may answer with an older one.
+        const known = loadSavedAppsBase(address)?.updated ?? null;
+        if (
+          record.hasPublishRecord &&
+          (known === null || record.timestamp > known)
+        ) {
           const settings = await getPublish(name);
           // Settings that cannot be read are not written over unasked.
           if (!settings) throw new Error(failure);
-          await takeIn(address, { settings, savedAt: record.timestamp });
-          const theirPins = (settings as { sortablePinnedApps?: PinnedApp[] })
-            ?.sortablePinnedApps;
-          if (Array.isArray(theirPins)) {
-            const saved = removeBrokenPinnedApps(theirPins);
-            // The list QDN holds now, so Revert goes back to that and not to
-            // the one read at sign-in, which has none of its pins.
-            setOldPinnedApps(saved);
-            // An app pinned on another device is kept: it would otherwise be
-            // removed by publishing this device's older list.
-            const merged = mergePinnedApps(pins, saved);
-            if (merged.length !== pins.length) {
-              pins = merged;
-              setPinnedApps(merged);
-              // Kept here too, so the next sign-in starts from the whole list.
-              saveToLocalStorage(
-                PINNED_APPS_STORAGE_KEY,
-                'sortablePinnedApps',
-                merged
-              );
-            }
-          }
+          // Taken in item by item: they become what Revert goes back to.
+          const taken = await savedApps.takeIn(address, {
+            settings,
+            updated: record.timestamp,
+          });
+          if (!taken) throw new Error(failure);
           const layouts = takeInSavedLayouts(address, settings);
           setSavedLayouts(layouts);
           layoutsSaved = layouts.saved;
@@ -168,27 +135,13 @@ export const useSaveSettingsToQdn = (
       if (address) takeInSavedSidePanelItems(address, layoutsSaved);
       const localLayouts = address ? readLocalLayouts(address) : null;
 
-      let bookmarks: AppBookmarksForAddress | null = null;
-      if (address) {
-        try {
-          bookmarks = await loadBookmarksForAddress(address);
-        } catch (error) {
-          console.error(error);
-        }
-      }
-      // Bookmarks that cannot be read now are saved as they were saved.
-      const launcher: SavedLauncher | null = bookmarks
-        ? {
-            bookmarks: toSavedBookmarks(bookmarks),
-            order: loadLauncherView(address).order,
-          }
-        : savedLauncher.address === address
-          ? savedLauncher.launcher
-          : null;
-
+      // The pins, folders and bookmarks with this device's latest changes.
+      const prepared = address ? await savedApps.forSave(address) : null;
+      if (address && !prepared) throw new Error(failure);
       const data64 = await objectToBase64({
-        sortablePinnedApps: serializePinnedAppsForQdn(pins),
-        ...(launcher ? toSavedLauncherSettings(launcher) : {}),
+        ...(prepared
+          ? prepared.fields
+          : { sortablePinnedApps: serializePinnedAppsForQdn(pinnedApps) }),
         ...(localLayouts
           ? toSavedLayoutSettings(localLayouts, layoutsSaved)
           : {}),
@@ -235,23 +188,15 @@ export const useSaveSettingsToQdn = (
       );
       if (!response?.identifier) throw new Error(failure);
 
-      const savedAt = Date.now();
-      setOldPinnedApps(pins);
-      setSettingsQdnLastUpdated(savedAt);
+      setSettingsQdnLastUpdated(Date.now());
       if (address && localLayouts) {
         setSavedLayouts(markLayoutsSaved(address, localLayouts, layoutsSaved));
       }
-      if (address && launcher) {
-        setSavedLauncher({ address, status: 'saved', launcher, savedAt });
-        if (bookmarks) {
-          saveLauncherSyncMark(address, {
-            savedAt,
-            localAt: bookmarks.updatedAt,
-            order: launcher.order,
-            // Everything this device has is now saved.
-            unsaved: false,
-          });
-        }
+      // What was published is what QDN holds now.
+      if (address && prepared) {
+        await savedApps.markPublished(address, prepared.apps);
+      } else {
+        setOldPinnedApps(pinnedApps);
       }
       return 'saved';
     },
@@ -259,16 +204,13 @@ export const useSaveSettingsToQdn = (
       address,
       name,
       pinnedApps,
-      savedLauncher,
+      savedApps,
       savedLayouts,
       setOldPinnedApps,
-      setPinnedApps,
-      setSavedLauncher,
       setSavedLayouts,
       setSettingsQdnLastUpdated,
       show,
       t,
-      takeIn,
     ]
   );
 };

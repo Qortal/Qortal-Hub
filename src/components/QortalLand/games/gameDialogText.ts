@@ -1,5 +1,7 @@
 export const friendlyGameStatus = (error?: string): string => {
-  const normalized = String(error || '').trim().toLowerCase();
+  const normalized = String(error || '')
+    .trim()
+    .toLowerCase();
   if (!normalized) return 'The game has ended.';
   if (normalized.includes('rematch') && normalized.includes('declin')) {
     return 'Rematching was declined.';

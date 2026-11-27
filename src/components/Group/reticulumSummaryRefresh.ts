@@ -1,5 +1,6 @@
-type ReticulumMentionSummary = {
+type ReticulumBadgeSummary = {
   mentionCount?: number;
+  unreadCount?: number;
 };
 
 type SequenceRef = {
@@ -14,12 +15,14 @@ type TimestampRef = {
   current: number | null;
 };
 
-export const getReticulumMentionBadgeCount = (
-  summaries: Record<string, ReticulumMentionSummary>
+export const getReticulumTotalBadgeCount = (
+  summaries: Record<string, ReticulumBadgeSummary>
 ): number =>
   Object.values(summaries || {}).reduce(
     (total, summary) =>
-      total + Math.max(0, Number(summary?.mentionCount) || 0),
+      total +
+      Math.max(0, Number(summary?.mentionCount) || 0) +
+      Math.max(0, Number(summary?.unreadCount) || 0),
     0
   );
 

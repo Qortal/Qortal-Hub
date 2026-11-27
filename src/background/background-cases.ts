@@ -58,6 +58,7 @@ import {
   sendChatNotification,
   sendCoin,
   setGroupData,
+  updateGroup,
   updateThreadActivity,
   walletVersion,
 } from '../background/background.ts';
@@ -73,6 +74,7 @@ import Base58 from '../encryption/Base58.ts';
 import { encryptSingle } from '../qdn/encryption/group-encryption';
 import { _createPoll, _voteOnPoll } from '../qortal/get.ts';
 import { listNamePathSegment } from '../qortal/qappNodePaths';
+import { paymentNotSentError } from '../transactions/paymentAnswer';
 import { createTransaction } from '../transactions/transactions';
 import { getData, storeData } from '../utils/chromeStorage';
 import publicKeyToAddress from '../utils/generateWallet/publicKeyToAddress';
@@ -498,18 +500,23 @@ export async function sendCoinCase(request, event) {
       receiver,
       password,
       amount,
+      approvedFee,
       skipConfirmPassword = false,
     } = request.payload;
+    // approvedFee: the fee shown in the confirmation; sendCoin refuses a
+    // higher fee from the node.
     const { res } = await sendCoin(
-      { receiver, password, amount },
+      { receiver, password, amount, approvedFee },
       skipConfirmPassword === true
     );
     if (!res?.success) {
+      const notSent = paymentNotSentError(res);
       event.source.postMessage(
         {
           requestId: request.requestId,
           action: 'sendCoin',
-          error: res?.data?.message,
+          error: notSent.message,
+          ...(notSent.code ? { code: notSent.code } : {}),
           type: 'backgroundMessageResponse',
         },
         event.origin
@@ -661,6 +668,49 @@ export async function createGroupCase(request, event) {
       {
         requestId: request.requestId,
         action: 'createGroup',
+        error: error?.message,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  }
+}
+
+export async function updateGroupCase(request, event) {
+  try {
+    const {
+      groupId,
+      newOwner,
+      newIsOpen,
+      newDescription,
+      newApprovalThreshold,
+      newMinimumBlockDelay,
+      newMaximumBlockDelay,
+    } = request.payload;
+    const response = await updateGroup({
+      groupId,
+      newOwner,
+      newIsOpen,
+      newDescription,
+      newApprovalThreshold,
+      newMinimumBlockDelay,
+      newMaximumBlockDelay,
+    });
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'updateGroup',
+        payload: response,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'updateGroup',
         error: error?.message,
         type: 'backgroundMessageResponse',
       },

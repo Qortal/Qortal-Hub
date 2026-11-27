@@ -1,4 +1,11 @@
-import { Avatar, Box, ButtonBase, Rating, styled, Typography } from '@mui/material';
+import {
+  Avatar,
+  Box,
+  ButtonBase,
+  Rating,
+  styled,
+  Typography,
+} from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { getBaseApiReact } from '../../../App';
 import LogoSelected from '../../../assets/svgs/LogoSelected.svg';
@@ -109,7 +116,7 @@ export const AppCardCompact = ({ app, myName }: AppCardCompactProps) => {
             },
           }}
           alt={app?.name}
-          src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${app?.name}/qortal_avatar?async=true`}
+          src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${encodeURIComponent(app?.name)}/qortal_avatar?async=true`}
         >
           <img
             style={{

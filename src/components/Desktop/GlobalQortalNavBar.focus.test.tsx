@@ -72,3 +72,51 @@ describe('GlobalQortalNavBar on Ctrl+L', () => {
     removeListener.mockRestore();
   });
 });
+
+describe('GlobalQortalNavBar when a window opened from it takes the focus', () => {
+  it("doesn't take the focus back to select its text", () => {
+    vi.useFakeTimers();
+    const other = document.createElement('button');
+    document.body.appendChild(other);
+    try {
+      const { input } = renderBar();
+      const select = vi.spyOn(input, 'select');
+      // A join link entered in the bar opens the join window, whose focus
+      // trap takes the focus before the bar's text is selected.
+      act(() => {
+        input.focus();
+      });
+      act(() => {
+        other.focus();
+      });
+      act(() => {
+        vi.runOnlyPendingTimers();
+      });
+
+      expect(select).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(other);
+    } finally {
+      other.remove();
+      vi.useRealTimers();
+    }
+  });
+
+  it('still selects its text when it keeps the focus', () => {
+    vi.useFakeTimers();
+    try {
+      const { input } = renderBar();
+      const select = vi.spyOn(input, 'select');
+      act(() => {
+        input.focus();
+      });
+      act(() => {
+        vi.runOnlyPendingTimers();
+      });
+
+      expect(select).toHaveBeenCalled();
+      expect(document.activeElement).toBe(input);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

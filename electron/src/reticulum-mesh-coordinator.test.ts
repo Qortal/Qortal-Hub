@@ -29,8 +29,14 @@ vi.mock('./setup', () => ({
 vi.mock('./reticulum-daemon', () => ({
   getReticulumInstanceIndex: vi.fn(() => 0),
   buildCurrentManagedReticulumConfig: vi.fn(() => ''),
-  ensureMeshNetworkIdentityIfNeeded: vi.fn(() => ({ ok: true, created: false })),
-  ensureMeshNetworkPassphraseIfNeeded: vi.fn(() => ({ ok: true, created: false })),
+  ensureMeshNetworkIdentityIfNeeded: vi.fn(() => ({
+    ok: true,
+    created: false,
+  })),
+  ensureMeshNetworkPassphraseIfNeeded: vi.fn(() => ({
+    ok: true,
+    created: false,
+  })),
   getReticulumDaemonStatus: vi.fn(() => ({ running: false })),
   restartBundledReticulumDaemonAndWaitReady: vi.fn(async () => {}),
   startBundledReticulumDaemon: vi.fn(),
@@ -87,9 +93,13 @@ describe('ReticulumMeshCoordinator', () => {
   });
 
   it('waits for daemon readiness before restarting the bridge after mesh config changes', async () => {
-    vi.mocked(buildCurrentManagedReticulumConfig).mockReturnValue('next-config');
+    vi.mocked(buildCurrentManagedReticulumConfig).mockReturnValue(
+      'next-config'
+    );
     vi.mocked(writeManagedReticulumConfigIfManaged).mockReturnValue(true);
-    vi.mocked(getReticulumDaemonStatus).mockReturnValue({ running: true } as any);
+    vi.mocked(getReticulumDaemonStatus).mockReturnValue({
+      running: true,
+    } as any);
 
     await applyManagedMeshConfigAfterReachableUpdate();
 
@@ -98,14 +108,21 @@ describe('ReticulumMeshCoordinator', () => {
     expect(startReticulumBridge).toHaveBeenCalledTimes(1);
     expect(rebindReticulumBridgeConsumers).toHaveBeenCalledTimes(1);
     expect(
-      vi.mocked(restartBundledReticulumDaemonAndWaitReady).mock.invocationCallOrder[0]
-    ).toBeLessThan(vi.mocked(startReticulumBridge).mock.invocationCallOrder[0]!);
+      vi.mocked(restartBundledReticulumDaemonAndWaitReady).mock
+        .invocationCallOrder[0]
+    ).toBeLessThan(
+      vi.mocked(startReticulumBridge).mock.invocationCallOrder[0]!
+    );
   });
 
   it('does not restart the bridge if the awaited daemon restart fails', async () => {
-    vi.mocked(buildCurrentManagedReticulumConfig).mockReturnValue('next-config');
+    vi.mocked(buildCurrentManagedReticulumConfig).mockReturnValue(
+      'next-config'
+    );
     vi.mocked(writeManagedReticulumConfigIfManaged).mockReturnValue(true);
-    vi.mocked(getReticulumDaemonStatus).mockReturnValue({ running: true } as any);
+    vi.mocked(getReticulumDaemonStatus).mockReturnValue({
+      running: true,
+    } as any);
     vi.mocked(restartBundledReticulumDaemonAndWaitReady).mockRejectedValueOnce(
       new Error('shared instance timeout')
     );

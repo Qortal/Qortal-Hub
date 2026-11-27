@@ -6,7 +6,7 @@ import {
   sortablePinnedAppsAtom,
   userInfoAtom,
 } from '../../atoms/global';
-import { useHasUnsavedLauncher } from '../Apps/AppsLauncher/launcherQdnSync';
+import { useHasUnsavedSavedApps } from '../Apps/AppsLauncher/savedAppsSync';
 import { useLauncherBookmarks } from '../Apps/AppsLauncher/useLauncherBookmarks';
 import { useRevertSettings } from './useRevertSettings';
 import { useSaveSettingsToQdn } from './useSaveSettingsToQdn';
@@ -98,7 +98,7 @@ export const Save = ({
   // The bookmarks and folders are saved with the pins: a change to them is
   // a change to save too.
   const { data: bookmarks } = useLauncherBookmarks(myAddress, true);
-  const hasLauncherChanged = useHasUnsavedLauncher(myAddress, bookmarks);
+  const hasLauncherChanged = useHasUnsavedSavedApps(myAddress, bookmarks);
   // Home's layout and the side panel are saved with them too.
   const hasLayoutsChanged = useHasUnsavedLayouts(myAddress);
   const hasChanged = hasLauncherChanged || hasLayoutsChanged;
@@ -501,7 +501,6 @@ export const Save = ({
                     }
                   );
                   setPinnedApps(responseData);
-                  setOldPinnedApps(responseData);
                   setIsUsingImportExportSettings(true);
                 }
               } catch (error) {

@@ -68,14 +68,14 @@ Set `QORTAL_RETICULUM_NO_SYSTEM=1` to opt out of (3) and (4) in dev.
 
 **Key paths and ports:**
 
-| Item | Value |
-|---|---|
-| Config directory | `appData/qortal-hub/reticulum` — shared by all local app instances |
-| Daemon base port | `37428 + N` where N is the instance index |
-| Control base port | `37429 + N` |
-| Instance name | `qortal-hub-shared` |
-| Discovery announce interval | 5 minutes |
-| Daemon stop timeout | 10 seconds |
+| Item                        | Value                                                              |
+| --------------------------- | ------------------------------------------------------------------ |
+| Config directory            | `appData/qortal-hub/reticulum` — shared by all local app instances |
+| Daemon base port            | `37428 + N` where N is the instance index                          |
+| Control base port           | `37429 + N`                                                        |
+| Instance name               | `qortal-hub-shared`                                                |
+| Discovery announce interval | 5 minutes                                                          |
+| Daemon stop timeout         | 10 seconds                                                         |
 
 **Multi-instance behaviour:** The daemon is shared across all open Hub windows. A JSON instance registry tracks active app PIDs. On quit, the daemon is only stopped when no other instance is still active (ref-counted).
 
@@ -83,12 +83,12 @@ Set `QORTAL_RETICULUM_NO_SYSTEM=1` to opt out of (3) and (4) in dev.
 
 **Reachability states** reported by the daemon:
 
-| State | Meaning |
-|---|---|
-| `unknown` | Status not yet determined |
-| `lan-only` | Reachable only on the local network |
+| State           | Meaning                                 |
+| --------------- | --------------------------------------- |
+| `unknown`       | Status not yet determined               |
+| `lan-only`      | Reachable only on the local network     |
 | `hub-connected` | Connected to at least one bootstrap hub |
-| `disconnected` | No RNS connectivity |
+| `disconnected`  | No RNS connectivity                     |
 
 ### Bridge — `reticulum-bridge.ts`
 
@@ -104,15 +104,15 @@ A Python subprocess (`presence_bridge.py`) launched after the daemon is ready.
 
 **Key bridge actions:**
 
-| Action | Purpose |
-|---|---|
-| `publish_presence` / `forward_presence` | Broadcast signed presence envelopes |
-| `send_group_call` / `fanout_group_call` | Group call signaling |
-| `open_group_audio_link` | Establish a Reticulum audio link to a peer |
-| `send_group_audio_link_heartbeat` | Keep audio links alive |
-| `accept_qchat_file_resource` | Accept an incoming file offer |
-| `send_qchat_file_resource` | Send a file offer to a peer |
-| `authorize_qchat_file_resource` | Authorise file delivery |
+| Action                                  | Purpose                                    |
+| --------------------------------------- | ------------------------------------------ |
+| `publish_presence` / `forward_presence` | Broadcast signed presence envelopes        |
+| `send_group_call` / `fanout_group_call` | Group call signaling                       |
+| `open_group_audio_link`                 | Establish a Reticulum audio link to a peer |
+| `send_group_audio_link_heartbeat`       | Keep audio links alive                     |
+| `accept_qchat_file_resource`            | Accept an incoming file offer              |
+| `send_qchat_file_resource`              | Send a file offer to a peer                |
+| `authorize_qchat_file_resource`         | Authorise file delivery                    |
 
 ### Q-App Backend Scheduling
 
@@ -161,20 +161,20 @@ Handles hub-to-hub mesh networking, separate from the TLS P2P layer (`p2p-networ
 
 **Interface types:**
 
-| Platform | Listen interface | Outbound hub interface |
-|---|---|---|
-| Linux | `BackboneInterface` (port 4243) | `BackboneInterface` |
-| Windows / macOS | `TCPServerInterface` (port 4243) | `TCPClientInterface` |
+| Platform        | Listen interface                 | Outbound hub interface |
+| --------------- | -------------------------------- | ---------------------- |
+| Linux           | `BackboneInterface` (port 4243)  | `BackboneInterface`    |
+| Windows / macOS | `TCPServerInterface` (port 4243) | `TCPClientInterface`   |
 
 Community mesh discovery uses RNS `AutoInterface` with `autoconnect_discovered_interfaces` capped at 8 peers.
 
 **Default bootstrap hubs:**
 
-| Name | Host | Port |
-|---|---|---|
+| Name                       | Host                       | Port |
+| -------------------------- | -------------------------- | ---- |
 | Backbone Client Qortal Hub | `phantom.mobilefabrik.com` | 4400 |
-| Crowetic Reticulum Hub | `reticulum.qortal.link` | 4444 |
-| Crowetic Reticulum Hub 2 | `reticulum2.qortal.link` | 4444 |
+| Crowetic Reticulum Hub     | `reticulum.qortal.link`    | 4444 |
+| Crowetic Reticulum Hub 2   | `reticulum2.qortal.link`   | 4444 |
 
 **UPnP:** The coordinator attempts to map the mesh listen port via UPnP and records the discovered WAN IP in `reachable_on` so remote peers can reach this node. A manually configured `meshReachableOnHost` always takes precedence over the UPnP-discovered value.
 
@@ -234,10 +234,10 @@ This file is **shipped inside every Qortal Hub app bundle** (`resources/reticulu
 
 ### Summary
 
-| Identity | Scope | Generated | Stored |
-| --- | --- | --- | --- |
-| Local bridge identity | Per installation | Once, on first startup | `userData/reticulum/presence-bridge.identity` |
-| Mesh network identity | All Hub installations | Never (bundled) | `userData/reticulum/mesh-network.identity` (copied from bundle) |
+| Identity              | Scope                 | Generated              | Stored                                                          |
+| --------------------- | --------------------- | ---------------------- | --------------------------------------------------------------- |
+| Local bridge identity | Per installation      | Once, on first startup | `userData/reticulum/presence-bridge.identity`                   |
+| Mesh network identity | All Hub installations | Never (bundled)        | `userData/reticulum/mesh-network.identity` (copied from bundle) |
 
 ## Startup and Shutdown
 
@@ -258,15 +258,15 @@ This file is **shipped inside every Qortal Hub app bundle** (`resources/reticulu
 
 Exposed via `window.electronAPI` (context bridge in `electron/src/preload.ts`):
 
-| Method | Description |
-|---|---|
-| `reticulumGetStatus()` | One-shot snapshot: daemon PID, mode, bridge state, reachability, hub interface counts |
-| `onReticulumStatus(cb)` | Subscribe to live status updates; returns an unsubscribe function |
-| `reticulumGetOverlayPeers()` | List of active Reticulum links with presence hashes and connection timestamps |
-| `reticulumGetMeshStatus()` | Mesh enable flag, listen port, UPnP state, reachability hosts |
-| `reticulumEnsureMeshNetworkIdentity()` | Create the mesh identity file if it does not exist yet |
-| `reticulumGetLocalDestinationHash()` | This instance's 32-char hex RNS destination hash |
-| `reticulumGetLocalIdentityPublicKeyBase64()` | RNS.Identity public key (used in `GC_JOIN` messages) |
+| Method                                       | Description                                                                           |
+| -------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `reticulumGetStatus()`                       | One-shot snapshot: daemon PID, mode, bridge state, reachability, hub interface counts |
+| `onReticulumStatus(cb)`                      | Subscribe to live status updates; returns an unsubscribe function                     |
+| `reticulumGetOverlayPeers()`                 | List of active Reticulum links with presence hashes and connection timestamps         |
+| `reticulumGetMeshStatus()`                   | Mesh enable flag, listen port, UPnP state, reachability hosts                         |
+| `reticulumEnsureMeshNetworkIdentity()`       | Create the mesh identity file if it does not exist yet                                |
+| `reticulumGetLocalDestinationHash()`         | This instance's 32-char hex RNS destination hash                                      |
+| `reticulumGetLocalIdentityPublicKeyBase64()` | RNS.Identity public key (used in `GC_JOIN` messages)                                  |
 
 ## Presence Flow
 
@@ -280,36 +280,36 @@ Exposed via `window.electronAPI` (context bridge in `electron/src/preload.ts`):
 
 Files are offered and delivered over Reticulum links with the following constraints:
 
-| Constraint | Value |
-|---|---|
-| Offer TTL | 2 hours |
-| Completed-send cache grace | 7 days |
-| Signature max age | 24 hours |
-| Signature max future skew | 2 minutes |
+| Constraint                   | Value     |
+| ---------------------------- | --------- |
+| Offer TTL                    | 2 hours   |
+| Completed-send cache grace   | 7 days    |
+| Signature max age            | 24 hours  |
+| Signature max future skew    | 2 minutes |
 | Bridge attach retry interval | 3 seconds |
 
 ## Environment Variables
 
-| Variable | Effect |
-|---|---|
-| `QORTAL_RETICULUM_SYSTEM=1` | Force use of system Python even in packaged builds |
-| `QORTAL_RETICULUM_NO_SYSTEM=1` | Disable system Python fallback in dev |
-| `QORTAL_RETICULUM_PRIORITY_NICE=<n>` | Override rnsd process nice value (default `-7`) |
-| `QORTAL_RETICULUM_PRIORITY_NICE=off` | Disable nice adjustment entirely |
+| Variable                             | Effect                                             |
+| ------------------------------------ | -------------------------------------------------- |
+| `QORTAL_RETICULUM_SYSTEM=1`          | Force use of system Python even in packaged builds |
+| `QORTAL_RETICULUM_NO_SYSTEM=1`       | Disable system Python fallback in dev              |
+| `QORTAL_RETICULUM_PRIORITY_NICE=<n>` | Override rnsd process nice value (default `-7`)    |
+| `QORTAL_RETICULUM_PRIORITY_NICE=off` | Disable nice adjustment entirely                   |
 
 ## Relevant Files
 
-| File | Purpose |
-|---|---|
-| `electron/src/reticulum-daemon.ts` | rnsd process lifecycle, config generation, instance registry |
-| `electron/src/reticulum-bridge.ts` | Python bridge process, command/event protocol, audio IPC |
-| `electron/src/reticulum-launch.ts` | App-launch readiness wait |
-| `electron/src/reticulum-mesh.ts` | Hub-to-hub mesh coordinator, UPnP |
-| `electron/src/reticulum-mesh-store.ts` | Persistent mesh state (listen port, UPnP, reachable host) |
-| `electron/src/reticulum-mesh-constants.ts` | Default listen port (`4243`), max outbound peers (`8`) |
-| `electron/src/reticulum-audio-ipc.ts` | Binary audio frame encoding/decoding (QAUD format) |
-| `electron/src/reticulum-audio-link-fallback-policy.ts` | Link quality decisions and fallback policy |
-| `electron/src/reticulum-bridge-rebind.ts` | Bridge consumer rebinding for multi-instance scenarios |
-| `electron/src/group-call-wire-reticulum.ts` | Group call wire protocol over Reticulum |
-| `electron/src/preload.ts` | Context bridge — `window.electronAPI.reticulum*` methods |
-| `electron/resources/presence_bridge.py` | Python bridge process (presence, calls, file transfers) |
+| File                                                   | Purpose                                                      |
+| ------------------------------------------------------ | ------------------------------------------------------------ |
+| `electron/src/reticulum-daemon.ts`                     | rnsd process lifecycle, config generation, instance registry |
+| `electron/src/reticulum-bridge.ts`                     | Python bridge process, command/event protocol, audio IPC     |
+| `electron/src/reticulum-launch.ts`                     | App-launch readiness wait                                    |
+| `electron/src/reticulum-mesh.ts`                       | Hub-to-hub mesh coordinator, UPnP                            |
+| `electron/src/reticulum-mesh-store.ts`                 | Persistent mesh state (listen port, UPnP, reachable host)    |
+| `electron/src/reticulum-mesh-constants.ts`             | Default listen port (`4243`), max outbound peers (`8`)       |
+| `electron/src/reticulum-audio-ipc.ts`                  | Binary audio frame encoding/decoding (QAUD format)           |
+| `electron/src/reticulum-audio-link-fallback-policy.ts` | Link quality decisions and fallback policy                   |
+| `electron/src/reticulum-bridge-rebind.ts`              | Bridge consumer rebinding for multi-instance scenarios       |
+| `electron/src/group-call-wire-reticulum.ts`            | Group call wire protocol over Reticulum                      |
+| `electron/src/preload.ts`                              | Context bridge — `window.electronAPI.reticulum*` methods     |
+| `electron/resources/presence_bridge.py`                | Python bridge process (presence, calls, file transfers)      |

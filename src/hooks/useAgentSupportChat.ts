@@ -131,7 +131,9 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
 
   // ── Block list ────────────────────────────────────────────────────────────
 
-  const [blockedAddresses, setBlockedAddresses] = useState<Set<string>>(new Set());
+  const [blockedAddresses, setBlockedAddresses] = useState<Set<string>>(
+    new Set()
+  );
 
   /** Ref kept in sync so the queue onEvent closure never sees stale blocked set. */
   const blockedRef = useRef<Set<string>>(new Set());
@@ -141,12 +143,17 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
 
   // Load persisted block list on mount.
   useEffect(() => {
-    window.appStorage?.get(BLOCKED_STORAGE_KEY).then((stored: unknown) => {
-      if (Array.isArray(stored) && stored.length > 0) {
-        const set = new Set<string>(stored.filter((v): v is string => typeof v === 'string'));
-        setBlockedAddresses(set);
-      }
-    }).catch(() => {});
+    window.appStorage
+      ?.get(BLOCKED_STORAGE_KEY)
+      .then((stored: unknown) => {
+        if (Array.isArray(stored) && stored.length > 0) {
+          const set = new Set<string>(
+            stored.filter((v): v is string => typeof v === 'string')
+          );
+          setBlockedAddresses(set);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // ── Permanent queue subscription ─────────────────────────────────────────
@@ -170,7 +177,8 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
       // multiple knock events arriving synchronously (e.g. during a
       // history replay) all see the correct, up-to-date list rather
       // than a stale snapshot that hasn't been re-rendered yet.
-      if (ticketsRef.current.some((t) => t.userAddress === authorAddress)) return;
+      if (ticketsRef.current.some((t) => t.userAddress === authorAddress))
+        return;
 
       // Subscribe to the user's private channel so events accumulate.
       window.chat?.subscribe(chatId).catch(() => {});
@@ -212,11 +220,14 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
   const inner = useP2PChat(innerChatId);
 
   /** Derive the active ticket object from the chatId. */
-  const activeTicket = tickets.find((t) => t.chatId === activeTicketChatId) ?? null;
+  const activeTicket =
+    tickets.find((t) => t.chatId === activeTicketChatId) ?? null;
 
   // ── Decryption ────────────────────────────────────────────────────────────
 
-  const [decryptedMessages, setDecryptedMessages] = useState<RenderedMessage[]>([]);
+  const [decryptedMessages, setDecryptedMessages] = useState<RenderedMessage[]>(
+    []
+  );
 
   /**
    * Cache: "<eventId>:<editedAt|0>" → decrypted text.
@@ -231,7 +242,9 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
   const reactionDecryptCacheRef = useRef(new Map<string, string>());
 
   /** Cache of fully processed rendered messages keyed by message fingerprint. */
-  const renderedMessageCacheRef = useRef(new Map<string, RenderedMessage | null>());
+  const renderedMessageCacheRef = useRef(
+    new Map<string, RenderedMessage | null>()
+  );
 
   // Clear both caches when the active ticket changes.
   useEffect(() => {
@@ -376,7 +389,9 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
     };
 
     processMessages();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [inner.messages, activeTicket]);
 
   // ── Encrypted send wrappers ───────────────────────────────────────────────
@@ -385,7 +400,10 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
     async (text: string): Promise<void> => {
       const trimmed = text.trim();
       if (!trimmed || !activeTicket) return;
-      const encrypted = await encryptForUser(trimmed, activeTicket.userPublicKey);
+      const encrypted = await encryptForUser(
+        trimmed,
+        activeTicket.userPublicKey
+      );
       await inner.sendMessage(encrypted);
     },
     [inner.sendMessage, activeTicket]
@@ -395,7 +413,10 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
     async (targetId: string, newContent: string): Promise<void> => {
       const trimmed = newContent.trim();
       if (!trimmed || !activeTicket) return;
-      const encrypted = await encryptForUser(trimmed, activeTicket.userPublicKey);
+      const encrypted = await encryptForUser(
+        trimmed,
+        activeTicket.userPublicKey
+      );
       await inner.sendEdit(targetId, encrypted);
     },
     [inner.sendEdit, activeTicket]
@@ -405,7 +426,10 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
     async (parentId: string, text: string): Promise<void> => {
       const trimmed = text.trim();
       if (!trimmed || !activeTicket) return;
-      const encrypted = await encryptForUser(trimmed, activeTicket.userPublicKey);
+      const encrypted = await encryptForUser(
+        trimmed,
+        activeTicket.userPublicKey
+      );
       await inner.sendReply(parentId, encrypted);
     },
     [inner.sendReply, activeTicket]
@@ -442,20 +466,23 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
     });
   }, []);
 
-  const unblockUser = useCallback(async (userAddress: string): Promise<void> => {
-    setBlockedAddresses((prev) => {
-      const next = new Set(prev);
-      next.delete(userAddress);
-      window.appStorage?.set(BLOCKED_STORAGE_KEY, [...next]).catch(() => {});
-      return next;
-    });
-    // Restore the ticket so the conversation is visible again.
-    setTickets((prev) =>
-      prev.map((t) =>
-        t.userAddress === userAddress ? { ...t, isBlocked: false } : t
-      )
-    );
-  }, []);
+  const unblockUser = useCallback(
+    async (userAddress: string): Promise<void> => {
+      setBlockedAddresses((prev) => {
+        const next = new Set(prev);
+        next.delete(userAddress);
+        window.appStorage?.set(BLOCKED_STORAGE_KEY, [...next]).catch(() => {});
+        return next;
+      });
+      // Restore the ticket so the conversation is visible again.
+      setTickets((prev) =>
+        prev.map((t) =>
+          t.userAddress === userAddress ? { ...t, isBlocked: false } : t
+        )
+      );
+    },
+    []
+  );
 
   // ── Resolve ticket ────────────────────────────────────────────────────────
 

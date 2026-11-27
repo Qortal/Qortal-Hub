@@ -185,4 +185,53 @@ describe('QortalRequestExtensionDialog', () => {
 
     expect(screen.getByText('30')).toBeInTheDocument();
   });
+
+  it('names the app that asks, from the request’s tab', () => {
+    renderDialog({
+      text1: 'Send 5 QORT to Alice?',
+      requestingApp: { name: 'Q-Tube', service: 'APP' },
+    });
+
+    expect(screen.getByText('Requested by')).toBeInTheDocument();
+    expect(screen.getByTestId('qortal-request-app-name')).toHaveTextContent(
+      'Q-Tube'
+    );
+    expect(screen.getByTestId('qortal-request-app-service')).toHaveTextContent(
+      'APP'
+    );
+    expect(screen.queryByText('Unknown Q-App')).toBeNull();
+  });
+
+  it('warns when Hub can’t tell which app asks', () => {
+    renderDialog({ text1: 'Send 5 QORT to Alice?', requestingApp: null });
+
+    expect(screen.getByTestId('qortal-request-app-name')).toHaveTextContent(
+      'Unknown Q-App'
+    );
+    expect(
+      screen.getByText(
+        'Qortal Hub could not tell which Q-App sent this request. Decline it unless you just asked for this yourself.'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('qortal-request-app-service')).toBeNull();
+  });
+
+  it('names no app and gives no warning for a request from Hub itself', () => {
+    renderDialog({
+      text1: 'Add this minting account?',
+      requestingApp: null,
+      fromHub: true,
+    });
+
+    expect(screen.getAllByText('Add this minting account?')).not.toHaveLength(
+      0
+    );
+    expect(screen.queryByTestId('qortal-request-app')).toBeNull();
+    expect(screen.queryByText('Unknown Q-App')).toBeNull();
+    expect(
+      screen.queryByText(
+        'Qortal Hub could not tell which Q-App sent this request. Decline it unless you just asked for this yourself.'
+      )
+    ).toBeNull();
+  });
 });

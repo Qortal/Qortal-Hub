@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../../i18n/i18n';
+import { HUB_REQUEST, isHubRequest } from '../../../qortal/requestingApp';
 import { quitterHashString } from './quitterIdentity';
 import {
   firstMentionKeyword,
@@ -32,8 +33,10 @@ describe('publishMultipleResources', () => {
       'PUBLISH_MULTIPLE_QDN_RESOURCES',
       { resources },
       240000,
-      true
+      true,
+      HUB_REQUEST
     );
+    expect(isHubRequest(sendMessage.mock.calls[0][4])).toBe(true);
   });
 
   it('treats a declined approval as a cancel, in any language', async () => {

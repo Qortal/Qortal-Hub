@@ -431,6 +431,11 @@
     "unpin_from_bookmarks": "eemalda järjehoidjatest",
     "unsaved_publish": "avaldamisvormi andmed pole veel avaldatud ja vahelehe sulgemine kustutab need."
   },
+  "approval_dialog": {
+    "requested_by": "Päringu saatja",
+    "unknown_app": "Tundmatu Q-App",
+    "unknown_app_hint": "Qortal Hub ei suutnud kindlaks teha, milline Q-App selle päringu saatis. Keeldu sellest, kui sa just ise seda ei palunud."
+  },
   "apps_bar": {
     "empty": "Kinnita rakendus või lisa järjehoidja ja see ilmub siia.",
     "label": "Kinnitatud rakendused ja järjehoidjad",
@@ -948,7 +953,7 @@
       "register_name": "kas soovid selle nime registreerida?",
       "reset_pinned": "ei meeldi kohalikud muudatused? Kas soovid taastada vaikimisi kinnitatud rakendused?",
       "reset_qdn": "ei meeldi kohalikud muudatused? Kas soovid taastada oma QDN-i salvestatud kinnitatud rakendused?",
-      "transfer_qort": "kas soovid kanda üle {{ amount }} QORT?"
+      "transfer_qort_to": "kas soovid kanda {{ amount }} QORT üle saajale {{ recipient }}?"
     },
     "success": {
       "order_submitted": "sinu ostutellimus esitatud",
@@ -1051,7 +1056,14 @@
       "name": "Nimi",
       "website": "Veebileht"
     },
-    "suggestions": "Soovitused"
+    "suggestions": "Soovitused",
+    "zoom": {
+      "button": "suurendus: {{percent}}",
+      "kept": "{{name}} jaoks selles arvutis salvestatud",
+      "same_as_hub": "sama mis Hub",
+      "zoom_in": "suurenda",
+      "zoom_out": "vähenda"
+    }
   },
   "new_post_in": "uus postitus kohas {{ title }}",
   "node_state": {
@@ -1835,6 +1847,7 @@
       "image_metadata_unremovable": "pilti {{index}} ei saa postitada: selles vormingus ei saa asukoha- ja kaamerateavet eemaldada. Salvesta see JPEG- või PNG-vormingus ja proovi uuesti.",
       "images_too_large": "need pildid on koos postitamiseks liiga suured. Eemalda üks pilt ja proovi uuesti.",
       "name_required": "avaldamiseks on vaja Qortali nime",
+      "not_posted_left_home": "postitamata: lahkusid avalehelt enne, kui postitus saadeti. Avalda see uuesti, kui oled valmis.",
       "post_too_large": "see postitus on üle 5 MB, seega {{app}} seda ei näitaks. Lühenda seda või eemalda pilt.",
       "publish_failed": "avaldamine ebaõnnestus",
       "too_many_images": "postituses võib olla kuni {{count}} pilti"

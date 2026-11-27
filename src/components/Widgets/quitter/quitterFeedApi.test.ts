@@ -23,12 +23,26 @@ const followDoc = (index: number, size = 96) => ({
 
 /**
  * A node with `docs` follow documents for every user. Follow document N says
- * the user follows `Followed N`.
+ * the user follows `Followed N`. `refuse(n)` says whether the n-th read of
+ * follow data (1-based) gets Core's answer for a repository problem: HTTP 500
+ * with a JSON error body.
  */
-const mockNode = (docs: ReturnType<typeof followDoc>[]) => {
+const mockNode = (
+  docs: ReturnType<typeof followDoc>[],
+  refuse: (read: number) => boolean = () => false
+) => {
+  let reads = 0;
   const fetchMock = vi.fn(
     async (url: string, init?: { method?: string; body?: string }) => {
       if (init?.method === 'POST') {
+        reads += 1;
+        if (refuse(reads)) {
+          return {
+            ok: false,
+            status: 500,
+            json: async () => ({ error: 5, message: 'repository issue' }),
+          };
+        }
         const asked = JSON.parse(init.body as string) as {
           identifier: string;
         }[];
@@ -113,6 +127,65 @@ describe('fetchQuitterFollowedNames', () => {
 
     expect(await fetchQuitterFollowedNames('Busy Reader')).toHaveLength(400);
     expect(postsTo(fetchMock)).toHaveLength(4);
+  });
+});
+
+describe('fetchQuitterFollowedNames when the node refuses the follow data', () => {
+  it('fails rather than say the reader follows nobody', async () => {
+    mockNode([followDoc(1)], () => true);
+
+    await expect(fetchQuitterFollowedNames('Refused Reader')).rejects.toThrow(
+      'Request failed with status 500'
+    );
+  });
+
+  it('asks the node again next time, within the 5-minute cache', async () => {
+    const fetchMock = mockNode([followDoc(1)], (read) => read === 1);
+
+    await expect(
+      fetchQuitterFollowedNames('Recovering Reader')
+    ).rejects.toThrow();
+    expect(await fetchQuitterFollowedNames('Recovering Reader')).toEqual([
+      'Followed 1',
+    ]);
+    expect(postsTo(fetchMock)).toHaveLength(2);
+  });
+
+  it('keeps no list cut short by one refused batch', async () => {
+    // 150 follows are two reads; the second one is refused the first time.
+    mockNode(
+      Array.from({ length: 150 }, (_, i) => followDoc(i + 1)),
+      (read) => read === 2
+    );
+
+    await expect(fetchQuitterFollowedNames('Half Reader')).rejects.toThrow();
+    expect(await fetchQuitterFollowedNames('Half Reader')).toHaveLength(150);
+  });
+
+  it('stops reading when the feed load is cancelled', async () => {
+    const fetchMock = vi.fn(
+      async (_url: string, init?: { method?: string; signal?: AbortSignal }) =>
+        init?.method === 'POST'
+          ? // The node takes its time: only a cancel ends this read.
+            new Promise((_resolve, reject) => {
+              init.signal?.addEventListener('abort', () =>
+                reject(new DOMException('Aborted', 'AbortError'))
+              );
+            })
+          : { ok: true, json: async () => [followDoc(1)] }
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const load = new AbortController();
+
+    const names = fetchQuitterFollowedNames('Patient Reader', load.signal);
+    await vi.waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')
+      ).toBe(true)
+    );
+    load.abort();
+
+    await expect(names).rejects.toThrow('Aborted');
   });
 });
 

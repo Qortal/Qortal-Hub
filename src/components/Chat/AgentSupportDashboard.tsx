@@ -487,7 +487,6 @@ function AttachmentImage({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
   const aspectRatio = width && height ? `${width} / ${height}` : undefined;

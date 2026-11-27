@@ -279,8 +279,7 @@ export function installCertificateVerification(session: Session): void {
     const pinnedLeafPem = trustedPinnedLeafByHost.get(hostname);
 
     if (pinnedLeafPem && isValidPemCertificate(pinnedLeafPem)) {
-      const pinnedLeafFp =
-        sha256FingerprintFromPem(pinnedLeafPem);
+      const pinnedLeafFp = sha256FingerprintFromPem(pinnedLeafPem);
       let cert: typeof request.certificate | undefined = request.certificate;
       while (cert) {
         const certFp = fingerprintToHex(cert.fingerprint ?? '');
