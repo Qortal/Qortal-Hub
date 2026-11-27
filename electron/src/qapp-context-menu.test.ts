@@ -21,8 +21,9 @@ import {
   readElementInfo,
   registerQAppMenuIpc,
   shownPageLink,
-  VIDEO_LOOKUP_MS,
-  withCoveredVideo,
+  LOOKUP_MS,
+  withFoundPicture,
+  withFoundVideo,
   withFound,
   saveFileName,
   savableUrl,
@@ -586,7 +587,7 @@ describe('links, names and questions the menu hands on', () => {
   });
 });
 
-describe('a video under a cover', () => {
+describe("a video the app's preload found", () => {
   const found = {
     src: `${NODE}/arbitrary/VIDEO/Publisher/vid-1`,
     stream: false,
@@ -596,7 +597,7 @@ describe('a video under a cover', () => {
   };
 
   it("takes the video the app's preload found as the one right-clicked", () => {
-    expect(withCoveredVideo(params(), found)).toMatchObject({
+    expect(withFoundVideo(params(), found)).toMatchObject({
       mediaType: 'video',
       srcURL: found.src,
       mediaFlags: {
@@ -608,27 +609,78 @@ describe('a video under a cover', () => {
       },
     });
     expect(
-      withCoveredVideo(params(), { ...found, stream: true }).mediaFlags.canSave
+      withFoundVideo(params(), { ...found, stream: true }).mediaFlags.canSave
     ).toBe(false);
     expect(
-      withCoveredVideo(params(), { ...found, src: '' }).mediaFlags.canSave
+      withFoundVideo(params(), { ...found, src: '' }).mediaFlags.canSave
     ).toBe(false);
     expect(
-      withCoveredVideo(params(), { ...found, pictureInPicture: 'showing' })
+      withFoundVideo(params(), { ...found, pictureInPicture: 'showing' })
         .mediaFlags.isShowingPictureInPicture
     ).toBe(true);
   });
 
   it('keeps the right-click as it was without a video, or with a strange one', () => {
     const plain = params();
-    expect(withCoveredVideo(plain, null)).toBe(plain);
-    expect(withCoveredVideo(plain, { ...found, src: 7 })).toBe(plain);
+    expect(withFoundVideo(plain, null)).toBe(plain);
+    expect(withFoundVideo(plain, { ...found, src: 7 })).toBe(plain);
     expect(
-      withCoveredVideo(plain, {
+      withFoundVideo(plain, {
         ...found,
         src: `data:,${'x'.repeat(1_000_001)}`,
       })
     ).toBe(plain);
+  });
+});
+
+describe("a picture the app's preload found", () => {
+  const found = {
+    src: `${NODE}/arbitrary/IMAGE/Publisher/pic-1?async=true`,
+    loaded: true,
+  };
+
+  it('takes it as the picture right-clicked, copied from its pixels', () => {
+    expect(withFoundPicture(params(), found)).toMatchObject({
+      mediaType: 'image',
+      srcURL: found.src,
+      hasImageContents: true,
+      foundPicture: true,
+    });
+    expect(
+      withFoundPicture(params(), { ...found, loaded: false })
+    ).toMatchObject({ srcURL: found.src, hasImageContents: false });
+    // Too long an address to take, but loaded: it can still be copied.
+    expect(withFoundPicture(params(), { src: '', loaded: true })).toMatchObject(
+      { mediaType: 'image', srcURL: '', hasImageContents: true }
+    );
+  });
+
+  it('keeps the right-click as it was without a picture, or with a strange one', () => {
+    const plain = params();
+    expect(withFoundPicture(plain, null)).toBe(plain);
+    expect(withFoundPicture(plain, { src: '', loaded: false })).toBe(plain);
+    expect(withFoundPicture(plain, { ...found, src: 7 })).toBe(plain);
+    expect(
+      withFoundPicture(plain, {
+        src: `data:image/png;base64,${'A'.repeat(1_000_001)}`,
+        loaded: true,
+      })
+    ).toBe(plain);
+  });
+
+  it('takes it only where Chromium named nothing', () => {
+    const answer = { video: null, picture: found, link: null };
+    expect(withFound(params(), answer)).toMatchObject({
+      mediaType: 'image',
+      foundPicture: true,
+    });
+    for (const named of [
+      params({ selectionText: 'a caption' }),
+      params({ isEditable: true }),
+      params({ mediaType: 'video', srcURL: `${NODE}/arbitrary/VIDEO/P/v` }),
+    ]) {
+      expect(withFound(named, answer)).toEqual(named);
+    }
   });
 });
 
@@ -1829,7 +1881,75 @@ describe('QAppContextMenus', () => {
     ).toBe(true);
   });
 
-  it('asks the app what it shows unless Chromium named a link, and about a video only on a plain spot', async () => {
+  it("offers the picture an image viewer shows, which doesn't take the pointer, and copies it from its pixels", async () => {
+    setup();
+    const src = `${NODE}/arbitrary/IMAGE/Publisher/pic-1?async=true`;
+    let pixels: unknown = { png: 'data:image/png;base64,AAAA' };
+    guest.answer = (code) =>
+      code.endsWith('at(true)')
+        ? { video: null, picture: { src, loaded: true }, link: null }
+        : code.endsWith('picture()')
+          ? pixels
+          : null;
+    let open = await rightClick({ x: 400, y: 300 });
+    expect(actions(open.items)).toEqual([
+      'savePicture',
+      'copyPicture',
+      'copyPictureLink',
+    ]);
+    // Chromium finds no picture at the point: the app's preload draws it.
+    expect(await menus.act(open.menuId, 'copyPicture')).toBe(true);
+    expect(guest.copiedAt).toEqual([]);
+    expect(guest.guestCalls.map(([, code]) => code.split('?.')[1])).toEqual([
+      'at(true)',
+      'picture()',
+    ]);
+    expect(clipboard).toEqual(['image:data:26']);
+    // One from elsewhere: what's on screen of it.
+    pixels = {
+      box: { x: 300, y: 200, width: 400, height: 300 },
+      viewport: { width: 1000, height: 800 },
+    };
+    open = await rightClick({});
+    expect(await menus.act(open.menuId, 'copyPicture')).toBe(true);
+    expect(guest.captured).toEqual([
+      { x: 300, y: 200, width: 400, height: 300 },
+    ]);
+    // Gone, or no longer what the menu was opened for.
+    pixels = null;
+    open = await rightClick({});
+    expect(await menus.act(open.menuId, 'copyPicture')).toBe(false);
+    open = await rightClick({});
+    expect(await menus.act(open.menuId, 'copyPictureLink')).toBe(true);
+    expect(clipboard.slice(2)).toEqual([
+      'qortal://use-embed/IMAGE?name=Publisher&identifier=pic-1&service=IMAGE',
+    ]);
+    // Saving it saves that picture, through the app.
+    open = await rightClick({});
+    expect(await menus.act(open.menuId, 'savePicture')).toBe(true);
+    expect(guest.downloads[0].startsWith(`${src}#qortal-hub-save-`)).toBe(true);
+  });
+
+  it('offers to copy a picture the app found only once it has loaded', async () => {
+    setup();
+    guest.answer = (code) =>
+      code.endsWith('at(true)')
+        ? {
+            video: null,
+            picture: {
+              src: `${NODE}/arbitrary/IMAGE/Publisher/pic-1`,
+              loaded: false,
+            },
+            link: null,
+          }
+        : null;
+    expect(actions((await rightClick({})).items)).toEqual([
+      'savePicture',
+      'copyPictureLink',
+    ]);
+  });
+
+  it('asks the app what it shows unless Chromium named a link, and about a picture or video only on a plain spot', async () => {
     setup();
     const asked = async (overrides: Partial<QAppMenuParams>) => {
       guest.guestCalls = [];
@@ -1845,12 +1965,12 @@ describe('QAppContextMenus', () => {
     expect(await asked({})).toEqual(['at(true)']);
   });
 
-  it("opens the menu without video items when the app doesn't answer in time", async () => {
+  it("opens the menu without picture or video items when the app doesn't answer in time", async () => {
     setup();
     vi.useFakeTimers();
     guest.executeJavaScriptInIsolatedWorld = () => new Promise(() => {});
     guest.emit('context-menu', {}, params());
-    await vi.advanceTimersByTimeAsync(VIDEO_LOOKUP_MS - 1);
+    await vi.advanceTimersByTimeAsync(LOOKUP_MS - 1);
     expect(hub.sent).toEqual([]);
     await vi.advanceTimersByTimeAsync(1);
     const [[, open]] = hub.sent;

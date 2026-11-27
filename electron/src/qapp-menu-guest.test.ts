@@ -339,7 +339,20 @@ describe('a video under a cover', () => {
     );
     const video = win.document.querySelector('video');
     const cover = win.document.querySelector('.cover');
-    // jsdom lays nothing out: what is under the point, top first.
+    // jsdom lays nothing out: where they are, and what is under the point,
+    // top first.
+    for (const element of [
+      win.document.querySelector('#player'),
+      video,
+      cover,
+    ]) {
+      vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 640,
+        height: 360,
+      } as DOMRect);
+    }
     const asked: [number, number][] = [];
     Object.defineProperty(win.document, 'elementsFromPoint', {
       configurable: true,
@@ -457,6 +470,463 @@ describe('a video under a cover', () => {
   });
 });
 
+describe("a picture or video Chromium doesn't see at the point", () => {
+  type Rect = { left: number; top: number; width: number; height: number };
+  const NODE_PICTURE = 'https://node.example/arbitrary/IMAGE/Publisher';
+
+  /** jsdom lays nothing out: where an element is on screen. */
+  const place = (element: Element, rect: Rect) =>
+    vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({
+      ...rect,
+      x: rect.left,
+      y: rect.top,
+      right: rect.left + rect.width,
+      bottom: rect.top + rect.height,
+    } as DOMRect);
+
+  /**
+   * What Chromium lists at the point, top first: the elements under it that
+   * take the pointer, also ones covered by others.
+   */
+  const listAtPoint = (win: TestWindow, ...ids: string[]) =>
+    Object.defineProperty(win.document, 'elementsFromPoint', {
+      configurable: true,
+      value: () => [
+        ...ids.map((id) => win.document.getElementById(id)),
+        win.document.body,
+        win.document.documentElement,
+      ],
+    });
+
+  const loaded = (image: Element, width = 1600, height = 1200) =>
+    Object.defineProperties(image, {
+      complete: { configurable: true, value: true },
+      naturalWidth: { configurable: true, value: width },
+      naturalHeight: { configurable: true, value: height },
+    });
+
+  /**
+   * An image viewer as Torq's full-screen one is built: a dialog over the
+   * feed, with a black stage the pointer lands on, and in it the pictures
+   * the viewer moves itself, which don't take the pointer (the one shown,
+   * and the ones before and after it, off to the sides).
+   */
+  const viewer = () => {
+    const win = page(
+      '<div id="root"><article id="post">' +
+        `<img id="feed" src="${NODE_PICTURE}/feed-1">` +
+        '<video id="feed-video"></video></article></div>' +
+        '<div id="dialog" style="background-color: rgba(0, 0, 0, 0.96)">' +
+        '<div id="stage" style="background: #000; overflow: hidden">' +
+        '<div id="reel" style="pointer-events: none">' +
+        `<img id="before" style="pointer-events: none" src="${NODE_PICTURE}/pic-0">` +
+        `<img id="shown" style="pointer-events: none" src="${NODE_PICTURE}/pic-1">` +
+        `<img id="after" style="pointer-events: none" src="${NODE_PICTURE}/pic-2">` +
+        '</div></div></div>'
+    );
+    const byId = (id: string) => win.document.getElementById(id);
+    const screen = { left: 0, top: 0, width: 1000, height: 800 };
+    place(byId('dialog'), screen);
+    place(byId('stage'), screen);
+    place(byId('reel'), screen);
+    place(byId('before'), { left: -700, top: 200, width: 400, height: 300 });
+    place(byId('shown'), { left: 300, top: 200, width: 400, height: 300 });
+    place(byId('after'), { left: 1300, top: 200, width: 400, height: 300 });
+    // The feed's own picture and video, under the viewer at the same place.
+    place(byId('feed'), { left: 250, top: 150, width: 500, height: 400 });
+    place(byId('feed-video'), { left: 250, top: 150, width: 500, height: 400 });
+    for (const id of ['before', 'shown', 'after', 'feed']) loaded(byId(id));
+    listAtPoint(win, 'stage', 'dialog', 'feed-video', 'feed', 'post', 'root');
+    return { win, byId };
+  };
+
+  it("finds the picture an image viewer shows, which doesn't take the pointer", async () => {
+    const { win, byId } = viewer();
+    const helper = install(win);
+    rightClick(win, byId('stage'), { clientX: 500, clientY: 350 });
+    expect(await helper.at(true)).toEqual({
+      video: null,
+      picture: { src: `${NODE_PICTURE}/pic-1`, loaded: true },
+      link: null,
+    });
+    // Not loaded yet: there, but nothing to copy.
+    loaded(byId('shown'), 0, 0);
+    expect((await helper.at(true)).picture).toEqual({
+      src: `${NODE_PICTURE}/pic-1`,
+      loaded: false,
+    });
+    // Only on a spot Chromium named nothing at.
+    expect((await helper.at(false)).picture).toBeNull();
+  });
+
+  it("never finds the feed's picture or video the viewer hides", async () => {
+    const { win, byId } = viewer();
+    const helper = install(win);
+    // The viewer's black stage, beside its picture: over the feed's.
+    rightClick(win, byId('stage'), { clientX: 270, clientY: 170 });
+    expect(await helper.at(true)).toEqual({
+      video: null,
+      picture: null,
+      link: null,
+    });
+    expect(helper.videoFrame()).toBeNull();
+    expect(await helper.pictureInPicture(true)).toBe(false);
+  });
+
+  it('finds none of it where it is invisible or cut off, or under what was right-clicked', async () => {
+    const { win, byId } = viewer();
+    const helper = install(win);
+    const shown = byId('shown') as HTMLImageElement;
+    const found = async (on = 'stage') => {
+      rightClick(win, byId(on), { clientX: 500, clientY: 350 });
+      return (await helper.at(true)).picture;
+    };
+    shown.style.visibility = 'hidden';
+    expect(await found()).toBeNull();
+    shown.style.visibility = '';
+    byId('reel').style.opacity = '0';
+    expect(await found()).toBeNull();
+    byId('reel').style.opacity = '';
+    // The stage cuts the picture off where it sticks out of it.
+    place(byId('stage'), { left: 0, top: 0, width: 450, height: 800 });
+    expect(await found()).toBeNull();
+    place(byId('stage'), { left: 0, top: 0, width: 1000, height: 800 });
+    // A window of another part of the page, over the viewer's picture.
+    win.document.body.insertAdjacentHTML(
+      'beforeend',
+      '<div id="sheet" style="background-color: rgb(255, 255, 255)"></div>'
+    );
+    place(byId('sheet'), { left: 400, top: 300, width: 200, height: 100 });
+    listAtPoint(win, 'sheet', 'stage', 'dialog');
+    expect(await found('sheet')).toBeNull();
+    listAtPoint(win, 'stage', 'dialog');
+    expect(await found()).toMatchObject({ src: `${NODE_PICTURE}/pic-1` });
+  });
+
+  it('takes one that takes the pointer only where Chromium lists it', async () => {
+    // Its box holds the point, but Chromium lists it only where it is shown
+    // (here something cuts it off another way).
+    const win = page(
+      '<div id="card"><img id="picture" src="https://node.example/arbitrary/IMAGE/Publisher/pic-1"></div>'
+    );
+    const helper = install(win);
+    const byId = (id: string) => win.document.getElementById(id);
+    place(byId('card'), { left: 0, top: 0, width: 300, height: 200 });
+    place(byId('picture'), { left: 0, top: 0, width: 300, height: 200 });
+    listAtPoint(win, 'card');
+    rightClick(win, byId('card'), { clientX: 100, clientY: 100 });
+    expect((await helper.at(true)).picture).toBeNull();
+    listAtPoint(win, 'picture', 'card');
+    expect((await helper.at(true)).picture).not.toBeNull();
+  });
+
+  it('takes the last of two pictures shown there: it is drawn over the other', async () => {
+    const { win, byId } = viewer();
+    const helper = install(win);
+    byId('shown').insertAdjacentHTML(
+      'afterend',
+      `<img id="sharp" style="pointer-events: none" src="${NODE_PICTURE}/pic-1-full">`
+    );
+    place(byId('sharp'), { left: 300, top: 200, width: 400, height: 300 });
+    rightClick(win, byId('stage'), { clientX: 500, clientY: 350 });
+    expect((await helper.at(true)).picture.src).toBe(
+      `${NODE_PICTURE}/pic-1-full`
+    );
+  });
+
+  it('finds a picture under a layer on it, and a video under its poster', async () => {
+    const win = page(
+      '<div id="card"><img id="picture" src="https://node.example/arbitrary/THUMBNAIL/Publisher/t-1">' +
+        '<div id="shade"></div></div>' +
+        '<div id="player"><video id="video"></video>' +
+        '<div id="poster" style="background-color: rgb(0, 0, 0)">Play</div></div>'
+    );
+    const helper = install(win);
+    const byId = (id: string) => win.document.getElementById(id);
+    for (const id of ['card', 'picture', 'shade']) {
+      place(byId(id), { left: 0, top: 0, width: 300, height: 200 });
+    }
+    for (const id of ['player', 'video', 'poster']) {
+      place(byId(id), { left: 0, top: 300, width: 300, height: 200 });
+    }
+    listAtPoint(win, 'shade', 'picture', 'card');
+    rightClick(win, byId('shade'), { clientX: 100, clientY: 100 });
+    expect((await helper.at(true)).picture).toEqual({
+      src: 'https://node.example/arbitrary/THUMBNAIL/Publisher/t-1',
+      loaded: false,
+    });
+    listAtPoint(win, 'poster', 'video', 'player');
+    Object.defineProperty(byId('video'), 'currentSrc', {
+      configurable: true,
+      value: 'https://node.example/arbitrary/VIDEO/Publisher/vid-1',
+    });
+    rightClick(win, byId('poster'), { clientX: 100, clientY: 400 });
+    expect(await helper.at(true)).toMatchObject({
+      video: { src: 'https://node.example/arbitrary/VIDEO/Publisher/vid-1' },
+      picture: null,
+    });
+    // The video smaller than its player (black bars), the poster over all
+    // of the player: still the player's own poster.
+    place(byId('video'), { left: 0, top: 337, width: 300, height: 126 });
+    expect((await helper.at(true)).video).not.toBeNull();
+  });
+
+  it('finds the video under its play button when its poster is a picture', async () => {
+    // The poster is an <img> over the video, with a play button over both;
+    // then the poster doesn't take the pointer, in the player's own layer.
+    const win = page(
+      '<div id="player"><video id="video"></video>' +
+        '<img id="poster" src="https://node.example/arbitrary/THUMBNAIL/Publisher/vid-1">' +
+        '<div id="layer"><img id="still" style="pointer-events: none" src="https://node.example/arbitrary/THUMBNAIL/Publisher/vid-1">' +
+        '<button id="play">Play</button></div></div>'
+    );
+    const helper = install(win);
+    const byId = (id: string) => win.document.getElementById(id);
+    for (const id of ['player', 'video', 'poster', 'layer', 'still']) {
+      place(byId(id), { left: 0, top: 0, width: 640, height: 360 });
+    }
+    place(byId('play'), { left: 280, top: 140, width: 80, height: 80 });
+    Object.defineProperty(byId('video'), 'currentSrc', {
+      configurable: true,
+      value: 'https://node.example/arbitrary/VIDEO/Publisher/vid-1',
+    });
+    listAtPoint(win, 'play', 'layer', 'poster', 'video', 'player');
+    rightClick(win, byId('play'), { clientX: 320, clientY: 180 });
+    expect(await helper.at(true)).toMatchObject({
+      video: { src: 'https://node.example/arbitrary/VIDEO/Publisher/vid-1' },
+      picture: null,
+    });
+    listAtPoint(win, 'layer', 'video', 'player');
+    rightClick(win, byId('layer'), { clientX: 100, clientY: 100 });
+    expect(await helper.at(true)).toMatchObject({
+      video: { src: 'https://node.example/arbitrary/VIDEO/Publisher/vid-1' },
+      picture: null,
+    });
+  });
+
+  it("never finds a picture under the app's own top bar or a panel it draws over the page", async () => {
+    const win = page(
+      '<div id="root"><header id="bar" style="background-color: rgb(255, 255, 255)">Opened-App</header>' +
+        '<main id="feed">' +
+        `<img id="first" src="${NODE_PICTURE}/pic-1">` +
+        `<article id="post"><img id="picture" src="${NODE_PICTURE}/pic-2"></article>` +
+        '</main>' +
+        '<div id="panel" style="background-color: rgb(255, 255, 255)">Settings</div></div>'
+    );
+    const helper = install(win);
+    const byId = (id: string) => win.document.getElementById(id);
+    place(byId('root'), { left: 0, top: -600, width: 1000, height: 3000 });
+    place(byId('feed'), { left: 0, top: -536, width: 1000, height: 2936 });
+    place(byId('bar'), { left: 0, top: 0, width: 1000, height: 64 });
+    // Scrolled partly under the bar.
+    place(byId('first'), { left: 16, top: -20, width: 300, height: 200 });
+    place(byId('post'), { left: 100, top: 300, width: 600, height: 400 });
+    place(byId('picture'), { left: 100, top: 300, width: 600, height: 400 });
+    place(byId('panel'), { left: 0, top: 0, width: 1000, height: 800 });
+    listAtPoint(win, 'bar', 'first', 'feed', 'root');
+    rightClick(win, byId('bar'), { clientX: 100, clientY: 30 });
+    expect((await helper.at(true)).picture).toBeNull();
+    for (const covered of ['first', 'picture']) {
+      listAtPoint(win, 'panel', covered, 'feed', 'root');
+      rightClick(win, byId('panel'), { clientX: 300, clientY: 400 });
+      expect((await helper.at(true)).picture).toBeNull();
+    }
+  });
+
+  it('never finds a picture under a layer of its own over the page, however it is drawn', async () => {
+    // A sheet painted with a gradient (no background colour), and a dialog
+    // drawn by a web component, whose own layers Chromium doesn't list.
+    const win = page(
+      '<div id="root"><article id="post">' +
+        `<img id="picture" src="${NODE_PICTURE}/pic-1">` +
+        '</article></div>' +
+        '<div id="sheet" style="background-image: linear-gradient(rgb(16, 16, 32), rgb(32, 32, 64))">Profile</div>' +
+        '<div id="dialog-host"></div>'
+    );
+    const helper = install(win);
+    const byId = (id: string) => win.document.getElementById(id);
+    const shadow = byId('dialog-host').attachShadow({ mode: 'open' });
+    shadow.innerHTML =
+      '<div id="overlay" style="background-color: rgb(0, 0, 0)"></div>';
+    // A short page: the picture fills most of it.
+    place(win.document.body, { left: 0, top: 0, width: 1000, height: 800 });
+    place(byId('root'), { left: 0, top: 0, width: 1000, height: 800 });
+    place(byId('post'), { left: 0, top: 0, width: 1000, height: 600 });
+    place(byId('picture'), { left: 0, top: 0, width: 1000, height: 600 });
+    place(byId('sheet'), { left: 0, top: 0, width: 1000, height: 800 });
+    place(byId('dialog-host'), { left: 0, top: 0, width: 1000, height: 800 });
+    listAtPoint(win, 'sheet', 'picture', 'post', 'root');
+    rightClick(win, byId('sheet'), { clientX: 300, clientY: 300 });
+    expect((await helper.at(true)).picture).toBeNull();
+    listAtPoint(win, 'dialog-host', 'picture', 'post', 'root');
+    rightClick(win, shadow.getElementById('overlay'), {
+      clientX: 300,
+      clientY: 300,
+    });
+    expect((await helper.at(true)).picture).toBeNull();
+  });
+
+  it('finds a picture behind the page only where nothing else was right-clicked', async () => {
+    // A hero section: a picture behind a heading, which doesn't take the
+    // pointer so the heading does.
+    const win = page(
+      '<section id="hero">' +
+        `<img id="wallpaper" style="pointer-events: none" src="${NODE_PICTURE}/wallpaper">` +
+        '<h1 id="heading">Welcome</h1></section>'
+    );
+    const helper = install(win);
+    const byId = (id: string) => win.document.getElementById(id);
+    place(byId('hero'), { left: 0, top: 0, width: 1000, height: 600 });
+    place(byId('wallpaper'), { left: 0, top: 0, width: 1000, height: 600 });
+    place(byId('heading'), { left: 100, top: 200, width: 800, height: 80 });
+    listAtPoint(win, 'heading', 'hero');
+    rightClick(win, byId('heading'), { clientX: 300, clientY: 240 });
+    expect((await helper.at(true)).picture).toBeNull();
+    // The hero's own empty part: the picture is what shows there.
+    listAtPoint(win, 'hero');
+    rightClick(win, byId('hero'), { clientX: 300, clientY: 450 });
+    expect((await helper.at(true)).picture).toMatchObject({
+      src: `${NODE_PICTURE}/wallpaper`,
+    });
+  });
+
+  it('finds the picture of a viewer fixed over the window from inside a narrow column', async () => {
+    // The column cuts off its own overflow, but not the fixed viewer in it.
+    const win = page(
+      '<div id="column" style="overflow: hidden">' +
+        '<div id="stage" style="position: fixed">' +
+        `<img id="shown" style="pointer-events: none" src="${NODE_PICTURE}/pic-1">` +
+        '</div></div>'
+    );
+    const helper = install(win);
+    const byId = (id: string) => win.document.getElementById(id);
+    place(byId('column'), { left: 0, top: 0, width: 300, height: 3000 });
+    place(byId('stage'), { left: 0, top: 0, width: 1000, height: 800 });
+    place(byId('shown'), { left: 300, top: 200, width: 400, height: 300 });
+    listAtPoint(win, 'stage');
+    rightClick(win, byId('stage'), { clientX: 500, clientY: 350 });
+    expect((await helper.at(true)).picture).toMatchObject({
+      src: `${NODE_PICTURE}/pic-1`,
+    });
+  });
+
+  it("finds one on the page's own empty spot, whatever <body>'s own box", async () => {
+    // <body> has overflow: hidden (as a dialog library sets it) and a box
+    // ending above the point: that overflow is the window's, not <body>'s.
+    const win = page(
+      `<img id="art" style="pointer-events: none" src="${NODE_PICTURE}/art">`
+    );
+    const helper = install(win);
+    win.document.body.style.overflow = 'hidden';
+    place(win.document.body, { left: 0, top: 0, width: 1000, height: 100 });
+    place(win.document.getElementById('art'), {
+      left: 0,
+      top: 0,
+      width: 1000,
+      height: 800,
+    });
+    listAtPoint(win);
+    rightClick(win, win.document.body, { clientX: 300, clientY: 400 });
+    expect((await helper.at(true)).picture).toMatchObject({
+      src: `${NODE_PICTURE}/art`,
+    });
+  });
+
+  it("finds a video that doesn't take the pointer", async () => {
+    const win = page(
+      '<div id="player"><video id="video" style="pointer-events: none"></video></div>'
+    );
+    const helper = install(win);
+    const byId = (id: string) => win.document.getElementById(id);
+    place(byId('player'), { left: 0, top: 0, width: 640, height: 360 });
+    place(byId('video'), { left: 0, top: 0, width: 640, height: 360 });
+    Object.defineProperty(byId('video'), 'currentSrc', {
+      configurable: true,
+      value: 'https://node.example/arbitrary/VIDEO/Publisher/vid-1',
+    });
+    listAtPoint(win, 'player');
+    rightClick(win, byId('player'), { clientX: 320, clientY: 180 });
+    expect((await helper.videoAt())?.src).toBe(
+      'https://node.example/arbitrary/VIDEO/Publisher/vid-1'
+    );
+  });
+
+  describe('picture', () => {
+    const drawn = (win: TestWindow) => {
+      const drawImage = vi.fn();
+      const sizes: [number, number][] = [];
+      vi.spyOn(win.HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+        drawImage,
+      } as never);
+      vi.spyOn(win.HTMLCanvasElement.prototype, 'toDataURL').mockImplementation(
+        function (this: HTMLCanvasElement) {
+          sizes.push([this.width, this.height]);
+          return 'data:image/png;base64,AAAA';
+        }
+      );
+      return { drawImage, sizes };
+    };
+
+    it('draws the picture the menu was opened for at its own size', async () => {
+      const { win, byId } = viewer();
+      const helper = install(win);
+      const { drawImage, sizes } = drawn(win);
+      // No menu with a picture yet.
+      expect(helper.picture()).toBeNull();
+      rightClick(win, byId('stage'), { clientX: 500, clientY: 350 });
+      await helper.at(true);
+      expect(helper.picture()).toEqual({ png: 'data:image/png;base64,AAAA' });
+      expect(drawImage.mock.calls[0][0]).toBe(byId('shown'));
+      expect(sizes).toEqual([[1600, 1200]]);
+      // Bigger than 4K: made smaller.
+      loaded(byId('shown'), 7680, 4320);
+      helper.picture();
+      expect(sizes[1]).toEqual([3840, 2160]);
+    });
+
+    it("gives the picture's box when it can't be read or hasn't loaded", async () => {
+      const { win, byId } = viewer();
+      const helper = install(win);
+      vi.spyOn(win.HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+        drawImage: vi.fn(),
+      } as never);
+      vi.spyOn(win.HTMLCanvasElement.prototype, 'toDataURL').mockImplementation(
+        () => {
+          throw new Error('SecurityError: tainted canvas');
+        }
+      );
+      rightClick(win, byId('stage'), { clientX: 500, clientY: 350 });
+      await helper.at(true);
+      const where = {
+        box: { x: 300, y: 200, width: 400, height: 300 },
+        viewport: { width: win.innerWidth, height: win.innerHeight },
+      };
+      expect(helper.picture()).toEqual(where);
+      loaded(byId('shown'), 0, 0);
+      expect(helper.picture()).toEqual(where);
+    });
+
+    it('copies nothing once the picture changed, left the page, or another right-click came', async () => {
+      const { win, byId } = viewer();
+      const helper = install(win);
+      drawn(win);
+      const shown = byId('shown') as HTMLImageElement;
+      rightClick(win, byId('stage'), { clientX: 500, clientY: 350 });
+      await helper.at(true);
+      shown.src = `${NODE_PICTURE}/pic-2`;
+      expect(helper.picture()).toBeNull();
+      shown.src = `${NODE_PICTURE}/pic-1`;
+      expect(helper.picture()).not.toBeNull();
+      // A new right-click: its own menu, with no picture asked about yet.
+      rightClick(win, byId('stage'), { clientX: 500, clientY: 350 });
+      expect(helper.picture()).toBeNull();
+      await helper.at(true);
+      shown.remove();
+      expect(helper.picture()).toBeNull();
+    });
+  });
+});
+
 describe('a link the app shows outside an <a>', () => {
   it('reads a link put on the element, or on one it is in', async () => {
     const win = page(
@@ -552,6 +1022,10 @@ describe('a link the app shows outside an <a>', () => {
     const win = page('<p>Text</p>');
     const helper = install(win);
     rightClick(win, win.document.querySelector('p'));
-    expect(await helper.at(true)).toEqual({ video: null, link: null });
+    expect(await helper.at(true)).toEqual({
+      video: null,
+      picture: null,
+      link: null,
+    });
   });
 });

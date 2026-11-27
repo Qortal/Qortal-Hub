@@ -167,12 +167,16 @@ export type QAppElementBox = {
   viewport: { width: number; height: number };
 };
 
-/** A video's frame: a PNG, or where the video is when it can't be read. */
-export type QAppVideoFrame = { png: string } | QAppElementBox;
+/**
+ * A picture's or a video frame's pixels: a PNG, or where it is on screen
+ * when they can't be read.
+ */
+export type QAppPixels = { png: string } | QAppElementBox;
 
 /**
- * The video under the pointer, also under what covers it (a play button, a
- * player's own layer): what the menu needs to offer the video's items.
+ * The video under the pointer, also one under what covers it (a play button,
+ * a player's own layer) or one that doesn't take the pointer: what the menu
+ * needs to offer the video's items.
  */
 export type QAppVideoAt = {
   /** Where it plays from; empty while it has none. */
@@ -186,21 +190,36 @@ export type QAppVideoAt = {
 };
 
 /**
- * What the app shows at the right-click besides what Chromium names: a video
- * under a cover, and a link not in an <a> (an attribute, a link written as
- * text, a box showing one).
+ * A picture under the pointer that Chromium doesn't name: one that doesn't
+ * take the pointer (an image viewer's, which moves the picture itself), or
+ * one under a cover.
+ */
+export type QAppPictureAt = {
+  /** Where it was loaded from; empty when it has none, or it is too long. */
+  src: string;
+  /** Loaded, so it can be copied. */
+  loaded: boolean;
+};
+
+/**
+ * What the app shows at the right-click besides what Chromium names: a
+ * picture or a video (at most one of them), and a link not in an <a> (an
+ * attribute, a link written as text, a box showing one).
  */
 export type QAppFoundAt = {
   video: QAppVideoAt | null;
+  picture: QAppPictureAt | null;
   link: string | null;
 };
 
 /** What the app's preload offers main (QAPP_MENU_GUEST_KEY). */
 export type QAppMenuGuestHelper = {
-  at: (wantVideo: boolean) => Promise<QAppFoundAt>;
+  at: (wantMedia: boolean) => Promise<QAppFoundAt>;
   describe: () => QAppElementInfo | null;
   box: () => QAppElementBox | null;
-  videoFrame: () => QAppVideoFrame | null;
+  videoFrame: () => QAppPixels | null;
+  /** The picture the latest at() found, for "Copy picture". */
+  picture: () => QAppPixels | null;
   videoAt: () => Promise<QAppVideoAt | null>;
   pictureInPicture: (on: boolean) => Promise<boolean>;
 };

@@ -43,6 +43,7 @@ import {
   type QAppMenuOpen,
   type QAppMenuResult,
   type QAppMenuSettings,
+  type QAppPictureAt,
   type QAppSaveState,
   type QAppSaveUpdate,
   type QAppVideoAt,
@@ -83,10 +84,16 @@ const MIN_NAME_BYTES = 3;
 const MAX_NAME_BYTES = 40;
 /** Selected text longer than this is no name to look up (read no further). */
 const MAX_LOOKUP_SELECTION = 200;
-/** The menu waits this long for the app to say what video is under it. */
-export const VIDEO_LOOKUP_MS = 300;
-/** A video's address longer than this (a big data: one) isn't taken. */
-const MAX_VIDEO_SRC = 1_000_000;
+/**
+ * The menu waits this long for the app to say what it shows at the
+ * right-click besides what Chromium named (a link, a picture, a video).
+ */
+export const LOOKUP_MS = 300;
+/**
+ * A picture's or video's address longer than this (a big data: one) isn't
+ * taken.
+ */
+const MAX_MEDIA_SRC = 1_000_000;
 
 /** What the menu reads from Electron's context-menu params. */
 export type QAppMenuParams = {
@@ -106,6 +113,12 @@ export type QAppMenuParams = {
   formControlType?: string;
   /** The frame right-clicked: the app's own page, or a frame inside it. */
   frame?: unknown;
+  /**
+   * Set here, not by Electron: the picture is one the app's preload found
+   * where Chromium named none, so it is copied from its pixels (Chromium
+   * finds no picture at the point).
+   */
+  foundPicture?: boolean;
   editFlags: {
     canUndo: boolean;
     canRedo: boolean;
@@ -555,16 +568,43 @@ export function appPageLink(guest: QAppMenuGuest): string | null {
 }
 
 /**
- * The right-click as a right-click on the video the app's preload found
- * under the pointer (under what covers it), checked; as it was when none.
+ * The right-click as a right-click on the picture the app's preload found
+ * under the pointer (one that doesn't take the pointer, as an image viewer's,
+ * or one under a cover), checked; as it was when none.
  */
-export function withCoveredVideo(
+export function withFoundPicture(
+  params: QAppMenuParams,
+  found: unknown
+): QAppMenuParams {
+  if (!found || typeof found !== 'object') return params;
+  const picture = found as Partial<Record<keyof QAppPictureAt, unknown>>;
+  if (typeof picture.src !== 'string' || picture.src.length > MAX_MEDIA_SRC) {
+    return params;
+  }
+  const loaded = picture.loaded === true;
+  // Nothing to save or copy.
+  if (!picture.src && !loaded) return params;
+  return {
+    ...params,
+    mediaType: 'image',
+    srcURL: picture.src,
+    hasImageContents: loaded,
+    foundPicture: true,
+  };
+}
+
+/**
+ * The right-click as a right-click on the video the app's preload found
+ * under the pointer (under what covers it, or one that doesn't take the
+ * pointer), checked; as it was when none.
+ */
+export function withFoundVideo(
   params: QAppMenuParams,
   found: unknown
 ): QAppMenuParams {
   if (!found || typeof found !== 'object') return params;
   const video = found as Partial<Record<keyof QAppVideoAt, unknown>>;
-  if (typeof video.src !== 'string' || video.src.length > MAX_VIDEO_SRC) {
+  if (typeof video.src !== 'string' || video.src.length > MAX_MEDIA_SRC) {
     return params;
   }
   return {
@@ -583,9 +623,11 @@ export function withCoveredVideo(
 
 /**
  * A right-click on nothing Chromium names (no picture, video, link, text box
- * or selection) may be on a video under a cover: the app's preload is asked.
+ * or selection) may be on a picture or video Chromium doesn't see there: one
+ * under a cover, or one that doesn't take the pointer. The app's preload is
+ * asked.
  */
-const mayCoverVideo = (params: QAppMenuParams) =>
+const mayCoverMedia = (params: QAppMenuParams) =>
   params.mediaType === 'none' &&
   params.isEditable !== true &&
   !params.linkURL &&
@@ -593,15 +635,24 @@ const mayCoverVideo = (params: QAppMenuParams) =>
 
 /**
  * The right-click with what the app's preload found there (checked): a
- * video under a cover, and a link not in an <a> when Chromium named none.
+ * picture or video Chromium doesn't see, and a link not in an <a> when
+ * Chromium named none.
  */
 export function withFound(
   params: QAppMenuParams,
   found: unknown
 ): QAppMenuParams {
   if (!found || typeof found !== 'object') return params;
-  const { video, link } = found as { video?: unknown; link?: unknown };
-  let result = mayCoverVideo(params) ? withCoveredVideo(params, video) : params;
+  const { video, picture, link } = found as {
+    video?: unknown;
+    picture?: unknown;
+    link?: unknown;
+  };
+  let result = params;
+  if (mayCoverMedia(params)) {
+    result = withFoundPicture(params, picture);
+    if (result === params) result = withFoundVideo(params, video);
+  }
   if (
     !params.linkURL &&
     typeof link === 'string' &&
@@ -1057,8 +1108,9 @@ export class QAppContextMenus {
    * A right-click in an app. Unless Chromium named a link, the app's preload
    * is asked first (briefly) what it shows there: a link not in an <a> (an
    * attribute, a link written as text, a box showing one), and on a spot
-   * Chromium names nothing at, a video under a cover (a paused video's play
-   * button).
+   * Chromium names nothing at, a picture or video Chromium doesn't see there
+   * (a paused video's play button over it, an image viewer's picture that
+   * doesn't take the pointer).
    */
   open(guest: WebContents, params: QAppMenuParams): void {
     if (this.locked || guest.isDestroyed()) return;
@@ -1073,9 +1125,9 @@ export class QAppContextMenus {
     }
     void this.callGuest(
       guest,
-      `at(${mayCoverVideo(params)})`,
+      `at(${mayCoverMedia(params)})`,
       false,
-      VIDEO_LOOKUP_MS
+      LOOKUP_MS
     ).then((found) => {
       // A newer right-click in this app meanwhile: that one's menu shows.
       if (this.rightClicks.get(guest) !== ticket) return;
@@ -1164,9 +1216,18 @@ export class QAppContextMenus {
       case 'selectAll':
         guest[item.action]();
         return true;
-      case 'copyPicture':
-        guest.copyImageAt(params.x, params.y);
-        return true;
+      case 'copyPicture': {
+        if (!params.foundPicture) {
+          guest.copyImageAt(params.x, params.y);
+          return true;
+        }
+        // Chromium finds no picture at the point: the app's preload draws
+        // the one it found there.
+        const image = await this.pixelsImage(guest, 'picture()');
+        return image
+          ? this.toClipboard(() => this.deps.writeClipboardImage(image))
+          : false;
+      }
       case 'copyLink': {
         const text = copyableLink(params.linkURL, info.nodeOrigin);
         if (!text) return false;
@@ -1196,7 +1257,7 @@ export class QAppContextMenus {
         return this.toClipboard(() => this.deps.writeClipboardText(text));
       }
       case 'copyVideoFrame': {
-        const image = await this.videoFrameImage(guest);
+        const image = await this.pixelsImage(guest, 'videoFrame()');
         return image
           ? this.toClipboard(() => this.deps.writeClipboardImage(image))
           : false;
@@ -1483,14 +1544,15 @@ export class QAppContextMenus {
   }
 
   /**
-   * The video's frame as it is, at its own size; what's on screen there when
-   * the frame can't be read (a video from elsewhere). None when the app went
-   * away or Hub locked meanwhile.
+   * A video's frame as it is, or the picture found at the right-click, at
+   * its own size; what's on screen there when it can't be read (from
+   * elsewhere). None when the app went away or Hub locked meanwhile.
    */
-  private async videoFrameImage(
-    guest: WebContents
+  private async pixelsImage(
+    guest: WebContents,
+    call: 'videoFrame()' | 'picture()'
   ): Promise<NativeImage | null> {
-    const frame = await this.callGuest(guest, 'videoFrame()');
+    const frame = await this.callGuest(guest, call);
     if (this.gone(guest)) return null;
     const png = (frame as { png?: unknown } | null)?.png;
     if (typeof png === 'string') {
@@ -1513,7 +1575,7 @@ export class QAppContextMenus {
    */
   private async saveVideoFrame(record: MenuRecord): Promise<boolean> {
     const { guest, info } = record;
-    const image = await this.videoFrameImage(guest);
+    const image = await this.pixelsImage(guest, 'videoFrame()');
     if (!image) return false;
     const name = `${cleanFileName(info.appName) || 'Qortal'} ${stamp(
       this.now()

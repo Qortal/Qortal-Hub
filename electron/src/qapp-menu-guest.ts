@@ -3,10 +3,11 @@
  * preload runs it in its isolated world, where the page can't see or call it.
  *
  * It notes the element of each real right-click, for the menu's items that
- * act on that element (copy its description, a video's frame, picture in
- * picture), and lets Shift+right-click reach Hub's menu in an app that has a
- * menu of its own. Main calls it with executeJavaScriptInIsolatedWorld. What
- * it answers comes from the page, so main checks it.
+ * act on that element (copy its description, a picture, a video's frame,
+ * picture in picture), and lets Shift+right-click reach Hub's menu in an app
+ * that has a menu of its own. Main calls it with
+ * executeJavaScriptInIsolatedWorld. What it answers comes from the page, so
+ * main checks it.
  */
 import {
   QAPP_MENU_GUEST_KEY,
@@ -14,8 +15,9 @@ import {
   type QAppElementInfo,
   type QAppFoundAt,
   type QAppMenuGuestHelper,
+  type QAppPictureAt,
+  type QAppPixels,
   type QAppVideoAt,
-  type QAppVideoFrame,
 } from './qapp-context-menu-types';
 
 /** An element's HTML is cut after this many characters. */
@@ -25,10 +27,18 @@ const MAX_TITLE = 120;
 const MAX_SELECTOR_PARTS = 8;
 /** An element with more inside it is copied without what's inside. */
 export const MAX_COPIED_ELEMENTS = 2_000;
-/** A video frame bigger than 4K is made smaller. */
+/** A picture or video frame bigger than 4K is copied smaller. */
 const MAX_FRAME_PIXELS = 3840 * 2160;
-/** A video address longer than this (a big data: one) isn't handed over. */
-const MAX_VIDEO_SRC = 1_000_000;
+/**
+ * A picture's or video's address longer than this (a big data: one) isn't
+ * handed over.
+ */
+const MAX_MEDIA_SRC = 1_000_000;
+/**
+ * A picture or video under the element right-clicked counts when it fills
+ * at least this much of the nearest element holding both (see sameFrame).
+ */
+const FRAME_SHARE = 0.5;
 /** A link longer than this isn't one. */
 const MAX_LINK = 4_096;
 /**
@@ -143,6 +153,28 @@ function holderOf(node: Element): Element | null {
     : null;
 }
 
+type Box = { left: number; top: number; right: number; bottom: number };
+
+const boxOf = (element: Element): Box => {
+  const rect = element.getBoundingClientRect();
+  return {
+    left: rect.left,
+    top: rect.top,
+    right: rect.left + rect.width,
+    bottom: rect.top + rect.height,
+  };
+};
+
+const holds = (box: Box, x: number, y: number) =>
+  x >= box.left && x < box.right && y >= box.top && y < box.bottom;
+
+/** Whether an element cuts off what sticks out of its box. */
+const clipsOverflow = (style: CSSStyleDeclaration) =>
+  [style.overflow, style.overflowX, style.overflowY]
+    .join(' ')
+    .split(/\s+/)
+    .some((value) => value !== '' && value !== 'visible');
+
 /** The colour behind the element: its own, or the nearest one under it. */
 function backgroundOf(element: Element, win: Window): string {
   for (let node: Element | null = element; node; node = node.parentElement) {
@@ -202,6 +234,9 @@ export function installQAppMenuGuest(
   let last: Element | null = null;
   // Where it was right-clicked, in the page's CSS pixels.
   let point = { x: 0, y: 0 };
+  // The picture the latest right-click's menu was opened for (see at()),
+  // with the address it had then.
+  let offered: { picture: HTMLImageElement; src: string } | null = null;
   win.addEventListener(
     'contextmenu',
     (event) => {
@@ -210,6 +245,7 @@ export function installQAppMenuGuest(
       const target = event.composedPath()[0];
       last = target instanceof win.Element ? target : null;
       point = { x: event.clientX, y: event.clientY };
+      offered = null;
       // Shift+right-click: Hub's menu, even where the app has its own.
       if ((event as MouseEvent).shiftKey) event.stopImmediatePropagation();
     },
@@ -218,28 +254,112 @@ export function installQAppMenuGuest(
   // The element right-clicked last, while it is still on the page.
   const element = () => (last?.isConnected ? last : null);
   const viewport = () => ({ width: win.innerWidth, height: win.innerHeight });
+
+  type Media = HTMLImageElement | HTMLVideoElement;
+  const isMedia = (node: unknown): node is Media =>
+    node instanceof win.HTMLImageElement ||
+    node instanceof win.HTMLVideoElement;
+
+  const pageEdge = (node: Element) =>
+    node === win.document.body || node === win.document.documentElement;
+
   /**
-   * The video right-clicked: the element itself or one it is in, else the
-   * one under the point beneath what covers it (a play button, a player's
-   * own layer).
+   * Whether a picture or video in the element right-clicked that doesn't
+   * take the pointer (as an image viewer's picture, which the viewer moves
+   * itself) is shown at the point: its box holds the point, it is visible,
+   * and nothing it is in, up to that element, makes it invisible or cuts it
+   * off there. (Overflow on <body> and <html> is the window's own.)
    */
-  const videoUnder = (): HTMLVideoElement | null => {
+  const shownIn = (target: Element, media: Media, x: number, y: number) => {
+    if (!holds(boxOf(media), x, y)) return false;
+    const own = win.getComputedStyle(media);
+    if (own.pointerEvents !== 'none') return false;
+    if (own.visibility === 'hidden' || own.visibility === 'collapse') {
+      return false;
+    }
+    for (let node: Element | null = media; node; node = holderOf(node)) {
+      const style = node === media ? own : win.getComputedStyle(node);
+      if (Number.parseFloat(style.opacity) === 0) return false;
+      const cutOff =
+        node !== media &&
+        !pageEdge(node) &&
+        clipsOverflow(style) &&
+        !holds(boxOf(node), x, y);
+      if (cutOff) return false;
+      if (node === target) break;
+    }
+    return true;
+  };
+
+  /** The elements an element is in, from itself out, across shadow roots. */
+  const chainOf = (node: Element): Element[] => {
+    const chain: Element[] = [];
+    for (
+      let current: Element | null = node;
+      current;
+      current = holderOf(current)
+    ) {
+      chain.push(current);
+    }
+    return chain;
+  };
+
+  /**
+   * Whether the element right-clicked and a picture or video under it are in
+   * the same small frame (a player with its play button or poster, a
+   * thumbnail with a layer on it): the nearest element holding both isn't
+   * the page's own <body> or <html>, and the picture or video fills at least
+   * FRAME_SHARE of it. A dialog, a top bar or a panel drawn over the page
+   * shares only the page or a much bigger part of it with what is under it.
+   */
+  const sameFrame = (target: Element, media: Media) => {
+    const around = new Set(chainOf(target));
+    const holder = chainOf(media).find((node) => around.has(node));
+    if (!holder || pageEdge(holder)) return false;
+    const frame = boxOf(holder);
+    const own = boxOf(media);
+    const frameArea = (frame.right - frame.left) * (frame.bottom - frame.top);
+    const ownArea = (own.right - own.left) * (own.bottom - own.top);
+    return frameArea > 0 && ownArea >= frameArea * FRAME_SHARE;
+  };
+
+  /**
+   * The picture or video right-clicked, where Chromium named none: the one
+   * the element is in (a player's own controls); else one that doesn't take
+   * the pointer, shown at the point inside the element right-clicked (an
+   * image viewer's picture: drawn over the element, the last one in the page
+   * over the ones before it); else one under the element, in the same small
+   * frame (a paused video under its play button), as Chromium lists them.
+   * A picture found with a video there (the video's poster) gives way to
+   * the video. Nothing under a dialog, a top bar or a panel is found.
+   */
+  const mediaUnder = (): Media | null => {
     const target = element();
     if (!target) return null;
-    const own = videoOf(target);
-    if (own) return own;
-    const under = win.document.elementsFromPoint?.(point.x, point.y) ?? [];
-    for (const node of under) {
-      if (node instanceof win.HTMLVideoElement) return node;
-    }
-    return null;
+    const own = target.closest('video, img');
+    if (isMedia(own)) return own;
+    const { x, y } = point;
+    const inside = [...target.querySelectorAll('img, video')].filter(
+      (node): node is Media => isMedia(node) && shownIn(target, node, x, y)
+    );
+    const under = (win.document.elementsFromPoint?.(x, y) ?? []).filter(
+      (node): node is Media => isMedia(node) && sameFrame(target, node)
+    );
+    const found = [...inside.reverse(), ...under];
+    return (
+      found.find((media) => media instanceof win.HTMLVideoElement) ??
+      found[0] ??
+      null
+    );
   };
-  const videoOf = (node: Element | null): HTMLVideoElement | null => {
-    if (!node) return null;
-    if (node instanceof win.HTMLVideoElement) return node;
-    const found = node.closest('video');
-    return found instanceof win.HTMLVideoElement ? found : null;
+
+  const videoUnder = (): HTMLVideoElement | null => {
+    const media = mediaUnder();
+    return media instanceof win.HTMLVideoElement ? media : null;
   };
+
+  const srcOf = (picture: HTMLImageElement) =>
+    picture.currentSrc || picture.src || '';
 
   const describe = (): QAppElementInfo | null => {
     const target = element();
@@ -274,33 +394,64 @@ export function installQAppMenuGuest(
     };
   };
 
-  const videoFrame = (): QAppVideoFrame | null => {
-    const video = videoUnder();
-    if (!video) return null;
+  /**
+   * A picture's or a video frame's pixels at their own size (width × height,
+   * none when nothing can be drawn yet), made smaller past 4K; where it is
+   * on screen when they can't be read.
+   */
+  const pixelsOf = (
+    media: Media,
+    width: number,
+    height: number
+  ): QAppPixels => {
     const where = {
-      box: rounded(video.getBoundingClientRect()),
+      box: rounded(media.getBoundingClientRect()),
       viewport: viewport(),
     };
-    // HAVE_CURRENT_DATA: a frame to draw.
-    if (video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
-      return where;
-    }
+    if (!width || !height) return where;
     try {
-      const scale = Math.min(
-        1,
-        Math.sqrt(MAX_FRAME_PIXELS / (video.videoWidth * video.videoHeight))
-      );
+      const scale = Math.min(1, Math.sqrt(MAX_FRAME_PIXELS / (width * height)));
       const canvas = win.document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
-      canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+      canvas.width = Math.max(1, Math.round(width * scale));
+      canvas.height = Math.max(1, Math.round(height * scale));
       const context = canvas.getContext('2d');
       if (!context) return where;
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      context.drawImage(media, 0, 0, canvas.width, canvas.height);
       return { png: canvas.toDataURL('image/png') };
     } catch {
-      // A video from elsewhere can't be read: what's on screen is taken.
+      // One from elsewhere can't be read: what's on screen is taken.
       return where;
     }
+  };
+
+  const videoFrame = (): QAppPixels | null => {
+    const video = videoUnder();
+    if (!video) return null;
+    // HAVE_CURRENT_DATA: a frame to draw.
+    const ready = video.readyState >= 2;
+    return pixelsOf(
+      video,
+      ready ? video.videoWidth : 0,
+      ready ? video.videoHeight : 0
+    );
+  };
+
+  /**
+   * The picture the latest right-click's menu was opened for, while it is
+   * still on the page showing what it showed then.
+   */
+  const picture = (): QAppPixels | null => {
+    const shown = offered;
+    if (!shown?.picture.isConnected || srcOf(shown.picture) !== shown.src) {
+      return null;
+    }
+    const image = shown.picture;
+    const loaded = image.complete && image.naturalWidth > 0;
+    return pixelsOf(
+      image,
+      loaded ? image.naturalWidth : 0,
+      loaded ? image.naturalHeight : 0
+    );
   };
 
   const pictureInPicture = async (on: boolean): Promise<boolean> => {
@@ -321,8 +472,11 @@ export function installQAppMenuGuest(
 
   const videoAt = async (): Promise<QAppVideoAt | null> => {
     const video = videoUnder();
-    if (!video) return null;
-    const src = video.currentSrc.length > MAX_VIDEO_SRC ? '' : video.currentSrc;
+    return video ? videoInfo(video) : null;
+  };
+
+  const videoInfo = async (video: HTMLVideoElement): Promise<QAppVideoAt> => {
+    const src = video.currentSrc.length > MAX_MEDIA_SRC ? '' : video.currentSrc;
     // A blob: address of a MediaSource (fed in parts) can't be fetched; one
     // of a whole file can (only its start is read).
     let stream = !src && video.srcObject != null;
@@ -391,16 +545,38 @@ export function installQAppMenuGuest(
     return null;
   };
 
-  const at = async (wantVideo: boolean): Promise<QAppFoundAt> => ({
-    video: wantVideo ? await videoAt() : null,
-    link: linkAt(),
-  });
+  /** A picture found at the right-click, kept for "Copy picture". */
+  const pictureAt = (image: HTMLImageElement): QAppPictureAt => {
+    const src = srcOf(image);
+    offered = { picture: image, src };
+    return {
+      src: src.length > MAX_MEDIA_SRC ? '' : src,
+      loaded: image.complete && image.naturalWidth > 0,
+    };
+  };
+
+  /**
+   * What the app shows at the right-click besides what Chromium named: a
+   * link, and on a spot where Chromium named nothing (wantMedia), a picture
+   * or a video.
+   */
+  const at = async (wantMedia: boolean): Promise<QAppFoundAt> => {
+    offered = null;
+    const media = wantMedia ? mediaUnder() : null;
+    return {
+      video:
+        media instanceof win.HTMLVideoElement ? await videoInfo(media) : null,
+      picture: media instanceof win.HTMLImageElement ? pictureAt(media) : null,
+      link: linkAt(),
+    };
+  };
 
   const helper: QAppMenuGuestHelper = Object.freeze({
     at,
     describe,
     box,
     videoFrame,
+    picture,
     videoAt,
     pictureInPicture,
   });

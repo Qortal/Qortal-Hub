@@ -17,6 +17,22 @@ offers what is under the pointer:
 - **In dev mode:** "Copy element description", "Copy element as picture" and
   "Inspect element".
 
+A picture or video counts also where Chromium names none:
+
+- one that doesn't take the pointer (`pointer-events: none`) inside the
+  element right-clicked, as in an image viewer that moves the picture itself;
+- one under the element right-clicked, when both are in a small frame the
+  picture or video fills at least half of, such as a paused video under its
+  play button or poster, or a thumbnail under a layer on it. A picture found
+  there with a video, such as the video's poster, gives way to the video.
+
+What a dialog, a top bar or a panel covers isn't offered: the element
+right-clicked there shares only the page, or a much bigger part of it, with
+what is under it. Neither is a picture behind another element, such as a
+heading over a background picture. A picture found this way is copied from
+its pixels; when it comes from another site and can't be read, what's on
+screen of it is copied.
+
 An app with a right-click menu of its own keeps it: when the app cancels the
 `contextmenu` event, Hub's menu doesn't open. Shift+right-click opens Hub's
 menu anyway. An app that cancels every right-click (one listener on the
