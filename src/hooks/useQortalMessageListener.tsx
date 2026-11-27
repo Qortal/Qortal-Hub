@@ -30,6 +30,10 @@ import {
 import { normalizeQappIdentityContext } from '../qortal/qapp-identity';
 import { dispatchQAppScreenCaptureRequest } from '../qortal/qapp-screen-capture-request';
 import {
+  isQortPaymentRequest,
+  paymentOutcomeUnknownError,
+} from '../transactions/paymentAnswer';
+import {
   dispatchQAppFileSaveRequest,
   isQAppFileSaveAction,
 } from '../qortal/qapp-file-save-request';
@@ -836,7 +840,12 @@ export const useQortalMessageListener = (
             console.error('Failed qortalRequest', error);
             eventPort.postMessage({
               result: null,
-              error: serializeQortalRequestError(error),
+              error: serializeQortalRequestError(
+                // Hub stopped waiting, yet the payment may still go through.
+                isQortPaymentRequest(message?.payload)
+                  ? paymentOutcomeUnknownError()
+                  : error
+              ),
             });
           });
       };

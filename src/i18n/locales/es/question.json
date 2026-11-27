@@ -42,6 +42,7 @@
     "error": {
       "add_to_list": "no se pudo agregar a la lista",
       "app_fee_not_sent": "la publicación se realizó, pero la tarifa de la aplicación no se envió: {{ error }}",
+      "app_fee_outcome_unknown": "la publicación se realizó, pero Hub no pudo saber si se pagó la tarifa de la aplicación. Revise sus transacciones para comprobarlo.",
       "at_info": "no se pudo encontrar la información del AT.",
       "buy_order": "no se pudo enviar la orden de intercambio",
       "cancel_sell_order": "falló al cancelar la orden de venta. ¡Inténtalo de nuevo!",
@@ -104,6 +105,7 @@
       "node_info": "no se pudo recuperar la información del nodo",
       "node_status": "no se pudo recuperar el estado del nodo",
       "only_encrypted_data": "solo se pueden usar datos cifrados en servicios privados",
+      "payment_outcome_unknown": "Hub no pudo saber si este pago se realizó. Revise sus transacciones antes de volver a intentarlo.",
       "payments_partially_sent": "pagos realizados antes de este error: {{ sent }} de {{ total }}. Revise sus transacciones antes de volver a intentarlo. {{ error }}",
       "perform_request": "no se pudo realizar la solicitud",
       "poll_create": "no se pudo crear la encuesta",
