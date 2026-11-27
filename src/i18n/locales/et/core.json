@@ -1056,7 +1056,14 @@
       "name": "Nimi",
       "website": "Veebileht"
     },
-    "suggestions": "Soovitused"
+    "suggestions": "Soovitused",
+    "zoom": {
+      "button": "suurendus: {{percent}}",
+      "kept": "{{name}} jaoks selles arvutis salvestatud",
+      "same_as_hub": "sama mis Hub",
+      "zoom_in": "suurenda",
+      "zoom_out": "vähenda"
+    }
   },
   "new_post_in": "uus postitus kohas {{ title }}",
   "node_state": {

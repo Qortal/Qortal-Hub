@@ -94,6 +94,11 @@ import { installDisplayMediaPicker } from './display-media-picker';
 import { installTabShortcuts } from './tab-shortcuts';
 import { followHubZoom, installZoomKeys, menuPopupPoint } from './hub-zoom';
 import {
+  APP_ZOOM_FILE,
+  preparedForGuest,
+  registerHubZoomIpc,
+} from './app-zoom';
+import {
   DEV_LOGS_DISABLED_STORAGE_KEY,
   log as loggerLog,
   error as loggerError,
@@ -1710,6 +1715,29 @@ ipcMain.handle(
     }
   }
 );
+
+// Each Q-App's and website's own zoom (hub-zoom.ts, app-zoom.ts): which app a
+// webview shows, the levels kept for them, and the search bar's magnifier.
+registerHubZoomIpc({
+  ipcMain,
+  app,
+  checkSender: requireMainShellEvent,
+  getHubPage: () => {
+    const win = myCapacitorApp?.getMainWindow?.();
+    return win && !win.isDestroyed() ? win.webContents : null;
+  },
+  preparedOf: (guest) => {
+    const attached = attachedQAppGuests.get(guest.id);
+    return preparedForGuest(
+      attached?.contents === guest ? attached.prepared : null,
+      preparedQAppGuests.values(),
+      (partition) => guest.session === session.fromPartition(partition),
+      guest.getURL()
+    );
+  },
+  getFilePath: () => path.join(app.getPath('userData'), APP_ZOOM_FILE),
+  onError: (error) => loggerError('App zoom', error),
+});
 
 const mainWindowFiles = registerMainWindowFileIpc({
   ipcMain,

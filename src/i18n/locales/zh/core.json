@@ -1056,7 +1056,14 @@
       "name": "名称",
       "website": "网站"
     },
-    "suggestions": "建议"
+    "suggestions": "建议",
+    "zoom": {
+      "button": "缩放：{{percent}}",
+      "kept": "已在此电脑上为 {{name}} 保存",
+      "same_as_hub": "与 Hub 相同",
+      "zoom_in": "放大",
+      "zoom_out": "缩小"
+    }
   },
   "new_post_in": "{{ title }} 中的新帖子",
   "node_state": {

@@ -128,6 +128,25 @@ declare global {
         import('../components/Apps/publishProfiles').PublishProfile | null
       >;
     };
+    /** Zoom of the Hub and of each Q-App or website (hub-zoom.ts). */
+    hubZoom?: {
+      /** What the Hub page shows: the app tab on screen, and the lock. */
+      onScreen: (report: { tabId: string | null; locked: boolean }) => void;
+      /** The pointer is on the magnifier (its tab, or null: Hub), or left it. */
+      panelPointer: (tabId: string | null | undefined) => void;
+      get: (
+        tabId: string | null
+      ) => Promise<import('../components/Desktop/hubZoom').HubZoomState>;
+      change: (
+        target: { tabId: string } | 'hub',
+        action: 'in' | 'out' | 'reset'
+      ) => Promise<import('../components/Desktop/hubZoom').HubZoomState>;
+      onChanged: (
+        listener: (
+          change: import('../components/Desktop/hubZoom').HubZoomChange
+        ) => void
+      ) => () => void;
+    };
     coreSetup?: {
       isCoreRunning?: () => Promise<boolean>;
       isCoreRunningOnSystem?: () => Promise<boolean>;

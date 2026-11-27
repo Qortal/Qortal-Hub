@@ -1056,7 +1056,14 @@
       "name": "Nombre",
       "website": "Sitio web"
     },
-    "suggestions": "Sugerencias"
+    "suggestions": "Sugerencias",
+    "zoom": {
+      "button": "zoom: {{percent}}",
+      "kept": "guardado para {{name}} en este equipo",
+      "same_as_hub": "igual que Hub",
+      "zoom_in": "acercar",
+      "zoom_out": "alejar"
+    }
   },
   "new_post_in": "nueva publicación en {{ title }}",
   "node_state": {

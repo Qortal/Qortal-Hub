@@ -88,6 +88,8 @@ import {
   recordAppOpen,
 } from './appOpenCounts';
 import { exactAppNameMatch, type SearchableApp } from './appSearchSuggestions';
+import { HubZoomButton } from './HubZoomButton';
+import { useHubZoom } from './useHubZoom';
 import {
   buildOmniboxOptions,
   findPrivateAppTab,
@@ -1389,6 +1391,8 @@ export function GlobalQortalNavBar({
   const isAppsMode = desktopViewMode === 'apps';
   const isDevMode = desktopViewMode === 'dev';
   const isHomeMode = desktopViewMode === 'home';
+  // The magnifier: the zoom of the Q-App or website on screen, off Hub's.
+  const hubZoom = useHubZoom(desktopViewMode, selectedTab);
   const chromeBackground =
     theme.palette.mode === 'dark'
       ? 'rgba(33, 36, 42, 0.95)'
@@ -1936,15 +1940,19 @@ export function GlobalQortalNavBar({
               sx={{
                 alignItems: 'center',
                 display: 'flex',
-                flex: '0 0 90px',
+                // Only the buttons shown, side by side.
+                flexShrink: 0,
                 gap: 0.75,
                 height: 26,
                 justifyContent: 'flex-end',
-                maxWidth: 90,
-                minWidth: 90,
-                width: 90,
               }}
             >
+              <HubZoomButton
+                zoom={hubZoom}
+                hoverBackground={buttonHoverBackground}
+                tooltipSlotProps={tooltipSlotProps}
+                tooltipTitle={tooltipTitle}
+              />
               <Tooltip
                 title={tooltipTitle(t('core:action.copy_link'))}
                 placement="bottom"
@@ -1954,8 +1962,7 @@ export function GlobalQortalNavBar({
                 <Box
                   component="span"
                   sx={{
-                    display: 'inline-flex',
-                    visibility: canCopyCurrentLink ? 'visible' : 'hidden',
+                    display: canCopyCurrentLink ? 'inline-flex' : 'none',
                   }}
                 >
                   <ButtonBase
@@ -2019,8 +2026,7 @@ export function GlobalQortalNavBar({
                 <Box
                   component="span"
                   sx={{
-                    display: 'inline-flex',
-                    visibility: canPinCurrentApp ? 'visible' : 'hidden',
+                    display: canPinCurrentApp ? 'inline-flex' : 'none',
                   }}
                 >
                   <ButtonBase
@@ -2092,7 +2098,8 @@ export function GlobalQortalNavBar({
                   alignItems: 'center',
                   borderRadius: '8px',
                   color: theme.palette.text.secondary,
-                  display: 'flex',
+                  // Nothing to go to in an empty field.
+                  display: inputValue.trim() ? 'flex' : 'none',
                   flexShrink: 0,
                   height: 26,
                   justifyContent: 'center',
