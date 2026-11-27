@@ -1840,6 +1840,7 @@
       "image_metadata_unremovable": "l'immagine {{index}} non può essere pubblicata: da questo formato non è possibile rimuovere la posizione e i dati della fotocamera. Salvala come JPEG o PNG e riprova.",
       "images_too_large": "queste immagini sono troppo grandi per pubblicarle insieme. Rimuovi un'immagine e riprova.",
       "name_required": "serve un nome Qortal per pubblicare",
+      "not_posted_left_home": "non pubblicato: hai lasciato la Home prima che venisse inviato. Pubblicalo di nuovo quando vuoi.",
       "post_too_large": "questo post supera i 5 MB, quindi {{app}} non lo mostrerebbe. Accorcialo o rimuovi un'immagine.",
       "publish_failed": "pubblicazione non riuscita",
       "too_many_images": "massimo {{count}} immagini per post"
