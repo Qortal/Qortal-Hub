@@ -433,25 +433,29 @@ const fetchFollowedNames = async (
           identifier: resource.identifier,
         }))
       ),
+      signal,
     }
   );
   const followedNames = new Set<string>();
+  // A refused read is no answer: it must not pass for "follows nobody".
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
+  }
   const results = await response.json();
 
-  if (response.ok) {
-    for (const result of results) {
-      if (!result.data || result.error) continue;
+  // One result per document: an error there is about that document only.
+  for (const result of results) {
+    if (!result.data || result.error) continue;
 
-      try {
-        const json = JSON.parse(atob(result.data));
-        if (!json.followedName) continue;
-        followedNames.add(json.followedName);
-      } catch {
-        console.warn(
-          'Failed to decode follow data for identifier:',
-          result.identifier
-        );
-      }
+    try {
+      const json = JSON.parse(atob(result.data));
+      if (!json.followedName) continue;
+      followedNames.add(json.followedName);
+    } catch {
+      console.warn(
+        'Failed to decode follow data for identifier:',
+        result.identifier
+      );
     }
   }
 

@@ -12,10 +12,8 @@ export function computeP2pHealth(metrics: {
   p2pOutboundOverlayPeers?: number;
   p2pInboundOverlayPeers?: number;
 }): P2pHealthLevel {
-  const {
-    p2pReceivingOverlayPeers = 0,
-    p2pReceivingOverlayPeersStableMs = 0,
-  } = metrics;
+  const { p2pReceivingOverlayPeers = 0, p2pReceivingOverlayPeersStableMs = 0 } =
+    metrics;
   if (p2pReceivingOverlayPeers === 0) {
     return 'bad';
   }

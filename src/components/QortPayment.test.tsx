@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { ThemeProvider } from '@mui/material/styles';
 import {
   afterEach,
@@ -57,6 +63,7 @@ vi.mock('../chatComputePow.worker.js?worker', () => ({
 import { QortPayment } from './QortPayment';
 import { lightTheme } from '../styles/theme-light';
 import { getFee, resolveRecipient } from '../background/background.ts';
+import { executeEvent } from '../utils/events';
 import publicKeyToAddressUntyped from '../utils/generateWallet/publicKeyToAddress';
 
 const publicKeyToAddress = publicKeyToAddressUntyped as any;
@@ -235,4 +242,133 @@ describe('QortPayment', () => {
       expect(sendMessage).not.toHaveBeenCalled();
     }
   );
+
+  // What the dialog is told after it sent the payment: only `true` is a
+  // payment the node took.
+  it('shows the reason and keeps the dialog open when the payment was not sent', async () => {
+    sendMessage.mockResolvedValue({
+      error: 'transaction invalid: invalid address (INVALID_ADDRESS)',
+      message: 'transaction invalid: invalid address (INVALID_ADDRESS)',
+    });
+    const { onSuccess } = renderPayment();
+    clickSend();
+
+    expect(
+      await screen.findByText(
+        'transaction invalid: invalid address (INVALID_ADDRESS)'
+      )
+    ).toBeTruthy();
+    expect(onSuccess).not.toHaveBeenCalled();
+    expect(executeEvent).not.toHaveBeenCalled();
+  });
+
+  it('shows a failure, not a payment, when the answer gives no reason', async () => {
+    // sendCoinCase gives a reason for every payment it sent, so an answer
+    // without one comes from a failure before signing.
+    sendMessage.mockResolvedValue(undefined);
+    const { onSuccess } = renderPayment();
+    clickSend();
+
+    expect(await screen.findByText('question:message.error.send')).toBeTruthy();
+    expect(onSuccess).not.toHaveBeenCalled();
+    expect(executeEvent).not.toHaveBeenCalled();
+  });
+
+  it('says Hub cannot tell whether the payment went through when no answer comes in time', async () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    sendMessage.mockRejectedValue({
+      error: 'timeout',
+      message: 'Request timed out after 600000 ms (action: sendCoin)',
+    });
+    const { onSuccess } = renderPayment();
+    clickSend();
+
+    expect(
+      await screen.findByText('question:message.error.payment_outcome_unknown')
+    ).toBeTruthy();
+    expect(onSuccess).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  // The overlay can be closed while the payment is in flight.
+  it.each([
+    [
+      'Hub cannot tell whether it went through',
+      {
+        error: 'question:message.error.payment_outcome_unknown',
+        code: 'PAYMENT_OUTCOME_UNKNOWN',
+        message: 'question:message.error.payment_outcome_unknown',
+      },
+      {
+        message: 'question:message.error.payment_outcome_unknown',
+        type: 'warning',
+      },
+    ],
+    [
+      'the node refused it',
+      {
+        error: 'transaction invalid: invalid address (INVALID_ADDRESS)',
+        message: 'transaction invalid: invalid address (INVALID_ADDRESS)',
+      },
+      {
+        message: 'transaction invalid: invalid address (INVALID_ADDRESS)',
+        type: 'error',
+      },
+    ],
+  ])(
+    'tells it in Hub’s notification when the dialog closed before it heard that %s',
+    async (_label, answer, notification) => {
+      let reply: (value: unknown) => void = () => {};
+      sendMessage.mockReturnValue(
+        new Promise((resolve) => {
+          reply = resolve;
+        })
+      );
+      renderPayment();
+      clickSend();
+      await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+
+      cleanup();
+      reply(answer);
+
+      await waitFor(() =>
+        expect(executeEvent).toHaveBeenCalledWith('openGlobalSnackBar', {
+          ...notification,
+          duration: 8000,
+        })
+      );
+    }
+  );
+
+  it('tells it in Hub’s notification when the dialog closed and no answer came in time', async () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    let timeOut: (reason: unknown) => void = () => {};
+    sendMessage.mockReturnValue(
+      new Promise((_resolve, reject) => {
+        timeOut = reject;
+      })
+    );
+    renderPayment();
+    clickSend();
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+
+    cleanup();
+    timeOut({
+      error: 'timeout',
+      message: 'Request timed out after 600000 ms (action: sendCoin)',
+    });
+
+    await waitFor(() =>
+      expect(executeEvent).toHaveBeenCalledWith('openGlobalSnackBar', {
+        message: 'question:message.error.payment_outcome_unknown',
+        type: 'warning',
+        duration: 8000,
+      })
+    );
+    consoleError.mockRestore();
+  });
 });

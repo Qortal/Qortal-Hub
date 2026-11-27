@@ -41,7 +41,11 @@ export async function getIceServerSourceUrlsForPeer(
   pc: RTCPeerConnection
 ): Promise<string[]> {
   const stats = await getIceServerSourceStatsForPeer(pc);
-  return [...new Set(stats.map((entry) => entry.url).filter((url): url is string => !!url))];
+  return [
+    ...new Set(
+      stats.map((entry) => entry.url).filter((url): url is string => !!url)
+    ),
+  ];
 }
 
 export async function logIceServerSourcesForPeer(

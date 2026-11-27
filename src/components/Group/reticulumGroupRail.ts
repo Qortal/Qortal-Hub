@@ -63,7 +63,9 @@ export const subscribeToReticulumGroupOrder = (
   const handleOrderChange = (event: Event) => {
     const nextOrder = (event as CustomEvent<unknown>).detail;
     listener(
-      Array.isArray(nextOrder) ? nextOrder.map(String) : readReticulumGroupOrder()
+      Array.isArray(nextOrder)
+        ? nextOrder.map(String)
+        : readReticulumGroupOrder()
     );
   };
   window.addEventListener(RETICULUM_GROUP_ORDER_EVENT, handleOrderChange);

@@ -1,7 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { applyChessMove, createChessState, deriveChessStartingSeat, getChessLegalMoves, hashChessState, isChessInCheck, type ChessState } from './chess';
+import {
+  applyChessMove,
+  createChessState,
+  deriveChessStartingSeat,
+  getChessLegalMoves,
+  hashChessState,
+  isChessInCheck,
+  type ChessState,
+} from './chess';
 
-const empty = (): ChessState => ({ board: Array(64).fill(0), nextSeat: 1, whiteSeat: 1, ply: 0, halfmoveClock: 0, castlingRights: [false, false, false, false], enPassant: null, outcome: null });
+const empty = (): ChessState => ({
+  board: Array(64).fill(0),
+  nextSeat: 1,
+  whiteSeat: 1,
+  ply: 0,
+  halfmoveClock: 0,
+  castlingRights: [false, false, false, false],
+  enPassant: null,
+  outcome: null,
+});
 
 describe('Chess rules', () => {
   it('starts with twenty legal white moves', () => {
@@ -12,10 +29,18 @@ describe('Chess rules', () => {
     const countPositions = (state: ChessState, depth: number): number => {
       if (depth === 0) return 1;
       return getChessLegalMoves(state).reduce(
-        (total, move) => total + countPositions(
-          applyChessMove(state, state.nextSeat, move.from, move.to, move.promotion),
-          depth - 1
-        ),
+        (total, move) =>
+          total +
+          countPositions(
+            applyChessMove(
+              state,
+              state.nextSeat,
+              move.from,
+              move.to,
+              move.promotion
+            ),
+            depth - 1
+          ),
         0
       );
     };
@@ -29,7 +54,11 @@ describe('Chess rules', () => {
     state.board[52] = 4;
     state.board[4] = -4;
     state.board[0] = -6;
-    expect(getChessLegalMoves(state).some((move) => move.from === 52 && move.to === 51)).toBe(false);
+    expect(
+      getChessLegalMoves(state).some(
+        (move) => move.from === 52 && move.to === 51
+      )
+    ).toBe(false);
   });
 
   it('detects checkmate', () => {
@@ -137,10 +166,14 @@ describe('Chess rules', () => {
   });
 
   it('matches the Python initial-state hash fixture', async () => {
-    expect(await hashChessState(createChessState(2))).toBe('cc48133f2305d376d6d48e9e858239ae9ea6db7af7692c607d68b0af8a70a8bb');
+    expect(await hashChessState(createChessState(2))).toBe(
+      'cc48133f2305d376d6d48e9e858239ae9ea6db7af7692c607d68b0af8a70a8bb'
+    );
   });
 
   it('rejects malformed round seeds', async () => {
-    await expect(deriveChessStartingSeat('not-a-uuid', '11'.repeat(16), '22'.repeat(16))).rejects.toThrow('Invalid hexadecimal game seed');
+    await expect(
+      deriveChessStartingSeat('not-a-uuid', '11'.repeat(16), '22'.repeat(16))
+    ).rejects.toThrow('Invalid hexadecimal game seed');
   });
 });

@@ -62,6 +62,7 @@ const ADDRESS = /^Q[1-9A-HJ-NP-Za-km-z]{32,34}$/;
 const SERVICE = /^[A-Z][A-Z0-9_]{0,39}$/;
 const SIGNATURE = /^[1-9A-HJ-NP-Za-km-z]{32,128}$/;
 const SHA256_HEX = /^[a-f0-9]{64}$/;
+// Control characters are the point: a stored profile name may not carry one.
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
 

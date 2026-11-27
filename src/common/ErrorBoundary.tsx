@@ -2,7 +2,9 @@ import { Component, ReactNode } from 'react';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
-  fallback: ReactNode | ((args: { error: Error | null; componentStack?: string }) => ReactNode);
+  fallback:
+    | ReactNode
+    | ((args: { error: Error | null; componentStack?: string }) => ReactNode);
 }
 
 interface ErrorBoundaryState {

@@ -1,8 +1,5 @@
 import { Theme } from '@mui/material/styles';
-import {
-  APP_BLUE_SURFACE_TEXT,
-  getBlueTier1ButtonSx,
-} from './blueMaterial';
+import { APP_BLUE_SURFACE_TEXT, getBlueTier1ButtonSx } from './blueMaterial';
 
 /**
  * Returns the common MuiCssBaseline global styles shared by both themes.
@@ -73,7 +70,13 @@ export const getCommonGlobalStyles = (theme: Theme) => ({
 // Extend the Theme interface
 const commonThemeOptions = {
   typography: {
-    fontFamily: ['Inter', 'Segoe UI', 'ui-sans-serif', 'system-ui', 'sans-serif'].join(','),
+    fontFamily: [
+      'Inter',
+      'Segoe UI',
+      'ui-sans-serif',
+      'system-ui',
+      'sans-serif',
+    ].join(','),
     h1: {
       fontSize: '2rem',
       fontWeight: 600,

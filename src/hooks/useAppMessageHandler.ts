@@ -4,6 +4,8 @@ import { executeEvent } from '../utils/events';
 import { handleGetFileFromIndexedDB } from '../utils/indexedDB';
 import { openQortalLink } from '../utils/qortalLink/openQortalLink';
 import { openQWalletsTab } from '../utils/openQWalletsTab';
+import { openQChatTab } from '../utils/openQChatTab';
+import { setPendingNotificationNav } from '../utils/notificationClickBuffer';
 
 type PermissionHandler = (
   message: any,
@@ -32,43 +34,43 @@ export function useAppMessageHandler(
           (event as any).origin
         );
       } else if (message.action === 'NOTIFICATION_OPEN_DIRECT') {
-        executeEvent('openDirectMessage', {
-          from: message.payload?.from,
-        });
+        setPendingNotificationNav({ eventName: 'openDirectMessage', detail: { from: message.payload?.from } });
+        openQChatTab();
+        executeEvent('openDirectMessage', { from: message.payload?.from });
       } else if (message.action === 'NOTIFICATION_OPEN_GROUP') {
-        executeEvent('openGroupMessage', {
-          from: message.payload?.from,
-          channelId: message.payload?.channelId,
-        });
+        setPendingNotificationNav({ eventName: 'openGroupMessage', detail: { from: message.payload?.from, channelId: message.payload?.channelId } });
+        openQChatTab();
+        executeEvent('openGroupMessage', { from: message.payload?.from, channelId: message.payload?.channelId });
       } else if (message.action === 'NOTIFICATION_OPEN_ANNOUNCEMENT_GROUP') {
-        executeEvent('openGroupAnnouncement', {
-          from: message.payload?.from,
-        });
+        setPendingNotificationNav({ eventName: 'openGroupAnnouncement', detail: { from: message.payload?.from } });
+        openQChatTab();
+        executeEvent('openGroupAnnouncement', { from: message.payload?.from });
       } else if (message.action === 'NOTIFICATION_OPEN_THREAD_NEW_POST') {
-        executeEvent('openThreadNewPost', {
-          data: message.payload?.data,
-        });
+        executeEvent('openThreadNewPost', { data: message.payload?.data });
       } else if (message.action === 'NOTIFICATION_OPEN_APP') {
         const payload = message.payload;
         if (payload?.reticulumDirectMessage) {
-          executeEvent('openDirectMessageInternal', {
-            address: payload.from,
-            name: payload.name,
-          });
-        } else if (payload?.qChatMention) {
-          executeEvent('openGroupMessage', {
-            channelId: payload.channelId,
-            eventId: payload.eventId,
-            from: payload.from,
-          });
+          setPendingNotificationNav({ eventName: 'openDirectMessageInternal', detail: { address: payload.from, name: payload.name } });
+          openQChatTab();
+          executeEvent('openDirectMessageInternal', { address: payload.from, name: payload.name });
+        } else if (
+          payload?.qChatMention ||
+          payload?.qChatMessage ||
+          payload?.qChatReply ||
+          // A "joined the group" notification carries the same channelId,
+          // eventId and group id as the rest, so it opens the same way. It was
+          // left out of this list and the click did nothing but focus the
+          // window.
+          payload?.qChatWelcome ||
+          payload?.qChatReaction
+        ) {
+          setPendingNotificationNav({ eventName: 'openGroupMessage', detail: { channelId: payload.channelId, eventId: payload.eventId, from: payload.from } });
+          openQChatTab();
+          executeEvent('openGroupMessage', { channelId: payload.channelId, eventId: payload.eventId, from: payload.from });
         } else if (payload?.openCalendar) {
-          executeEvent('openGroupMessage', {
-            from: payload.from,
-            eventId: payload.eventId,
-            occurrenceStart: payload.occurrenceStart,
-            timezone: payload.timezone,
-            openCalendar: true,
-          });
+          setPendingNotificationNav({ eventName: 'openGroupMessage', detail: { from: payload.from, eventId: payload.eventId, occurrenceStart: payload.occurrenceStart, timezone: payload.timezone, openCalendar: true } });
+          openQChatTab();
+          executeEvent('openGroupMessage', { from: payload.from, eventId: payload.eventId, occurrenceStart: payload.occurrenceStart, timezone: payload.timezone, openCalendar: true });
         } else if (payload?.openWallets) {
           openQWalletsTab();
         } else if (payload?.link) {

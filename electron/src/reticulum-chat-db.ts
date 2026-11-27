@@ -59,8 +59,11 @@ export function normalizeReticulumChatDisplayName(
   value: unknown,
   fallback = ''
 ): string {
+  // Stripping control characters is the point: a channel name may not carry
+  // them into the database or back out to the UI.
   const normalized = (typeof value === 'string' ? value : '')
     .normalize('NFC')
+    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
     .trim();
   const safeName = Array.from(normalized).slice(0, 80).join('');
@@ -102,6 +105,10 @@ function eventPassesAuthorExclusion(
 
 const RETICULUM_CHAT_EXPIRY_PRUNE_INTERVAL_MS = 60 * 1000;
 const RETICULUM_CHAT_CHANNEL_SUMMARY_CACHE_MAX_ENTRIES = 4096;
+// High, so ordinary sessions never evict, but growth is still bounded on very
+// active long-running Hubs (the report found an unbounded per-process map).
+const RETICULUM_CHAT_MEMORY_EVENTS_MAX_ENTRIES = 200_000;
+const RETICULUM_CHAT_MEMORY_SEARCH_TEXT_MAX_ENTRIES = 100_000;
 const RETICULUM_DM_EXPIRY_DAY_MS = 24 * 60 * 60 * 1000;
 export const RETICULUM_DM_DEFAULT_EXPIRY_MS = 30 * RETICULUM_DM_EXPIRY_DAY_MS;
 const RETICULUM_DM_ALLOWED_EXPIRY_MS = new Set([
@@ -374,6 +381,25 @@ export type ReticulumChatReadTarget = {
   groupId: number;
   channelId: string;
   timestamp: number;
+};
+
+/**
+ * How a channel decides whether an event is already read.
+ *
+ * Normally that is a sender-timestamp comparison against the read watermark.
+ * When the watermark sits ahead of this device's own clock it can only have
+ * come from another sender's fast clock, and sender timestamps are then no
+ * longer comparable across authors: a correctly-clocked member's later message
+ * sits below the watermark and reads as seen although nobody saw it. In that
+ * case the read moment — this device's arrival counter — is the boundary, and
+ * `stored_at` is the value to compare against it.
+ *
+ * `computeChannelSummary` computes this once and passes it to the unread count,
+ * the reply counter and the mention counter, so all three agree.
+ */
+type ReticulumChatReadBoundary = {
+  /** Arrival sequence recorded when this device marked the channel read. */
+  readMoment: number;
 };
 
 export type ReticulumChatDeviceReadState = {
@@ -659,6 +685,8 @@ type MessageProjectionRow = {
   author_stream_id?: string;
   author_seq: number;
   created_at: number;
+  /** Local arrival order; see `nextArrivalSequence`. */
+  stored_at?: number;
   root_event_type: string;
   current_event_id: string;
   updated_at: number;
@@ -682,6 +710,22 @@ const rendererExpiresAtByEvent = new WeakMap<
   number | null
 >();
 const projectionUpdatedAtByEvent = new WeakMap<ReticulumChatEvent, number>();
+
+/**
+ * Local arrival order for a projected message.
+ *
+ * Kept off the event object: it is local sequencing, not signed content, and an
+ * enumerable field would leak into wire serialization. Absent for rows written
+ * before the column existed, where the sender timestamp is used instead.
+ */
+const projectionStoredAtByEvent = new WeakMap<ReticulumChatEvent, number>();
+
+function messageArrivalOrder(event: ReticulumChatEvent): number {
+  const storedAt = projectionStoredAtByEvent.get(event);
+  if (typeof storedAt === 'number') return storedAt;
+  const senderTimestamp = Number(event.timestamp);
+  return Number.isFinite(senderTimestamp) ? senderTimestamp : 0;
+}
 
 function rememberRendererExpiresAt<T extends ReticulumChatEvent>(
   event: T,
@@ -999,6 +1043,10 @@ function messageProjectionRowToEvent(
     event,
     Math.max(Number(row.created_at) || 0, Number(row.updated_at) || 0)
   );
+  const storedAt = Number(row.stored_at);
+  if (Number.isFinite(storedAt) && storedAt > 0) {
+    projectionStoredAtByEvent.set(event, storedAt);
+  }
   return rememberRendererExpiresAt(event, row.expires_at);
 }
 
@@ -1398,17 +1446,20 @@ function payloadHasReticulumFileAttachment(payload: string): boolean {
   }
 }
 
-function messageExpiryDurationFromPayload(payload: string): number | undefined {
+function messageExpiryDurationFromPayload(
+  payload: string
+): number | null | undefined {
   try {
     const parsed = JSON.parse(payload) as unknown;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
       return undefined;
     const record = parsed as Record<string, unknown>;
-    return normalizeReticulumChatExpiryDurationMs(
+    const rawExpiry =
       record.expiryDurationMs ??
-        record.expiresInMs ??
-        record.messageExpiryDurationMs
-    );
+      record.expiresInMs ??
+      record.messageExpiryDurationMs;
+    if (rawExpiry === 0) return null;
+    return normalizeReticulumChatExpiryDurationMs(rawExpiry);
   } catch {
     return undefined;
   }
@@ -1597,6 +1648,22 @@ export class ReticulumChatDatabase {
     }>
   >();
   private memoryReadWatermarks = new Map<string, number>();
+  // Kept apart from memoryReadWatermarks on purpose. Folding remote coverage
+  // into the local watermark would make it look like this device read up to a
+  // future sender time, which is exactly the signal the reliability check in
+  // `computeChannelSummary` looks for.
+  private memoryRemoteReadCoverage = new Map<string, number>();
+  // Per-author coverage is consulted once per rendered event to decide
+  // `readByOwner`, so it is cached by scope and invalidated whenever a receipt
+  // writes new rows.
+  private memoryAuthorReadCoverage = new Map<string, Map<string, number>>();
+  /**
+   * Last issued arrival sequence. Strictly increasing so several messages stored
+   * inside one millisecond still order against each other and against a read.
+   * Wall-clock values tie there, and a tie reads as "already seen" — losing a
+   * message.
+   */
+  private lastArrivalSequence = 0;
   private channelSummaryCache = new Map<
     string,
     CachedReticulumChannelSummary
@@ -1613,7 +1680,7 @@ export class ReticulumChatDatabase {
       storedAt: number;
       wireBytes: number;
       expiresAt: number | null;
-      messageExpiryDurationMs?: number;
+      messageExpiryDurationMs?: number | null;
     }
   >();
   private stmtInsertEvent: Statement;
@@ -1658,6 +1725,16 @@ export class ReticulumChatDatabase {
   private stmtGetPrivilegedMentionStatus: Statement;
   private stmtUpdatePrivilegedMentionStatus: Statement;
   private stmtGetWatermark: Statement;
+  private stmtGetWatermarkLocalReadAt: Statement;
+  private stmtGetWatermarkRemoteCoverage: Statement;
+  private stmtGetReadAuthorCoverage: Statement;
+  private stmtGetReadCoverageReceipt: Statement;
+  private stmtUpsertReadAuthorCoverage: Statement;
+  private stmtGetLocalAuthorCoverageUpTo: Statement;
+  private stmtGetLocalAuthorCoverageAtArrival: Statement;
+  private stmtUpsertWatermarkLocalReadAt: Statement;
+  private stmtUpsertRemoteReadCoverage: Statement;
+  private stmtGetNewestEventTimestamp: Statement;
   private stmtGetDirectWatermark: Statement;
   private stmtUpsertWatermark: Statement;
   private stmtUpsertMention: Statement;
@@ -1678,6 +1755,7 @@ export class ReticulumChatDatabase {
   private stmtDeleteSearchMirror: Statement;
   private stmtSearchMirror: Statement;
   private stmtUpsertSearchText: Statement;
+  private stmtGetSearchMirrorRowid: Statement;
   private stmtDeleteSearchText: Statement;
   private stmtUpsertChannel: Statement;
   private stmtGetChannels: Statement;
@@ -1844,6 +1922,12 @@ export class ReticulumChatDatabase {
       )
       ORDER BY created_at ASC, root_event_id ASC
     `);
+    // Newest visible event timestamp per channel. Bounds read watermarks so one
+    // can never sit ahead of the messages it is meant to cover.
+    this.stmtGetNewestEventTimestamp = this.db.prepare(`
+      SELECT MAX(timestamp) AS timestamp FROM reticulum_chat_events
+      WHERE group_id = ? AND channel_id = ?
+    `);
     this.stmtGetRecentMessageEventsAllChannels = this.db.prepare(`
       SELECT * FROM (
         SELECT * FROM rchat_message_projection
@@ -1860,13 +1944,13 @@ export class ReticulumChatDatabase {
          author_stream_id, author_seq, created_at, root_event_type, current_event_id, updated_at,
          reply_to_event_id, encrypted_payload, payload_hash,
          mention_address_hashes, mention_targets, signature, deleted_at,
-         deleted_event_id, expires_at, has_attachment)
+         deleted_event_id, expires_at, has_attachment, stored_at)
       VALUES
         (@root_event_id, @group_id, @channel_id, @author_address, @author_public_key,
          @author_stream_id, @author_seq, @created_at, @root_event_type, @current_event_id, @updated_at,
          @reply_to_event_id, @encrypted_payload, @payload_hash,
          @mention_address_hashes, @mention_targets, @signature, @deleted_at,
-         @deleted_event_id, @expires_at, @has_attachment)
+         @deleted_event_id, @expires_at, @has_attachment, @stored_at)
       ON CONFLICT(root_event_id) DO UPDATE SET
         group_id = excluded.group_id,
         channel_id = excluded.channel_id,
@@ -1887,7 +1971,16 @@ export class ReticulumChatDatabase {
         deleted_at = excluded.deleted_at,
         deleted_event_id = excluded.deleted_event_id,
         expires_at = excluded.expires_at,
-        has_attachment = excluded.has_attachment
+        has_attachment = excluded.has_attachment,
+        -- Keep the original arrival position. An edit or repair is the same
+        -- message and must not jump forward in the unread sequence: promoting
+        -- the rebuild's freshly-minted arrival value would put the edit after
+        -- the user's last read moment and resurrect it as unread.
+        stored_at = CASE
+          WHEN rchat_message_projection.stored_at > 0
+            THEN rchat_message_projection.stored_at
+          ELSE excluded.stored_at
+        END
     `);
     this.stmtGetMessageProjection = this.db.prepare(
       'SELECT * FROM rchat_message_projection WHERE root_event_id = ? LIMIT 1'
@@ -2216,13 +2309,83 @@ export class ReticulumChatDatabase {
     this.stmtGetWatermark = this.db.prepare(
       'SELECT timestamp FROM reticulum_chat_read_watermarks WHERE group_id = ? AND channel_id = ? AND address = ?'
     );
+    this.stmtGetWatermarkLocalReadAt = this.db.prepare(
+      'SELECT local_read_at FROM reticulum_chat_read_watermarks WHERE group_id = ? AND channel_id = ? AND address = ?'
+    );
+    this.stmtGetWatermarkRemoteCoverage = this.db.prepare(
+      'SELECT remote_covered_timestamp FROM reticulum_chat_read_watermarks WHERE group_id = ? AND channel_id = ? AND address = ?'
+    );
+    this.stmtGetReadAuthorCoverage = this.db.prepare(`
+      SELECT author_address, author_stream_id, covered_seq
+      FROM reticulum_chat_read_author_coverage
+      WHERE group_id = ? AND channel_id = ? AND address = ?
+    `);
+    this.stmtGetReadCoverageReceipt = this.db.prepare(`
+      SELECT MAX(signed_at) AS signed_at
+      FROM reticulum_chat_read_author_coverage
+      WHERE group_id = ? AND channel_id = ? AND address = ?
+    `);
+    this.stmtUpsertReadAuthorCoverage = this.db.prepare(`
+      INSERT INTO reticulum_chat_read_author_coverage
+        (group_id, channel_id, address, author_address, author_stream_id,
+         covered_seq, updated_at, signed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(group_id, channel_id, address, author_address, author_stream_id)
+      DO UPDATE SET
+        covered_seq = MAX(covered_seq, excluded.covered_seq),
+        updated_at = excluded.updated_at,
+        signed_at = MAX(signed_at, excluded.signed_at)
+    `);
+    this.stmtGetLocalAuthorCoverageUpTo = this.db.prepare(`
+      SELECT author_address, author_stream_id, MAX(author_seq) AS covered_seq
+      FROM rchat_event_headers
+      WHERE group_id = ? AND channel_id = ? AND timestamp <= ?
+      GROUP BY author_address, author_stream_id
+    `);
+    // Arrival-bounded variant. `timestamp` above is the sender's clock, so
+    // "at or below the read timestamp" still compares across authors: a
+    // correctly-clocked member's message that landed on this device after the
+    // read is stamped below a fast sender's timestamp and would be covered
+    // although nobody saw it. `stored_at` is this device's own arrival record,
+    // which is the same order `markChannelsRead` uses for `local_read_at`.
+    this.stmtGetLocalAuthorCoverageAtArrival = this.db.prepare(`
+      SELECT author_address, author_stream_id, MAX(author_seq) AS covered_seq
+      FROM rchat_event_headers
+      WHERE group_id = ? AND channel_id = ? AND stored_at <= ?
+      GROUP BY author_address, author_stream_id
+    `);
     this.stmtGetDirectWatermark = this.db.prepare(
       'SELECT timestamp FROM rchat_dm_read_watermarks WHERE conversation_id = ? AND address = ?'
     );
     this.stmtUpsertWatermark = this.db.prepare(`
-      INSERT INTO reticulum_chat_read_watermarks (group_id, channel_id, address, timestamp)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(group_id, channel_id, address) DO UPDATE SET timestamp = excluded.timestamp
+      INSERT INTO reticulum_chat_read_watermarks
+        (group_id, channel_id, address, timestamp, local_read_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(group_id, channel_id, address) DO UPDATE SET
+        timestamp = excluded.timestamp,
+        -- The read *moment* only ever moves forward: it records when the reader
+        -- looked, and a repair replaying an older watermark is not a new read.
+        local_read_at = MAX(local_read_at, excluded.local_read_at)
+    `);
+    this.stmtUpsertWatermarkLocalReadAt = this.db.prepare(`
+      UPDATE reticulum_chat_read_watermarks
+         SET local_read_at = MAX(local_read_at, ?)
+       WHERE group_id = ? AND channel_id = ? AND address = ?
+    `);
+    // Remote coverage is deliberately NOT clamped to the newest locally stored
+    // event. The other device read up to this sender time, so it must keep
+    // covering messages that have not arrived here yet. `timestamp` is left
+    // alone: it stays the clamped local watermark written through
+    // `stmtUpsertWatermark`, which keeps the reliability check in
+    // `computeChannelSummary` meaningful.
+    this.stmtUpsertRemoteReadCoverage = this.db.prepare(`
+      INSERT INTO reticulum_chat_read_watermarks
+        (group_id, channel_id, address, timestamp, local_read_at,
+         remote_covered_timestamp)
+      VALUES (?, ?, ?, 0, 0, ?)
+      ON CONFLICT(group_id, channel_id, address) DO UPDATE SET
+        remote_covered_timestamp =
+          MAX(remote_covered_timestamp, excluded.remote_covered_timestamp)
     `);
     this.stmtUpsertMention = this.db.prepare(`
       INSERT INTO reticulum_chat_mentions
@@ -2245,7 +2408,15 @@ export class ReticulumChatDatabase {
         projection.mention_address_hashes,
         projection.mention_targets,
         projection.encrypted_payload,
-        current_event.privileged_mention_status
+        current_event.privileged_mention_status,
+        current_event.author_stream_id AS author_stream_id,
+        current_event.author_seq AS author_seq,
+        -- The projection's arrival, not the current event's. An edit keeps the
+        -- original message's arrival position, so a mention introduced by an
+        -- edit is positioned where the message it replaced landed. Using the
+        -- edit's own arrival would place it after a read that happened before
+        -- the edit and resurrect the badge.
+        projection.stored_at AS stored_at
       FROM reticulum_chat_mentions AS mention
       JOIN rchat_message_projection AS projection
         ON projection.root_event_id = mention.event_id
@@ -2265,7 +2436,8 @@ export class ReticulumChatDatabase {
       SELECT
         reply.root_event_id,
         reply.author_address,
-        reply.created_at
+        reply.created_at,
+        reply.stored_at
       FROM rchat_message_projection AS reply
       JOIN rchat_message_projection AS parent
         ON parent.root_event_id = reply.reply_to_event_id
@@ -2338,13 +2510,16 @@ export class ReticulumChatDatabase {
     this.stmtDeleteSearchMirror = this.db.prepare(
       'DELETE FROM reticulum_chat_search_index WHERE event_id = ?'
     );
+    this.stmtGetSearchMirrorRowid = this.db.prepare(
+      'SELECT rowid FROM reticulum_chat_search_index WHERE event_id = ?'
+    );
     this.stmtUpsertSearchText = this.db.prepare(`
       INSERT INTO reticulum_chat_search_fts
-        (event_id, group_id, channel_id, author_address, timestamp, event_type, search_text)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+        (rowid, event_id, group_id, channel_id, author_address, timestamp, event_type, search_text)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     this.stmtDeleteSearchText = this.db.prepare(
-      'DELETE FROM reticulum_chat_search_fts WHERE event_id = ?'
+      'DELETE FROM reticulum_chat_search_fts WHERE rowid = ? AND event_id = ?'
     );
     this.stmtUpsertChannel = this.db.prepare(`
       INSERT OR REPLACE INTO reticulum_chat_channels
@@ -2974,6 +3149,7 @@ export class ReticulumChatDatabase {
     this.backfillMessageProjection();
     this.backfillSearchIndex();
     this.migrateProjectedSearchIndex();
+    this.migrateFtsRowidKeys();
     this.scrubExistingDeletedMessagePayloads();
     this.pruneExpiredMessages();
     this.pruneExpiredDirectMessages();
@@ -4333,6 +4509,9 @@ export class ReticulumChatDatabase {
         (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const tx = this.db.transaction((ids: string[]) => {
+      // Resolve search-index rows once for the whole pass (not once per event)
+      // and delete by rowid, which is keyed instead of a full FTS table scan.
+      const allIds = new Set<string>();
       for (const rootEventId of ids) {
         const rows = getThreadEvents.all(rootEventId, rootEventId) as Array<{
           event_id?: string;
@@ -4343,9 +4522,6 @@ export class ReticulumChatDatabase {
           author_seq?: number;
           timestamp?: number;
         }>;
-        const eventIds = rows
-          .map((row) => (typeof row.event_id === 'string' ? row.event_id : ''))
-          .filter(Boolean);
         for (const row of rows) {
           if (
             typeof row.event_id !== 'string' ||
@@ -4356,6 +4532,7 @@ export class ReticulumChatDatabase {
           ) {
             continue;
           }
+          allIds.add(row.event_id);
           insertExpiredMarker.run(
             row.event_id,
             row.group_id,
@@ -4367,26 +4544,45 @@ export class ReticulumChatDatabase {
             now
           );
         }
-        for (const eventId of eventIds) {
-          this.memoryMeta.delete(eventId);
-          this.memoryEvents.delete(eventId);
-          this.memoryScrubbedEvents.delete(eventId);
-          this.memoryScrubbedEventOverrides.delete(eventId);
-          this.memorySearchText.delete(eventId);
-          this.memoryMentions.delete(eventId);
-          this.memoryRelayCache.delete(eventId);
-          this.stmtDeleteSearchText.run(eventId);
-          this.stmtDeleteSearchMirror.run(eventId);
-          this.stmtDeleteMentionsForEvent.run(eventId);
-          this.stmtDeleteRelayByEvent.run(eventId);
-          this.stmtDeleteEvent.run(eventId);
+        allIds.add(rootEventId);
+      }
+      const batchIds = [...allIds];
+      // Resolve mirror rowids for the batch in chunks to stay under SQLite's
+      // variable limit. The mirror's rowid is stable because its upsert is
+      // ON CONFLICT(event_id) DO UPDATE.
+      const rowids = new Map<string, number>();
+      for (let i = 0; i < batchIds.length; i += 500) {
+        const chunk = batchIds.slice(i, i + 500);
+        const placeholders = chunk.map(() => '?').join(', ');
+        const rows = this.db
+          .prepare(
+            `SELECT event_id, rowid FROM reticulum_chat_search_index
+             WHERE event_id IN (${placeholders})`
+          )
+          .all(...chunk) as Array<{ event_id?: string; rowid?: number }>;
+        for (const row of rows) {
+          if (row.event_id && typeof row.rowid === 'number') {
+            rowids.set(row.event_id, row.rowid);
+          }
         }
+      }
+      for (const eventId of batchIds) {
+        this.memoryMeta.delete(eventId);
+        this.memoryEvents.delete(eventId);
+        this.memoryScrubbedEvents.delete(eventId);
+        this.memoryScrubbedEventOverrides.delete(eventId);
+        this.memorySearchText.delete(eventId);
+        this.memoryMentions.delete(eventId);
+        this.memoryRelayCache.delete(eventId);
+        const rowid = rowids.get(eventId);
+        if (rowid !== undefined) this.stmtDeleteSearchText.run(rowid, eventId);
+        this.stmtDeleteSearchMirror.run(eventId);
+        this.stmtDeleteMentionsForEvent.run(eventId);
+        this.stmtDeleteRelayByEvent.run(eventId);
+        this.stmtDeleteEvent.run(eventId);
+      }
+      for (const rootEventId of ids) {
         this.stmtDeleteMessageProjection.run(rootEventId);
-        this.memorySearchText.delete(rootEventId);
-        this.stmtDeleteSearchText.run(rootEventId);
-        this.stmtDeleteSearchMirror.run(rootEventId);
-        this.stmtDeleteMentionsForEvent.run(rootEventId);
-        this.stmtDeleteRelayByEvent.run(rootEventId);
       }
     });
     tx(rootIds);
@@ -4498,7 +4694,7 @@ export class ReticulumChatDatabase {
 
   private rootMessageExpiryState(root: ReticulumChatEvent): {
     expiresAt: number | null;
-    messageExpiryDurationMs?: number;
+    messageExpiryDurationMs?: number | null;
   } {
     if (
       root.eventType !== 'message' &&
@@ -4534,9 +4730,10 @@ export class ReticulumChatDatabase {
     channelId: unknown,
     createdAt: number,
     channelExpiryDurationMs?: number,
-    messageExpiryDurationMs?: number
+    messageExpiryDurationMs?: number | null
   ): number | null {
     if (!Number.isFinite(createdAt) || createdAt <= 0) return null;
+    if (messageExpiryDurationMs === null) return null;
     const normalizedChannelId = normalizeReticulumChatChannelId(channelId);
     const channelExpiryBase =
       normalizedChannelId === RETICULUM_CHAT_DEFAULT_CHANNEL_ID &&
@@ -4733,12 +4930,16 @@ export class ReticulumChatDatabase {
       reconciliation.expiry_duration_ms
     );
     const resolutions = rows.map((row) => {
-      const storedMessageExpiry = normalizeReticulumChatExpiryDurationMs(
-        row.message_expiry_duration_ms
-      );
+      const storedMessageExpiry =
+        row.message_expiry_duration_ms === 0
+          ? null
+          : normalizeReticulumChatExpiryDurationMs(
+              row.message_expiry_duration_ms
+            );
       const messageExpiryDurationMs =
-        storedMessageExpiry ??
-        messageExpiryDurationFromPayload(row.encrypted_payload ?? '');
+        storedMessageExpiry !== undefined
+          ? storedMessageExpiry
+          : messageExpiryDurationFromPayload(row.encrypted_payload ?? '');
       const timestamp = Number(row.timestamp);
       const previousExpiresAt = Number(row.expires_at);
       const alreadyExpired =
@@ -4759,7 +4960,10 @@ export class ReticulumChatDatabase {
       return {
         eventId: row.event_id,
         expiresAt,
-        messageExpiryDurationMs: messageExpiryDurationMs ?? null,
+        messageExpiryDurationMs:
+          messageExpiryDurationMs === null
+            ? 0
+            : (messageExpiryDurationMs ?? null),
       };
     });
 
@@ -4986,7 +5190,10 @@ export class ReticulumChatDatabase {
       accepted_at: now,
       wire_bytes: eventWireBytes(event),
       expires_at: expiresAt,
-      message_expiry_duration_ms: messageExpiryDurationMs ?? null,
+      message_expiry_duration_ms:
+        messageExpiryDurationMs === null
+          ? 0
+          : (messageExpiryDurationMs ?? null),
       privileged_mention_status:
         privilegedMentionStatus === 1
           ? 1
@@ -5022,7 +5229,7 @@ export class ReticulumChatDatabase {
           );
       }
       this.clearMissingRangesForEvent(event);
-      this.memoryEvents.set(event.eventId, event);
+      this.setMemoryEvent(event.eventId, event);
       this.memoryMeta.set(event.eventId, {
         ownEvent,
         lastServedAt: now,
@@ -5034,6 +5241,7 @@ export class ReticulumChatDatabase {
           : {}),
       });
       this.applyMessageProjectionEvent(event);
+      this.rememberProjectedArrival(event);
       this.refreshMessageProjectionIndexes(event);
       this.applyDeleteScrubForEvent(event);
       this.invalidateChatSummaryCache(event.groupId, event.channelId);
@@ -5216,7 +5424,7 @@ export class ReticulumChatDatabase {
     feedTimestamp: number,
     now: number,
     expiresAt: number | null,
-    messageExpiryDurationMs?: number
+    messageExpiryDurationMs?: number | null
   ): void {
     const wireBytes = eventWireBytes(event);
     this.stmtInsertEventHeaderV2.run({
@@ -5248,7 +5456,10 @@ export class ReticulumChatDatabase {
       retention_state: 'full',
       scrubbed_at: null,
       expires_at: expiresAt,
-      message_expiry_duration_ms: messageExpiryDurationMs ?? null,
+      message_expiry_duration_ms:
+        messageExpiryDurationMs === null
+          ? 0
+          : (messageExpiryDurationMs ?? null),
     });
   }
 
@@ -5520,7 +5731,7 @@ export class ReticulumChatDatabase {
             null,
         });
       }
-      this.stmtDeleteSearchText.run(eventId);
+      this.deleteSearchIndexRow(eventId);
       this.stmtDeleteSearchMirror.run(eventId);
       this.stmtDeleteMentionsForEvent.run(eventId);
       this.stmtDeleteRelayByEvent.run(eventId);
@@ -5858,6 +6069,70 @@ export class ReticulumChatDatabase {
     };
   }
 
+  private setMemoryEvent(eventId: string, event: ReticulumChatEvent): void {
+    this.memoryEvents.set(eventId, event);
+    if (this.memoryEvents.size > RETICULUM_CHAT_MEMORY_EVENTS_MAX_ENTRIES) {
+      // Bound the map: it is a supplement for committed rows (SQL is the
+      // authority), so dropping the oldest entries is safe and cheap here.
+      const overflow =
+        this.memoryEvents.size - RETICULUM_CHAT_MEMORY_EVENTS_MAX_ENTRIES;
+      let dropped = 0;
+      for (const key of this.memoryEvents.keys()) {
+        if (dropped >= overflow) break;
+        this.memoryEvents.delete(key);
+        dropped += 1;
+      }
+    }
+  }
+
+  private setMemorySearchText(eventId: string, text: string): void {
+    this.memorySearchText.set(eventId, text);
+    if (
+      this.memorySearchText.size > RETICULUM_CHAT_MEMORY_SEARCH_TEXT_MAX_ENTRIES
+    ) {
+      const overflow =
+        this.memorySearchText.size -
+        RETICULUM_CHAT_MEMORY_SEARCH_TEXT_MAX_ENTRIES;
+      let dropped = 0;
+      for (const key of this.memorySearchText.keys()) {
+        if (dropped >= overflow) break;
+        this.memorySearchText.delete(key);
+        dropped += 1;
+      }
+    }
+  }
+
+  /**
+   * Records the projection's arrival position against the event object that was
+   * just stored.
+   *
+   * `projectionStoredAtByEvent` is otherwise only populated for events
+   * materialised from a projection row, so anything that arrived through
+   * `insertEvent` — the whole live path — had no arrival recorded and fell back
+   * to the sender timestamp. That is wrong for an edit: the projection keeps the
+   * original message's arrival on purpose, so the badge has to be judged there.
+   * Seed the map from the row that was actually written instead of re-deriving
+   * it from sender time.
+   */
+  private rememberProjectedArrival(event: ReticulumChatEvent): void {
+    const rootEventId =
+      (event.eventType === 'edit' || event.eventType === 'delete') &&
+      event.targetEventId
+        ? event.targetEventId
+        : event.eventType === 'message' ||
+            event.eventType === 'attachment_manifest'
+          ? event.eventId
+          : '';
+    if (!rootEventId) return;
+    const storedAt = this.projectionArrivalForRoot(rootEventId);
+    if (storedAt === null) return;
+    projectionStoredAtByEvent.set(event, storedAt);
+    // The root object itself is also consulted when a mention hangs off the
+    // original message rather than the edit that introduced it.
+    const rootEvent = this.memoryEvents.get(rootEventId);
+    if (rootEvent) projectionStoredAtByEvent.set(rootEvent, storedAt);
+  }
+
   private applyMessageProjectionEvent(event: ReticulumChatEvent): void {
     if (
       event.eventType === 'message' ||
@@ -5938,6 +6213,7 @@ export class ReticulumChatDatabase {
       current_event_id: current.eventId,
       updated_at: current.timestamp,
       reply_to_event_id: root.replyToEventId ?? null,
+      stored_at: this.nextArrivalSequence(),
       encrypted_payload: current.encryptedPayload,
       payload_hash: current.payloadHash,
       mention_address_hashes: serializeMentionAddressHashes(
@@ -5964,7 +6240,7 @@ export class ReticulumChatDatabase {
     this.memoryScrubbedEventOverrides.delete(eventId);
     this.memorySearchText.delete(eventId);
     this.memoryMentions.delete(eventId);
-    this.stmtDeleteSearchText.run(eventId);
+    this.deleteSearchIndexRow(eventId);
     this.stmtDeleteSearchMirror.run(eventId);
     this.stmtDeleteMentionsForEvent.run(eventId);
     this.stmtDeleteEvent.run(eventId);
@@ -6422,9 +6698,9 @@ export class ReticulumChatDatabase {
   ): void {
     const normalized = normalizeSearchText(text);
     if (!normalized) return;
-    this.memorySearchText.set(event.eventId, normalized);
-    if (replaceExisting) this.stmtDeleteSearchText.run(event.eventId);
-    this.stmtUpsertSearchMirror.run(
+    this.setMemorySearchText(event.eventId, normalized);
+    if (replaceExisting) this.deleteSearchIndexRow(event.eventId);
+    const mirrorResult = this.stmtUpsertSearchMirror.run(
       event.eventId,
       event.groupId,
       normalizeReticulumChatChannelId(event.channelId),
@@ -6434,6 +6710,7 @@ export class ReticulumChatDatabase {
       normalized
     );
     this.stmtUpsertSearchText.run(
+      mirrorResult.lastInsertRowid,
       event.eventId,
       event.groupId,
       normalizeReticulumChatChannelId(event.channelId),
@@ -6545,6 +6822,21 @@ export class ReticulumChatDatabase {
     return row;
   }
 
+  private deleteSearchIndexRow(eventId: string): void {
+    // FTS5 can only address rows by rowid or MATCH; deleting by event_id (an
+    // UNINDEXED column) is a full table scan. Resolve the mirror row's rowid
+    // (primary-key lookup) and only delete when a mirror row exists. Skipping
+    // when there is no mirror row removes the scan from the new-message path,
+    // and the `AND event_id = ?` guard keeps a stale rowid (e.g. written by an
+    // older Hub after a downgrade) from deleting another message's row.
+    const row = this.stmtGetSearchMirrorRowid.get(eventId) as
+      | { rowid?: number }
+      | undefined;
+    if (row && typeof row.rowid === 'number') {
+      this.stmtDeleteSearchText.run(row.rowid, eventId);
+    }
+  }
+
   private upsertProjectedSearchText(
     projection: MessageProjectionRow,
     text: string
@@ -6552,11 +6844,11 @@ export class ReticulumChatDatabase {
     const normalized = normalizeSearchText(text);
     const rootEventId = projection.root_event_id;
     this.memorySearchText.delete(rootEventId);
-    this.stmtDeleteSearchText.run(rootEventId);
+    this.deleteSearchIndexRow(rootEventId);
     this.stmtDeleteSearchMirror.run(rootEventId);
     if (!normalized) return;
-    this.memorySearchText.set(rootEventId, normalized);
-    this.stmtUpsertSearchMirror.run(
+    this.setMemorySearchText(rootEventId, normalized);
+    const mirrorResult = this.stmtUpsertSearchMirror.run(
       rootEventId,
       projection.group_id,
       normalizeReticulumChatChannelId(projection.channel_id),
@@ -6565,7 +6857,10 @@ export class ReticulumChatDatabase {
       projection.root_event_type,
       normalized
     );
+    // Give the FTS row the mirror row's rowid so deletes are keyed lookups.
+    // ON CONFLICT(event_id) DO UPDATE preserves the rowid across updates.
     this.stmtUpsertSearchText.run(
+      mirrorResult.lastInsertRowid,
       rootEventId,
       projection.group_id,
       normalizeReticulumChatChannelId(projection.channel_id),
@@ -6629,7 +6924,7 @@ export class ReticulumChatDatabase {
   deleteSearchText(eventId: string): boolean {
     if (typeof eventId !== 'string' || !eventId) return false;
     this.memorySearchText.delete(eventId);
-    this.stmtDeleteSearchText.run(eventId);
+    this.deleteSearchIndexRow(eventId);
     this.stmtDeleteSearchMirror.run(eventId);
     return true;
   }
@@ -9445,6 +9740,8 @@ export class ReticulumChatDatabase {
   }
 
   private clearMissingRangesForEvent(event: ReticulumChatEvent): void {
+    // A late event inside a known-unavailable range must clear that marker so
+    // the range can be re-served/imported normally.
     const rows = this.dedupeMissingRangeRows([
       ...(this.stmtGetMissingRangesForSeq.all(
         event.groupId,
@@ -9960,6 +10257,17 @@ export class ReticulumChatDatabase {
     );
   }
 
+  /**
+   * Author sequence gaps worth requesting.
+   *
+   * Known limitation, tracked separately from the permanent-gone removal: the
+   * LIMIT is applied by SQL (and by the memory loop below) before any
+   * eligibility filter, so a page can be filled by ranges that will not be
+   * requested — a parked range, for instance — and a later recoverable gap is
+   * not returned at all. Fixing it means filtering eligibility before the final
+   * limit, or paging until an eligible gap is found or the candidates run out.
+   * This predates the removal and is not caused by it.
+   */
   getAuthorSequenceGaps(
     groupId: number,
     limit: number
@@ -11300,11 +11608,9 @@ export class ReticulumChatDatabase {
     for (const channel of this.getChannels(groupId, false)) {
       channels.add(channel.channelId);
     }
-    for (const event of this.memoryEvents.values()) {
-      if (event.groupId !== groupId) continue;
-      const channelId = normalizeReticulumChatChannelId(event.channelId);
-      if (!archivedChannels.has(channelId)) channels.add(channelId);
-    }
+    // Events enter memoryEvents only after their SQL insert succeeded, so
+    // stmtGetKnownChannels already returns every event-bearing channel. The
+    // previous per-group scan of the whole in-memory map was redundant.
     return [...channels];
   }
 
@@ -11315,15 +11621,22 @@ export class ReticulumChatDatabase {
     watermark: number,
     now: number,
     activeSilencedAuthors: ReadonlySet<string>,
-    ignoredThroughByAuthor: ReadonlyMap<string, number>
+    ignoredThroughByAuthor: ReadonlyMap<string, number>,
+    remoteAuthorCoverage: ReadonlyMap<string, number> = new Map(),
+    arrivalBoundary?: ReticulumChatReadBoundary
   ): number {
     const myMentionHash = hashReticulumChatMentionAddress(myAddress);
+    // As in `countUnreadReplies`: when the watermark is ahead of this device's
+    // clock it came from a fast sender, and a correctly-clocked member's mention
+    // stamped below it produced no badge. Drop the SQL bound and decide from the
+    // arrival record instead.
+    const useArrival = arrivalBoundary != null;
     const rows = this.stmtGetUnreadMentionRecords.all(
       groupId,
       channelId,
       myAddress,
       myAddress,
-      watermark,
+      useArrival ? 0 : watermark,
       `%${myMentionHash}%`,
       now
     ) as Array<{
@@ -11334,6 +11647,9 @@ export class ReticulumChatDatabase {
       privileged_mention_status?: number;
       projection_author_address?: string;
       timestamp?: number;
+      author_stream_id?: string;
+      author_seq?: number;
+      stored_at?: number;
     }>;
     let count = 0;
     for (const row of rows) {
@@ -11346,6 +11662,24 @@ export class ReticulumChatDatabase {
         timestamp <= (ignoredThroughByAuthor.get(authorAddress) ?? 0)
       ) {
         continue;
+      }
+      if (useArrival) {
+        if (Number(row.stored_at || 0) <= arrivalBoundary!.readMoment) continue;
+      } else if (timestamp <= watermark) {
+        continue;
+      }
+      // Per-author coverage, when a remote read on another device cleared it.
+      if (remoteAuthorCoverage.size > 0) {
+        const stream = normalizeReticulumChatAuthorStreamId(
+          row.author_stream_id
+        );
+        const seq = Number(row.author_seq);
+        if (stream && Number.isInteger(seq)) {
+          const coveredSeq = remoteAuthorCoverage.get(
+            `${authorAddress}|${stream}`
+          );
+          if (coveredSeq !== undefined && coveredSeq >= seq) continue;
+        }
       }
       const signedHashes = parseMentionAddressHashes(
         row.mention_address_hashes
@@ -11374,13 +11708,22 @@ export class ReticulumChatDatabase {
     now: number,
     activeSilencedAuthors: ReadonlySet<string>,
     ignoredThroughByAuthor: ReadonlyMap<string, number>,
-    recentMessageEvents: readonly ReticulumChatEvent[]
+    recentMessageEvents: readonly ReticulumChatEvent[],
+    isCoveredByRemoteAuthorRead?: (event: ReticulumChatEvent) => boolean,
+    arrivalBoundary?: ReticulumChatReadBoundary
   ): number {
     if (!myAddress) return 0;
+    // `created_at` is the sender's clock. When the watermark sits ahead of this
+    // device's clock it came from another sender's fast clock, and comparing a
+    // reply against it hides replies from correctly-clocked members — the badge
+    // drops to 0 for a message that is counted as unread. In that case the SQL
+    // bound is removed (0 keeps every row) and the decision is made below from
+    // this device's own arrival record instead.
+    const useArrival = arrivalBoundary != null;
     const rows = this.stmtGetUnreadReplyRecords.all(
       groupId,
       channelId,
-      watermark,
+      useArrival ? 0 : watermark,
       myAddress,
       myAddress,
       now,
@@ -11389,6 +11732,7 @@ export class ReticulumChatDatabase {
       root_event_id?: string;
       author_address?: string;
       created_at?: number;
+      stored_at?: number;
     }>;
     const replyEventIds = new Set<string>();
     for (const row of rows) {
@@ -11402,6 +11746,20 @@ export class ReticulumChatDatabase {
       ) {
         continue;
       }
+      if (useArrival) {
+        // Same rule the unread count uses: a reply this device received after it
+        // recorded the read is unread, whatever the other sender's clock says.
+        if (Number(row.stored_at || 0) <= arrivalBoundary!.readMoment) continue;
+      } else if (createdAt <= watermark) {
+        continue;
+      }
+      // The reply projection carries no author_seq, so the event is resolved to
+      // test per-author coverage. Gated on coverage being present, which is only
+      // true after a remote read, so the common path does no extra work.
+      if (isCoveredByRemoteAuthorRead) {
+        const resolved = this.getEvent(row.root_event_id);
+        if (resolved && isCoveredByRemoteAuthorRead(resolved)) continue;
+      }
       replyEventIds.add(row.root_event_id);
     }
 
@@ -11412,11 +11770,16 @@ export class ReticulumChatDatabase {
       if (
         replyEventIds.has(event.eventId) ||
         !event.replyToEventId ||
-        event.timestamp <= watermark ||
+        (isCoveredByRemoteAuthorRead?.(event) ?? false) ||
         event.authorAddress === myAddress ||
         activeSilencedAuthors.has(event.authorAddress) ||
         event.timestamp <=
-          (ignoredThroughByAuthor.get(event.authorAddress) ?? 0)
+          (ignoredThroughByAuthor.get(event.authorAddress) ?? 0) ||
+        // Same two modes as the query above: sender time normally, this
+        // device's arrival order when the watermark is not trustworthy.
+        (useArrival
+          ? this.eventArrivalOrder(event) <= arrivalBoundary!.readMoment
+          : event.timestamp <= watermark)
       ) {
         continue;
       }
@@ -11435,6 +11798,61 @@ export class ReticulumChatDatabase {
       replyEventIds.add(event.eventId);
     }
     return replyEventIds.size;
+  }
+
+  /**
+   * Arrival position of a message root, read from the projection that preserves
+   * it across an edit. Null when the row predates the column.
+   */
+  private projectionArrivalForRoot(rootEventId: string): number | null {
+    if (typeof rootEventId !== 'string' || !rootEventId) return null;
+    const row = this.stmtGetMessageProjection.get(rootEventId) as
+      | MessageProjectionRow
+      | undefined;
+    const storedAt = Number(row?.stored_at);
+    return Number.isFinite(storedAt) && storedAt > 0 ? storedAt : null;
+  }
+
+  /**
+   * Arrival order the read boundary compares against, for an event that may have
+   * come from the event log rather than from the projection.
+   *
+   * An edit keeps the original message's arrival position — the projection
+   * preserves `stored_at` across the edit on purpose — so a mention introduced
+   * by an edit must be judged by where the message it replaced landed, not by
+   * the edit's own, later timestamp. The WeakMap only carries that value for
+   * objects materialised from a projection row; events loaded straight from
+   * `reticulum_chat_events` (including every event after a restart, since the
+   * memory window is empty then) would otherwise fall back to the sender
+   * timestamp and resurrect the badge. Resolve through the projection for those.
+   */
+  private eventArrivalOrder(event: ReticulumChatEvent): number {
+    const known = projectionStoredAtByEvent.get(event);
+    if (typeof known === 'number') return known;
+    const rootEventId =
+      (event.eventType === 'edit' || event.eventType === 'delete') &&
+      event.targetEventId
+        ? event.targetEventId
+        : event.eventId;
+    const projected = this.projectionArrivalForRoot(rootEventId);
+    if (projected !== null) return projected;
+    return messageArrivalOrder(event);
+  }
+
+  /**
+   * Next strictly-increasing arrival sequence number.
+   *
+   * Seeded from the wall clock so values stay comparable with rows that stored a
+   * bare timestamp, then incremented per insert. Several messages routinely land
+   * inside one millisecond; with a raw timestamp those tie, and a tie against a
+   * read moment reads as "already seen" — losing the message. The counter cannot
+   * tie.
+   */
+  private nextArrivalSequence(): number {
+    const now = Date.now();
+    this.lastArrivalSequence =
+      now > this.lastArrivalSequence ? now : this.lastArrivalSequence + 1;
+    return this.lastArrivalSequence;
   }
 
   private getChannelSummary(
@@ -11521,27 +11939,118 @@ export class ReticulumChatDatabase {
       normalizedChannelId,
       myAddress
     );
+    const readMoment = this.getReadWatermarkLocalReadAt(
+      groupId,
+      normalizedChannelId,
+      myAddress
+    );
+    // Coverage of a read another device of this account already performed.
+    // Compared by sender time and never clamped, so history imported after the
+    // read receipt arrived here is still honouring that read. Without it, a
+    // device that receives the receipt first and the messages second has to
+    // guess, and the arrival-order fallback below would call them unread.
+    const remoteCoverage = this.getReadWatermarkRemoteCoverage(
+      groupId,
+      normalizedChannelId,
+      myAddress
+    );
+    // Clock-free coverage of a read another device performed, keyed by author
+    // stream and compared by author_seq. Preferred over the scalar above: a
+    // sender timestamp is only comparable within one author's stream, so the
+    // scalar let a fast-clocked author's read cover a different author's later
+    // message. The scalar is still consulted for receipts sent by a peer that
+    // has not upgraded, which carry no per-author data.
+    const remoteAuthorCoverage = this.getReadAuthorCoverage(
+      groupId,
+      normalizedChannelId,
+      myAddress
+    );
+    const isCoveredByRemoteAuthorRead = (
+      event: ReticulumChatEvent
+    ): boolean => {
+      if (remoteAuthorCoverage.size === 0) return false;
+      const key = `${event.authorAddress}|${event.authorStreamId}`;
+      const coveredSeq = remoteAuthorCoverage.get(key);
+      return coveredSeq !== undefined && coveredSeq >= event.authorSeq;
+    };
+    // A watermark ahead of the local clock can only come from another sender's
+    // fast clock: the reader cannot have read a message stamped in their own
+    // future. When that has happened, comparing sender timestamps is no longer
+    // meaningful, because a later message from a correctly-clocked sender sits
+    // below the watermark and is counted as read although nobody has seen it.
+    // That is the intermittent "push arrived, but no red dot" report —
+    // notifications never consult the watermark, so they keep firing while the
+    // count stays at zero.
+    //
+    // In that case only, fall back to arrival order, which is recorded locally
+    // and so is the one sequence every sender's message shares. Every other
+    // channel keeps the existing sender-timestamp comparison untouched, so
+    // backfilled history below the watermark is still correctly treated as read.
+    const watermarkIsUnreliable =
+      myAddress !== '' && readMoment > 0 && watermark > readMoment;
+    // Shared by the unread count, the reply counter and the mention counter so
+    // the three cannot disagree about which event is read. Undefined means the
+    // normal sender-time comparison applies.
+    const arrivalBoundary: ReticulumChatReadBoundary | undefined =
+      watermarkIsUnreliable ? { readMoment } : undefined;
     const unreadCount =
       myAddress && !suppressUnreadState
-        ? events.filter(
-            (event) =>
-              event.timestamp > watermark &&
-              event.authorAddress !== myAddress &&
-              event.timestamp >
-                (ignoredThroughByAuthor.get(event.authorAddress) ?? 0)
-          ).length
+        ? events.filter((event) => {
+            if (event.authorAddress === myAddress) return false;
+            if (
+              event.timestamp <=
+              (ignoredThroughByAuthor.get(event.authorAddress) ?? 0)
+            ) {
+              return false;
+            }
+            // Checked before the arrival-order fallback: a read another device
+            // already performed is authoritative by sender time even when this
+            // device's watermark was clamped below it. Skipping the clamp alone
+            // would not be enough, because a remote watermark ahead of the local
+            // clock switches the channel into arrival mode and the late message
+            // would still read as unread.
+            if (isCoveredByRemoteAuthorRead(event)) return false;
+            // Sender-time scalar, used only when this channel has no per-author
+            // coverage at all. Once any coverage exists the scalar is ignored,
+            // because the two coexist: the receipt still writes the scalar for
+            // backward compatibility, and honouring it alongside per-author rows
+            // would let a fast sender's timestamp cover another author's later
+            // message — exactly the defect the rows exist to prevent.
+            if (
+              remoteAuthorCoverage.size === 0 &&
+              remoteCoverage > 0 &&
+              event.timestamp <= remoteCoverage
+            ) {
+              return false;
+            }
+            return arrivalBoundary
+              ? this.eventArrivalOrder(event) > arrivalBoundary.readMoment
+              : event.timestamp > watermark;
+          }).length
         : 0;
+    // Reply and mention counters compare sender time directly. Remote reads are
+    // handled per author below; this stays the local boundary so a scalar
+    // V1 receipt can still clear the reply and mention badges it covers.
+    // Same precedence for the reply and mention counters: the scalar boundary is
+    // dropped entirely once per-author coverage exists, so it cannot clear a
+    // badge for a message no one read.
+    const senderTimeBoundary =
+      remoteAuthorCoverage.size === 0
+        ? Math.max(watermark, remoteCoverage)
+        : watermark;
     const replyCount =
       myAddress && !suppressUnreadState
         ? this.countUnreadReplies(
             groupId,
             normalizedChannelId,
             myAddress,
-            watermark,
+            senderTimeBoundary,
             now,
             activeSilencedAuthors,
             ignoredThroughByAuthor,
-            events
+            events,
+            isCoveredByRemoteAuthorRead,
+            arrivalBoundary
           )
         : 0;
     const mentionCount =
@@ -11550,10 +12059,12 @@ export class ReticulumChatDatabase {
             groupId,
             normalizedChannelId,
             myAddress,
-            watermark,
+            senderTimeBoundary,
             now,
             activeSilencedAuthors,
-            ignoredThroughByAuthor
+            ignoredThroughByAuthor,
+            remoteAuthorCoverage,
+            arrivalBoundary
           )
         : 0;
     let memoryMentionCount = 0;
@@ -11583,7 +12094,13 @@ export class ReticulumChatDatabase {
       if (
         !myMentionHash ||
         event.authorAddress === myAddress ||
-        event.timestamp <= watermark ||
+        // A remote read on another device cleared this mention, matched per
+        // author so a fast-clocked author's read cannot cover another author's
+        // later mention.
+        isCoveredByRemoteAuthorRead(event) ||
+        (arrivalBoundary
+          ? this.eventArrivalOrder(event) <= arrivalBoundary.readMoment
+          : event.timestamp <= senderTimeBoundary) ||
         event.timestamp <=
           (ignoredThroughByAuthor.get(event.authorAddress) ?? 0) ||
         (event.eventType !== 'message' &&
@@ -11597,7 +12114,10 @@ export class ReticulumChatDatabase {
     };
     const countEventMentionTarget = (event: ReticulumChatEvent) => {
       if (
-        event.timestamp <= watermark ||
+        isCoveredByRemoteAuthorRead(event) ||
+        (arrivalBoundary
+          ? this.eventArrivalOrder(event) <= arrivalBoundary.readMoment
+          : event.timestamp <= senderTimeBoundary) ||
         event.timestamp <=
           (ignoredThroughByAuthor.get(event.authorAddress) ?? 0) ||
         (event.eventType !== 'message' &&
@@ -11637,6 +12157,9 @@ export class ReticulumChatDatabase {
       }
     }
     if (myAddress && !suppressUnreadState) {
+      // Fetched from the local watermark, not senderTimeBoundary: the scalar in
+      // that boundary only covers V1 receipts, and filtering rows out here
+      // would hide mentions a per-author read has not covered.
       const mentionTargetRows = this.stmtGetUnreadMentionTargetEvents.all(
         groupId,
         normalizedChannelId,
@@ -11676,7 +12199,8 @@ export class ReticulumChatDatabase {
           event.groupId !== groupId ||
           normalizeReticulumChatChannelId(event.channelId) !==
             normalizedChannelId ||
-          event.timestamp <= watermark ||
+          isCoveredByRemoteAuthorRead(event) ||
+          event.timestamp <= senderTimeBoundary ||
           event.authorAddress === myAddress ||
           activeSilencedAuthors.has(event.authorAddress) ||
           event.timestamp <=
@@ -11705,19 +12229,42 @@ export class ReticulumChatDatabase {
       }
     }
     if (myAddress && !suppressUnreadState) {
-      for (const mentions of this.memoryMentions.values()) {
+      for (const [rootEventId, mentions] of this.memoryMentions.entries()) {
         for (const mention of mentions) {
           if (
             mention.groupId === groupId &&
             mention.channelId === normalizedChannelId &&
             mention.mentionedAddress === myAddress &&
             mention.authorAddress !== myAddress &&
-            mention.timestamp > watermark &&
+            (arrivalBoundary ? true : mention.timestamp > senderTimeBoundary) &&
             !activeSilencedAuthors.has(mention.authorAddress) &&
             mention.timestamp >
               (ignoredThroughByAuthor.get(mention.authorAddress) ?? 0) &&
             mention.readAt === 0
           ) {
+            // The mention record carries no author_seq, so the event it came
+            // from is consulted. Absent means it cannot be proven read on
+            // another device, so it still counts.
+            if (remoteAuthorCoverage.size > 0) {
+              const event =
+                this.memoryEvents.get(rootEventId) ??
+                this.getEvent(rootEventId);
+              if (event && isCoveredByRemoteAuthorRead(event)) continue;
+            }
+            // Arrival mode: the mention record has no arrival value of its own,
+            // so the event it came from decides. Absent means it cannot be
+            // compared, and it counts — same rule as the coverage check above.
+            if (arrivalBoundary) {
+              const event =
+                this.memoryEvents.get(rootEventId) ??
+                this.getEvent(rootEventId);
+              if (
+                event &&
+                this.eventArrivalOrder(event) <= arrivalBoundary.readMoment
+              ) {
+                continue;
+              }
+            }
             memoryMentionCount += 1;
           }
         }
@@ -11759,7 +12306,8 @@ export class ReticulumChatDatabase {
     groupId: number,
     channelIdOrTimestamp: string | number,
     upToTimestampOrAddress?: string | number,
-    myAddress = ''
+    myAddress = '',
+    options: { recordReadMoment?: boolean } = {}
   ): void {
     const channelId =
       typeof channelIdOrTimestamp === 'string'
@@ -11778,11 +12326,28 @@ export class ReticulumChatDatabase {
         : myAddress;
     this.markChannelsRead(
       [{ groupId, channelId, timestamp }],
-      effectiveAddress
+      effectiveAddress,
+      options
     );
   }
 
-  markChannelsRead(targets: ReticulumChatReadTarget[], myAddress = ''): number {
+  /**
+   * Records a read.
+   *
+   * `recordReadMoment` defaults to true. It must be false when the read belongs
+   * to another device of this account: `local_read_at` is this device's arrival
+   * position at the moment the reader looked, and it is what bounds the coverage
+   * this device will later resend. Recording another device's receipt there says
+   * "this device looked now", so the next resend describes messages that arrived
+   * after the other device's read as read too — and a peer that trusts the resend
+   * shows a message nobody read as read.
+   */
+  markChannelsRead(
+    targets: ReticulumChatReadTarget[],
+    myAddress = '',
+    options: { recordReadMoment?: boolean } = {}
+  ): number {
+    const recordReadMoment = options.recordReadMoment !== false;
     const address = typeof myAddress === 'string' ? myAddress.trim() : '';
     const normalizedTargets = new Map<string, ReticulumChatReadTarget>();
     for (const target of targets) {
@@ -11805,14 +12370,69 @@ export class ReticulumChatDatabase {
     }
     if (normalizedTargets.size === 0) return 0;
 
-    const readAt = Date.now();
+    // A read watermark is compared against `event.timestamp`, which is stamped
+    // by the *sender's* clock. A caller passing the local wall clock can
+    // therefore place the watermark ahead of messages from a sender whose clock
+    // runs fast; those messages satisfy `timestamp > watermark` forever and are
+    // stranded as permanently unread. Clamp every request to the newest event
+    // actually stored for the channel, and drop requests that have no event to
+    // anchor to. See src/utils/qChatReadWatermark.ts for the renderer side.
+    for (const [key, target] of normalizedTargets) {
+      const newestKnownEventTimestamp = this.getNewestEventTimestamp(
+        target.groupId,
+        target.channelId
+      );
+      if (newestKnownEventTimestamp <= 0) {
+        normalizedTargets.delete(key);
+        continue;
+      }
+      if (target.timestamp > newestKnownEventTimestamp) {
+        normalizedTargets.set(key, {
+          ...target,
+          timestamp: newestKnownEventTimestamp,
+        });
+      }
+    }
+    if (normalizedTargets.size === 0) return 0;
+
+    // Same strictly-increasing sequence as message arrival: a wall-clock value
+    // ties with messages stored in the same millisecond, and a tie reads as
+    // "already seen", losing the message.
+    const readAt = this.nextArrivalSequence();
     const watermarkUpdates = [...normalizedTargets.values()].filter(
       ({ groupId, channelId, timestamp }) =>
         timestamp > this.getReadWatermark(groupId, channelId, address)
     );
     const transaction = this.db.transaction(() => {
       for (const { groupId, channelId, timestamp } of watermarkUpdates) {
-        this.stmtUpsertWatermark.run(groupId, channelId, address, timestamp);
+        this.stmtUpsertWatermark.run(
+          groupId,
+          channelId,
+          address,
+          timestamp,
+          // The read moment rides on the watermark insert and is maxed on
+          // conflict, so it has to be suppressed here too. 0 leaves any existing
+          // value untouched.
+          recordReadMoment ? readAt : 0
+        );
+      }
+      // Record the read moment even when the watermark did not advance. A read
+      // of an already-read channel still tells us the reader looked *now*, which
+      // is what bounds a watermark that another sender's clock pushed ahead.
+      //
+      // Not for another device's receipt. That read happened elsewhere; the
+      // arrival order recorded here is this device's, and this device did not
+      // look. Keeping it would let the next coverage resend claim messages that
+      // arrived after the other device's read as read on this one too.
+      if (recordReadMoment) {
+        for (const { groupId, channelId } of normalizedTargets.values()) {
+          this.stmtUpsertWatermarkLocalReadAt.run(
+            readAt,
+            groupId,
+            channelId,
+            address
+          );
+        }
       }
       if (address) {
         for (const {
@@ -11869,6 +12489,412 @@ export class ReticulumChatDatabase {
     return normalizedTargets.size;
   }
 
+  /**
+   * Arrival order of the last recorded read on this device, or 0 when none was
+   * recorded.
+   *
+   * Used only to detect a watermark that another sender's fast clock pushed into
+   * the future. See the unread computation in `computeChannelSummary`.
+   */
+  getReadWatermarkLocalReadAt(
+    groupId: number,
+    channelId: string,
+    address = ''
+  ): number {
+    if (!Number.isInteger(groupId) || groupId <= 0) return 0;
+    const normalizedChannelId = normalizeReticulumChatChannelId(channelId);
+    const normalizedAddress = typeof address === 'string' ? address.trim() : '';
+    if (!normalizedAddress) return 0;
+    const row = this.stmtGetWatermarkLocalReadAt.get(
+      groupId,
+      normalizedChannelId,
+      normalizedAddress
+    ) as { local_read_at?: number } | undefined;
+    const stored = Number(row?.local_read_at);
+    return Number.isFinite(stored) && stored > 0 ? stored : 0;
+  }
+
+  /**
+   * Sender-time coverage of an authenticated read from another device of this
+   * account, or 0 when none was applied.
+   *
+   * Kept separate from `getReadWatermark` because the two mean different
+   * things. The local watermark is clamped to the newest event stored here, so
+   * it cannot cover history this device has not received yet. A remote read
+   * describes what the *other* device saw, and must keep applying to messages
+   * that land later.
+   */
+  getReadWatermarkRemoteCoverage(
+    groupId: number,
+    channelId: string,
+    address = ''
+  ): number {
+    if (!Number.isInteger(groupId) || groupId <= 0) return 0;
+    const normalizedChannelId = normalizeReticulumChatChannelId(channelId);
+    const normalizedAddress = typeof address === 'string' ? address.trim() : '';
+    if (!normalizedAddress) return 0;
+    const row = this.stmtGetWatermarkRemoteCoverage.get(
+      groupId,
+      normalizedChannelId,
+      normalizedAddress
+    ) as { remote_covered_timestamp?: number } | undefined;
+    const stored = Number(row?.remote_covered_timestamp);
+    const fromDb = Number.isFinite(stored) && stored > 0 ? stored : 0;
+    const fromMemory =
+      this.memoryRemoteReadCoverage.get(
+        this.readWatermarkKey(groupId, normalizedChannelId, normalizedAddress)
+      ) ?? 0;
+    return Math.max(fromDb, fromMemory);
+  }
+
+  /**
+   * Per-author read coverage applied from another device of this account.
+   *
+   * Keyed `author|stream`, valued by the highest `author_seq` covered. This is
+   * the clock-free form of {@link getReadWatermarkRemoteCoverage}: a sender
+   * timestamp is comparable only within one author's stream, so a single
+   * channel-wide boundary let a fast-clocked author's read cover a different
+   * author's later message.
+   */
+  getReadAuthorCoverage(
+    groupId: number,
+    channelId: string,
+    address = ''
+  ): Map<string, number> {
+    const coverage = new Map<string, number>();
+    if (!Number.isInteger(groupId) || groupId <= 0) return coverage;
+    const normalizedChannelId = normalizeReticulumChatChannelId(channelId);
+    const normalizedAddress = typeof address === 'string' ? address.trim() : '';
+    if (!normalizedAddress) return coverage;
+    const cacheKey = this.readWatermarkKey(
+      groupId,
+      normalizedChannelId,
+      normalizedAddress
+    );
+    const cached = this.memoryAuthorReadCoverage.get(cacheKey);
+    if (cached) return new Map(cached);
+    const rows = this.stmtGetReadAuthorCoverage.all(
+      groupId,
+      normalizedChannelId,
+      normalizedAddress
+    ) as ReadonlyArray<{
+      author_address?: string;
+      author_stream_id?: string;
+      covered_seq?: number;
+    }>;
+    for (const row of rows) {
+      const author = String(row?.author_address || '').trim();
+      const stream = String(row?.author_stream_id || '').trim();
+      const seq = Number(row?.covered_seq);
+      if (!author || !stream || !Number.isInteger(seq)) continue;
+      coverage.set(`${author}|${stream}`, seq);
+    }
+    this.memoryAuthorReadCoverage.set(cacheKey, new Map(coverage));
+    return coverage;
+  }
+
+  /**
+   * Whether the coverage belonging to a specific receipt has already landed.
+   *
+   * `handleReadSync` used to ask "does this channel have any coverage rows?" and
+   * then skip the receipt entirely. That is per channel, not per receipt, so once
+   * any device had ever sent coverage every later receipt for the channel was
+   * ignored — including reads from an older Hub that sends no coverage at all,
+   * and an updated device's read whose own coverage wires were lost. Both are
+   * reads nobody else would ever see.
+   *
+   * Comparing the receipt's `signedAt` makes the question per receipt: only a
+   * receipt whose own coverage has arrived skips the watermark path.
+   */
+  hasAuthorCoverageFromReceipt(
+    groupId: number,
+    channelId: string,
+    address = '',
+    signedAt = 0
+  ): boolean {
+    if (!Number.isInteger(groupId) || groupId <= 0) return false;
+    const normalizedAddress = typeof address === 'string' ? address.trim() : '';
+    const receiptSignedAt = Math.floor(Number(signedAt));
+    if (!normalizedAddress || !Number.isFinite(receiptSignedAt)) return false;
+    const normalizedChannelId = normalizeReticulumChatChannelId(channelId);
+    const row = this.stmtGetReadCoverageReceipt.get(
+      groupId,
+      normalizedChannelId,
+      normalizedAddress
+    ) as { signed_at?: number } | undefined;
+    const stored = Number(row?.signed_at);
+    if (!Number.isFinite(stored) || stored <= 0) return false;
+    // `>=` because a later receipt's coverage also proves this read reached us;
+    // coverage is monotonic per author, so a newer set cannot be missing an
+    // older one's entries.
+    return stored >= receiptSignedAt;
+  }
+
+  /**
+   * Records per-author coverage for a read performed on another device.
+   *
+   * Monotonic per author and stream: the upsert keeps the larger seq, so a
+   * replayed or out-of-order receipt cannot un-read history. Returns how many
+   * entries were written.
+   */
+  applyRemoteAuthorReadCoverage(
+    groupId: number,
+    channelId: string,
+    coverage: ReadonlyArray<{
+      authorAddress: string;
+      authorStreamId: string;
+      coveredSeq: number;
+    }>,
+    address = '',
+    signedAt = 0
+  ): number {
+    if (!Number.isInteger(groupId) || groupId <= 0) return 0;
+    const normalizedChannelId = normalizeReticulumChatChannelId(channelId);
+    const normalizedAddress = typeof address === 'string' ? address.trim() : '';
+    if (!normalizedAddress || !Array.isArray(coverage)) return 0;
+    // The receipt these entries belong to. Stored so a later receipt can ask
+    // whether ITS coverage landed instead of treating any coverage in the
+    // channel as its own — see `hasAuthorCoverageFromReceipt`.
+    const receiptSignedAt = Math.floor(Number(signedAt));
+    const rowSignedAt =
+      Number.isFinite(receiptSignedAt) && receiptSignedAt > 0
+        ? receiptSignedAt
+        : 0;
+    const now = Date.now();
+    let applied = 0;
+    const write = this.db.transaction(() => {
+      for (const entry of coverage) {
+        const author = String(entry?.authorAddress || '').trim();
+        const stream = normalizeReticulumChatAuthorStreamId(
+          entry?.authorStreamId
+        );
+        const seq = Number(entry?.coveredSeq);
+        if (!author || !stream || !Number.isInteger(seq) || seq <= 0) continue;
+        this.stmtUpsertReadAuthorCoverage.run(
+          groupId,
+          normalizedChannelId,
+          normalizedAddress,
+          author,
+          stream,
+          seq,
+          now,
+          rowSignedAt
+        );
+        applied += 1;
+      }
+    });
+    write();
+    if (applied > 0) {
+      this.memoryAuthorReadCoverage.delete(
+        this.readWatermarkKey(groupId, normalizedChannelId, normalizedAddress)
+      );
+      this.invalidateChatSummaryCache(
+        groupId,
+        normalizedChannelId,
+        normalizedAddress
+      );
+    }
+    return applied;
+  }
+
+  /**
+   * Highest `author_seq` this account has locally read for each author stream
+   * in a channel, for inclusion in a read receipt.
+   *
+   * Bounded by the read timestamp the receipt carries, so it describes exactly
+   * the events being marked read.
+   */
+  getLocalAuthorCoverageUpTo(
+    groupId: number,
+    channelId: string,
+    upToTimestamp: number,
+    address = ''
+  ): Array<{
+    authorAddress: string;
+    authorStreamId: string;
+    coveredSeq: number;
+  }> {
+    if (!Number.isInteger(groupId) || groupId <= 0) return [];
+    const timestamp = Number(upToTimestamp);
+    if (!Number.isFinite(timestamp) || timestamp <= 0) return [];
+    const normalizedChannelId = normalizeReticulumChatChannelId(channelId);
+    // Prefer this device's own arrival record of the read over the sender
+    // timestamp that travels in the receipt.
+    //
+    // `local_read_at` is the arrival sequence recorded when this device marked
+    // the channel read, so `stored_at <= local_read_at` selects exactly the
+    // messages it had received at that moment — no clocks involved. Bounding by
+    // `timestamp` instead would cover a correctly-clocked author's message that
+    // arrived after the read but is stamped below a fast sender's timestamp,
+    // which is the cross-author over-coverage this whole mechanism exists to
+    // fix. The sender-time query stays as a fallback for a channel with no
+    // recorded read moment yet.
+    const readMoment = this.getReadWatermarkLocalReadAt(
+      groupId,
+      normalizedChannelId,
+      address
+    );
+    if (readMoment > 0) {
+      const arrivalRows = this.stmtGetLocalAuthorCoverageAtArrival.all(
+        groupId,
+        normalizedChannelId,
+        readMoment
+      ) as ReadonlyArray<{
+        author_address?: string;
+        author_stream_id?: string;
+        covered_seq?: number;
+      }>;
+      const arrivalCoverage = this.mapLocalCoverageRows(arrivalRows);
+      if (arrivalCoverage.length > 0) return arrivalCoverage;
+    }
+    const rows = this.stmtGetLocalAuthorCoverageUpTo.all(
+      groupId,
+      normalizedChannelId,
+      Math.floor(timestamp)
+    ) as ReadonlyArray<{
+      author_address?: string;
+      author_stream_id?: string;
+      covered_seq?: number;
+    }>;
+    return this.mapLocalCoverageRows(rows);
+  }
+
+  /** Shared row mapping for the two local-coverage queries. */
+  private mapLocalCoverageRows(
+    rows: ReadonlyArray<{
+      author_address?: string;
+      author_stream_id?: string;
+      covered_seq?: number;
+    }>
+  ): Array<{
+    authorAddress: string;
+    authorStreamId: string;
+    coveredSeq: number;
+  }> {
+    const coverage: Array<{
+      authorAddress: string;
+      authorStreamId: string;
+      coveredSeq: number;
+    }> = [];
+    for (const row of rows) {
+      const authorAddress = String(row?.author_address || '').trim();
+      const authorStreamId = normalizeReticulumChatAuthorStreamId(
+        row?.author_stream_id
+      );
+      const coveredSeq = Number(row?.covered_seq);
+      if (!authorAddress || !authorStreamId) continue;
+      if (!Number.isInteger(coveredSeq) || coveredSeq <= 0) continue;
+      coverage.push({ authorAddress, authorStreamId, coveredSeq });
+    }
+    return coverage;
+  }
+
+  /**
+   * Applies an authenticated read that happened on another device of this
+   * account.
+   *
+   * Unlike `markChannelsRead`, the timestamp is NOT clamped to the newest
+   * locally stored event and is not dropped for an empty channel: the coverage
+   * has to be durable so that history imported afterwards is still counted as
+   * read. The signed record itself is validated by the caller before reaching
+   * here; this only records its coverage.
+   */
+  applyRemoteReadCoverage(
+    groupId: number,
+    channelId: string,
+    upToTimestamp: number,
+    address = ''
+  ): boolean {
+    if (!Number.isInteger(groupId) || groupId <= 0) return false;
+    const normalizedAddress = typeof address === 'string' ? address.trim() : '';
+    const timestamp = Number(upToTimestamp);
+    if (!normalizedAddress || !Number.isFinite(timestamp) || timestamp <= 0) {
+      return false;
+    }
+    const watermark = Math.floor(timestamp);
+    const normalizedChannelId = normalizeReticulumChatChannelId(channelId);
+    if (
+      watermark <=
+      this.getReadWatermarkRemoteCoverage(
+        groupId,
+        normalizedChannelId,
+        normalizedAddress
+      )
+    ) {
+      return false;
+    }
+    this.stmtUpsertRemoteReadCoverage.run(
+      groupId,
+      normalizedChannelId,
+      normalizedAddress,
+      watermark
+    );
+    this.memoryRemoteReadCoverage.set(
+      this.readWatermarkKey(groupId, normalizedChannelId, normalizedAddress),
+      watermark
+    );
+    // The coverage changes the unread count this account sees for the channel,
+    // so any cached summary for it is stale.
+    this.invalidateChatSummaryCache(
+      groupId,
+      normalizedChannelId,
+      normalizedAddress
+    );
+    return true;
+  }
+
+  /**
+   * Whether a single event should render as read for this account.
+   *
+   * Two sources, checked in order of authority. Per-author coverage is
+   * clock-free and decided by `author_seq`. The scalar watermark is the older,
+   * channel-wide sender-time boundary, kept only for V1 receipts and for reads
+   * this device performed itself.
+   *
+   * The renderer's read tick used to consult the watermark alone, which meant a
+   * V2 receipt (which deliberately does not move that watermark) left messages
+   * the account had already read on another device still rendering as unread.
+   */
+  isEventCoveredByReadState(
+    groupId: number,
+    channelId: string,
+    address: string,
+    event: {
+      authorAddress?: string;
+      authorStreamId?: string;
+      authorSeq?: number;
+      timestamp?: number;
+    }
+  ): boolean {
+    const normalizedAddress = typeof address === 'string' ? address.trim() : '';
+    if (!normalizedAddress) return false;
+    const timestamp = Number(event?.timestamp);
+    if (!Number.isFinite(timestamp) || timestamp <= 0) return false;
+    if (timestamp <= this.getReadWatermark(groupId, channelId, address)) {
+      return true;
+    }
+    const normalizedChannelId = normalizeReticulumChatChannelId(channelId);
+    const authorAddress = String(event?.authorAddress || '').trim();
+    const authorStreamId = normalizeReticulumChatAuthorStreamId(
+      event?.authorStreamId
+    );
+    const authorSeq = Number(event?.authorSeq);
+    if (
+      !authorAddress ||
+      !authorStreamId ||
+      !Number.isInteger(authorSeq) ||
+      authorSeq <= 0
+    ) {
+      return false;
+    }
+    const coveredSeq = this.getReadAuthorCoverage(
+      groupId,
+      normalizedChannelId,
+      address
+    ).get(`${authorAddress}|${authorStreamId}`);
+    return coveredSeq !== undefined && coveredSeq >= authorSeq;
+  }
+
   getReadWatermark(groupId: number, channelId: string, address = ''): number {
     const normalizedChannelId = normalizeReticulumChatChannelId(channelId);
     const normalizedAddress = typeof address === 'string' ? address.trim() : '';
@@ -11899,6 +12925,39 @@ export class ReticulumChatDatabase {
     address: string
   ): string {
     return `${groupId}:${normalizeReticulumChatChannelId(channelId)}:${address}`;
+  }
+
+  /**
+   * Newest event timestamp actually stored for a channel.
+   *
+   * Used to bound read watermarks: a watermark above this value would sit ahead
+   * of every message it is meant to cover, stranding them as unread forever
+   * because their sender-stamped timestamps can never exceed it. Returns 0 when
+   * the channel has no stored events.
+   */
+  getNewestEventTimestamp(groupId: number, channelId: string): number {
+    if (!Number.isInteger(groupId) || groupId <= 0) return 0;
+    const normalizedChannelId = normalizeReticulumChatChannelId(channelId);
+    const row = this.stmtGetNewestEventTimestamp.get(
+      groupId,
+      normalizedChannelId
+    ) as { timestamp?: number } | undefined;
+    const stored =
+      typeof row?.timestamp === 'number' && Number.isFinite(row.timestamp)
+        ? row.timestamp
+        : 0;
+    let newest = stored;
+    for (const event of this.memoryEvents.values()) {
+      if (event.groupId !== groupId) continue;
+      if (
+        normalizeReticulumChatChannelId(event.channelId) !== normalizedChannelId
+      ) {
+        continue;
+      }
+      const timestamp = Number(event.timestamp);
+      if (Number.isFinite(timestamp) && timestamp > newest) newest = timestamp;
+    }
+    return newest;
   }
 
   getMissingEvents(
@@ -12284,6 +13343,75 @@ export class ReticulumChatDatabase {
     tx(rows);
   }
 
+  private migrateFtsRowidKeys(): void {
+    // One-time local rebuild: older Hubs inserted FTS rows without an explicit
+    // rowid, so a `WHERE event_id = ?` delete scanned the whole (unindexed)
+    // virtual table. Give every FTS row the rowid of its mirror row so future
+    // deletes are keyed lookups. FTS5 only addresses rows by rowid or MATCH,
+    // and both tables hold the same normalized text today.
+    const migrationName = 'fts-rowid-keyed-deletes-v1';
+    const applied = this.db
+      .prepare('SELECT 1 FROM rchat_schema_migrations WHERE name = ? LIMIT 1')
+      .get(migrationName);
+    if (applied) return;
+    const rows = this.db
+      .prepare(
+        `
+          SELECT event_id, group_id, channel_id, author_address, timestamp, event_type, search_text,
+                 rowid
+          FROM reticulum_chat_search_index
+          ORDER BY timestamp DESC, event_id DESC
+        `
+      )
+      .all() as Array<{
+      event_id?: string;
+      group_id?: number;
+      channel_id?: string;
+      author_address?: string;
+      timestamp?: number;
+      event_type?: string;
+      search_text?: string;
+      rowid?: number;
+    }>;
+    const tx = this.db.transaction(() => {
+      this.db.exec('DELETE FROM reticulum_chat_search_fts');
+      const insert = this.db.prepare(`
+        INSERT INTO reticulum_chat_search_fts
+          (rowid, event_id, group_id, channel_id, author_address, timestamp, event_type, search_text)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const row of rows) {
+        if (
+          typeof row.event_id !== 'string' ||
+          typeof row.rowid !== 'number' ||
+          typeof row.group_id !== 'number' ||
+          typeof row.author_address !== 'string' ||
+          typeof row.timestamp !== 'number' ||
+          typeof row.event_type !== 'string' ||
+          typeof row.search_text !== 'string'
+        ) {
+          continue;
+        }
+        insert.run(
+          row.rowid,
+          row.event_id,
+          row.group_id,
+          normalizeReticulumChatChannelId(row.channel_id),
+          row.author_address,
+          row.timestamp,
+          row.event_type,
+          row.search_text
+        );
+      }
+      this.db
+        .prepare(
+          'INSERT INTO rchat_schema_migrations (name, applied_at) VALUES (?, ?)'
+        )
+        .run(migrationName, Date.now());
+    });
+    tx();
+  }
+
   private migrateProjectedSearchIndex(): void {
     // v4 rebuilds rows created by the early visible-text indexer, which could
     // include reply event IDs, special IDs, and other non-message metadata.
@@ -12548,7 +13676,10 @@ export class ReticulumChatDatabase {
         deleted_at INTEGER,
         deleted_event_id TEXT,
         expires_at INTEGER,
-        has_attachment INTEGER NOT NULL DEFAULT 0
+        has_attachment INTEGER NOT NULL DEFAULT 0,
+        -- Local arrival order. Sender timestamps are not comparable across
+        -- senders; this is the only sequence every message shares.
+        stored_at INTEGER NOT NULL DEFAULT 0
       );
       CREATE INDEX IF NOT EXISTS idx_rchat_message_projection_visible
         ON rchat_message_projection (group_id, channel_id, deleted_at, created_at, root_event_id);
@@ -12744,7 +13875,39 @@ export class ReticulumChatDatabase {
         channel_id TEXT NOT NULL DEFAULT 'general',
         address TEXT NOT NULL DEFAULT '',
         timestamp INTEGER NOT NULL,
+        -- This device's clock reading at the moment of the read. Used to detect
+        -- a watermark that a fast-clocked sender pushed into the future; see
+        -- effectiveReadWatermark. 0 means never recorded.
+        local_read_at INTEGER NOT NULL DEFAULT 0,
+        -- Sender-time coverage of an authenticated read performed on another
+        -- device of this same account. Stored unclamped, unlike the local
+        -- watermark, so it still covers history that arrives here later. 0
+        -- means no remote read has been applied.
+        remote_covered_timestamp INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (group_id, channel_id, address)
+      );
+      -- Per-author coverage of a read performed on another device of this
+      -- account. One row per author stream the reader has caught up with.
+      --
+      -- A sender timestamp is comparable only within one author's stream, so a
+      -- single channel-wide boundary let a fast-clocked author's read cover a
+      -- different author's later message. author_seq is a dense counter per
+      -- (group, author, stream) allocated from max(seq)+1 rather than from a
+      -- clock, so it cannot be skewed.
+      CREATE TABLE IF NOT EXISTS reticulum_chat_read_author_coverage (
+        group_id INTEGER NOT NULL,
+        channel_id TEXT NOT NULL DEFAULT 'general',
+        address TEXT NOT NULL DEFAULT '',
+        author_address TEXT NOT NULL,
+        author_stream_id TEXT NOT NULL,
+        covered_seq INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        -- The signedAt of the receipt that produced these rows. It is what lets
+        -- a receipt decide whether its OWN coverage has landed, so a read from a
+        -- device that does not send coverage is no longer ignored merely because
+        -- some other receipt once did. 0 for rows written before the column.
+        signed_at INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (group_id, channel_id, address, author_address, author_stream_id)
       );
       CREATE TABLE IF NOT EXISTS rchat_dm_read_watermarks (
         conversation_id TEXT NOT NULL,
@@ -13058,6 +14221,68 @@ export class ReticulumChatDatabase {
     );
   }
 
+  /**
+   * Local clock reading stored alongside each read watermark.
+   *
+   * Needed because a watermark can legitimately be *ahead* of this device's
+   * clock: it is taken from the newest event's sender timestamp, and a sender
+   * whose clock runs fast produces one in the future. Recording when the reader
+   * actually looked lets `effectiveReadWatermark` tell a normal read from one
+   * dragged forward by another participant's clock.
+   */
+  /** Local arrival order for projected messages. See `nextArrivalSequence`. */
+  private migrateMessageProjectionStoredAtSchema(): void {
+    this.ensureColumn(
+      'rchat_message_projection',
+      'stored_at',
+      `
+      ALTER TABLE rchat_message_projection
+        ADD COLUMN stored_at INTEGER NOT NULL DEFAULT 0
+      `
+    );
+    // Rows written before this column existed have no recorded arrival order.
+    // Their sender timestamp is the best available stand-in and preserves their
+    // previous unread behaviour exactly, so an upgrade changes nothing visible.
+    this.db.exec(`
+      UPDATE rchat_message_projection
+         SET stored_at = created_at
+       WHERE stored_at = 0
+    `);
+  }
+
+  private migrateReadWatermarkLocalReadAtSchema(): void {
+    this.ensureColumn(
+      'reticulum_chat_read_watermarks',
+      'local_read_at',
+      `
+      ALTER TABLE reticulum_chat_read_watermarks
+        ADD COLUMN local_read_at INTEGER NOT NULL DEFAULT 0
+      `
+    );
+  }
+
+  private migrateReadAuthorCoverageReceiptSchema(): void {
+    this.ensureColumn(
+      'reticulum_chat_read_author_coverage',
+      'signed_at',
+      `
+      ALTER TABLE reticulum_chat_read_author_coverage
+        ADD COLUMN signed_at INTEGER NOT NULL DEFAULT 0
+      `
+    );
+  }
+
+  private migrateReadWatermarkRemoteCoverageSchema(): void {
+    this.ensureColumn(
+      'reticulum_chat_read_watermarks',
+      'remote_covered_timestamp',
+      `
+      ALTER TABLE reticulum_chat_read_watermarks
+        ADD COLUMN remote_covered_timestamp INTEGER NOT NULL DEFAULT 0
+      `
+    );
+  }
+
   private migrateMetadataSnapshotLineageSchema(): void {
     this.ensureColumn(
       'rchat_metadata_snapshots',
@@ -13194,6 +14419,22 @@ export class ReticulumChatDatabase {
         name: 'channel-write-mode-updated-at',
         run: () => this.migrateChannelWriteModeUpdatedAtSchema(),
       },
+      {
+        name: 'message-projection-stored-at',
+        run: () => this.migrateMessageProjectionStoredAtSchema(),
+      },
+      {
+        name: 'read-watermark-local-read-at',
+        run: () => this.migrateReadWatermarkLocalReadAtSchema(),
+      },
+      {
+        name: 'read-watermark-remote-coverage',
+        run: () => this.migrateReadWatermarkRemoteCoverageSchema(),
+      },
+      {
+        name: 'read-author-coverage-receipt',
+        run: () => this.migrateReadAuthorCoverageReceiptSchema(),
+      },
       { name: 'message-expiry', run: () => this.migrateExpirySchema() },
       {
         name: 'dynamic-channel-expiry-policy',
@@ -13274,6 +14515,10 @@ export class ReticulumChatDatabase {
       {
         name: 'author-gap-known-unavailable',
         run: () => this.initAuthorGapKnownUnavailableSchema(),
+      },
+      {
+        name: 'author-gap-gone-ranges-removed',
+        run: () => this.dropAuthorGoneRangeSchema(),
       },
       {
         name: 'rejected-event-author-sequence',
@@ -14129,6 +15374,23 @@ export class ReticulumChatDatabase {
       );
       CREATE INDEX IF NOT EXISTS idx_rchat_known_unavailable_recheck
         ON rchat_known_unavailable_ranges (recheck_at, group_id);
+    `);
+  }
+
+  private dropAuthorGoneRangeSchema(): void {
+    // The permanent "gone" marker is removed: a permission denial is not
+    // evidence that history was deleted, and no marker of this kind could be
+    // woken by a later access grant. Develop's bounded, retryable
+    // known-unavailable park already keeps a dead range out of the hot loop.
+    //
+    // The table is dropped rather than left unread so that databases written by
+    // an earlier build of this branch get their suppressed gaps back through
+    // normal discovery. Markers carry no reason column, so a marker written
+    // from a refusal cannot be told apart from a genuine one and is not worth
+    // preserving.
+    this.db.exec(`
+      DROP INDEX IF EXISTS idx_rchat_gone_ranges_author;
+      DROP TABLE IF EXISTS rchat_gone_ranges;
     `);
   }
 

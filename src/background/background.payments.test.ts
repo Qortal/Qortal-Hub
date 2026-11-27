@@ -5,6 +5,7 @@ import {
   describe,
   expect,
   it,
+  onTestFinished,
   vi,
 } from 'vitest';
 
@@ -749,4 +750,73 @@ describe('names with invisible characters', () => {
       expect(createTransaction).not.toHaveBeenCalled();
     }
   );
+});
+
+describe("sendCoin: the node's answer", () => {
+  // What Core 6.1.9 answers on /transactions/process: the transaction with its
+  // signature when it accepts it, `{ error, message }` when it refuses it. An
+  // error page or no reply at all doesn't say whether the payment went through.
+  const GATEWAY_PAGE =
+    '<html><head><title>502 Bad Gateway</title></head><body><center><h1>502 Bad Gateway</h1></center></body></html>';
+  const pay = () =>
+    bg.sendCoin(
+      { amount: 1, receiver: accountA.address, approvedFee: APPROVED_FEE },
+      true
+    );
+
+  it('counts the payment as sent when the answer carries its signature', async () => {
+    const fetchMock = stubNode();
+    const { res } = await pay();
+    expect(res).toMatchObject({ success: true, outcome: 'sent' });
+    expect(posts(fetchMock)).toHaveLength(1);
+  });
+
+  it('does not count an error page as sent', async () => {
+    const fetchMock = stubNode({ process: GATEWAY_PAGE });
+    const { res } = await pay();
+    expect(res).toEqual({
+      success: false,
+      outcome: 'unknown',
+      data: GATEWAY_PAGE,
+    });
+    expect(posts(fetchMock)).toHaveLength(1);
+  });
+
+  it('does not count an answer for another transaction as sent', async () => {
+    stubNode({
+      process: {
+        type: 'PAYMENT',
+        signature: Base58.encode(new Uint8Array(64).fill(7)),
+      },
+    });
+    const { res } = await pay();
+    expect(res).toMatchObject({ success: false, outcome: 'unknown' });
+  });
+
+  it('does not count an answer without a signature as sent', async () => {
+    stubNode({ process: { type: 'PAYMENT', amount: '1.00000000' } });
+    const { res } = await pay();
+    expect(res).toMatchObject({ success: false, outcome: 'unknown' });
+  });
+
+  it("reads the node's refusal as refused", async () => {
+    const refusal = {
+      error: 312,
+      message: 'transaction invalid: insufficient balance (NO_BALANCE)',
+    };
+    stubNode({ process: refusal });
+    const { res } = await pay();
+    expect(res).toEqual({ success: false, outcome: 'refused', data: refusal });
+  });
+
+  it('resolves, sent once, when no answer comes back', async () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    onTestFinished(() => consoleError.mockRestore());
+    const fetchMock = stubNode({ process: new TypeError('Failed to fetch') });
+    const { res } = await pay();
+    expect(res).toMatchObject({ success: false, outcome: 'unknown' });
+    expect(posts(fetchMock)).toHaveLength(1);
+  });
 });

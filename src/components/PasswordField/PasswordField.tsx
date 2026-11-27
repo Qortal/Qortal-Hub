@@ -51,7 +51,8 @@ export const CustomInput = styled(TextField)(({ theme }) => ({
     minWidth: 0,
     opacity: 0.88,
     padding: 4,
-    transition: 'color 160ms ease, opacity 160ms ease, background-color 160ms ease',
+    transition:
+      'color 160ms ease, opacity 160ms ease, background-color 160ms ease',
   },
   '& .MuiInputAdornment-root .MuiButtonBase-root:hover': {
     backgroundColor:
@@ -104,7 +105,8 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
   ) => {
     const [canViewPassword, setCanViewPassword] = useState(false);
     const [isEditable, setIsEditable] = useState(!suppressAutofill);
-    const hasValue = typeof value === 'string' ? value.length > 0 : Boolean(value);
+    const hasValue =
+      typeof value === 'string' ? value.length > 0 : Boolean(value);
 
     return (
       <CustomInput

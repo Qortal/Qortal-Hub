@@ -32,12 +32,9 @@ export const useHandlePaymentNotification = (address) => {
     [getNameOrAddressOfSender]
   );
 
-  const setLastEnteredTimestampPaymentEventFunc = useCallback(
-    () => {
-      setLastEnteredTimestampPayment(Date.now());
-    },
-    [setLastEnteredTimestampPayment]
-  );
+  const setLastEnteredTimestampPaymentEventFunc = useCallback(() => {
+    setLastEnteredTimestampPayment(Date.now());
+  }, [setLastEnteredTimestampPayment]);
 
   useEffect(() => {
     subscribeToEvent(

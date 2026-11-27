@@ -229,6 +229,7 @@ export const NotAuthenticated = ({
   );
   const hasAccountsText = (
     <Wallets
+      autoFocusFilter={introStage === 'complete'}
       mode="entry"
       setExtState={setExtstate}
       setRawWallet={setRawWallet}

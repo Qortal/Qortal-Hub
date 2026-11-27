@@ -505,23 +505,13 @@ export const AppsDesktop = ({
 
   const myApp = useMemo(() => {
     return availableQapps.find(
-      (app) =>
-        app.name === myName &&
-        app.service ===
-          t('core:app', {
-            postProcess: 'capitalizeAll',
-          })
+      (app) => app.name === myName && app.service === 'APP'
     );
   }, [myName, availableQapps]);
 
   const myWebsite = useMemo(() => {
     return availableQapps.find(
-      (app) =>
-        app.name === myName &&
-        app.service ===
-          t('core:website', {
-            postProcess: 'capitalizeAll',
-          })
+      (app) => app.name === myName && app.service === 'WEBSITE'
     );
   }, [myName, availableQapps]);
 

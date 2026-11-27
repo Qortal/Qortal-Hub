@@ -30,9 +30,13 @@ const FAILED_RENEW_RETRY_MS = 5 * 60 * 1000;
  * Wrapping in new Function() prevents the TypeScript CommonJS compiler
  * from rewriting import() to require() — require() fails on ESM packages.
  */
-export async function loadNatApi(): Promise<{ default: new (opts: Record<string, unknown>) => NatApiClient }> {
+export async function loadNatApi(): Promise<{
+  default: new (opts: Record<string, unknown>) => NatApiClient;
+}> {
   const load = new Function('return import("@silentbot1/nat-api")');
-  return (await load()) as { default: new (opts: Record<string, unknown>) => NatApiClient };
+  return (await load()) as {
+    default: new (opts: Record<string, unknown>) => NatApiClient;
+  };
 }
 
 export async function createNatApiClient(options: {
@@ -99,8 +103,7 @@ function scheduleManagedRenewal(
   clearManagedMappingTimer(client, key);
 
   const renewDelayMs =
-    delayMs ??
-    Math.max(60, mapping.ttl - RENEW_BEFORE_EXPIRY_SECONDS) * 1000;
+    delayMs ?? Math.max(60, mapping.ttl - RENEW_BEFORE_EXPIRY_SECONDS) * 1000;
 
   const timer = setTimeout(() => {
     void renewManagedMapping(client, mapping);
@@ -280,7 +283,9 @@ export async function unmapUdpPort(
     .catch(() => {});
 }
 
-export async function destroyNatClient(client: NatApiClient | null): Promise<void> {
+export async function destroyNatClient(
+  client: NatApiClient | null
+): Promise<void> {
   if (!client) return;
   const managed = managedNatClients.get(client);
   if (managed) {

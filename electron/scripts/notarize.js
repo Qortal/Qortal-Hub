@@ -17,8 +17,14 @@ module.exports = async function notarizeMac(context) {
     APPLEIDPASS_SET: !!process.env.APPLEIDPASS,
   });
 
-  if (!process.env.APPLEID || !process.env.APPLEIDPASS || !process.env.APPLETEAMID) {
-    console.warn('Notarization skipped: APPLEID / APPLEIDPASS / APPLETEAMID not set correctly');
+  if (
+    !process.env.APPLEID ||
+    !process.env.APPLEIDPASS ||
+    !process.env.APPLETEAMID
+  ) {
+    console.warn(
+      'Notarization skipped: APPLEID / APPLEIDPASS / APPLETEAMID not set correctly'
+    );
     return;
   }
 
@@ -35,4 +41,3 @@ module.exports = async function notarizeMac(context) {
 
   console.log('Notarization complete.');
 };
-

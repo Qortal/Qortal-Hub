@@ -197,7 +197,7 @@ Manual placements are defined in `QORTAL_LAND_DEVELOPMENT_PNG_PROP_PLACEMENTS`.
 Enable development PNG prop overlays with:
 
 ```js
-localStorage.setItem('qortalland.devPngProps', '1')
+localStorage.setItem('qortalland.devPngProps', '1');
 ```
 
 or:
@@ -209,7 +209,7 @@ or:
 Disable the overlay with:
 
 ```js
-localStorage.removeItem('qortalland.devPngProps')
+localStorage.removeItem('qortalland.devPngProps');
 ```
 
 or:

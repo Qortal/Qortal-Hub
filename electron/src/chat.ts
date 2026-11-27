@@ -270,8 +270,10 @@ export function buildChatSignedData(event: ChatEvent): Record<string, unknown> {
   };
   if (event.replyTo !== undefined) base['replyTo'] = event.replyTo;
   if (event.targetId !== undefined) base['targetId'] = event.targetId;
-  if (event.attachmentMeta !== undefined) base['attachmentMeta'] = event.attachmentMeta;
-  if (event.attachmentDataHash !== undefined) base['attachmentDataHash'] = event.attachmentDataHash;
+  if (event.attachmentMeta !== undefined)
+    base['attachmentMeta'] = event.attachmentMeta;
+  if (event.attachmentDataHash !== undefined)
+    base['attachmentDataHash'] = event.attachmentDataHash;
   return base;
 }
 
@@ -342,18 +344,28 @@ export function buildGroupChatId(groupId: number): string {
 /**
  * Full validation except Ed25519 (runs on main thread). Signature verified via VerifyWorkerPool.
  */
-function validateChatEventSansSignature(event: ChatEvent, now: number): ValidationResult {
+function validateChatEventSansSignature(
+  event: ChatEvent,
+  now: number
+): ValidationResult {
   // 1. Required field types
   if (
-    typeof event.id !== 'string' || !event.id ||
-    typeof event.chatId !== 'string' || !event.chatId ||
+    typeof event.id !== 'string' ||
+    !event.id ||
+    typeof event.chatId !== 'string' ||
+    !event.chatId ||
     typeof event.eventType !== 'string' ||
-    typeof event.authorAddress !== 'string' || !event.authorAddress ||
-    typeof event.authorPublicKey !== 'string' || !event.authorPublicKey ||
-    typeof event.seq !== 'number' || !Number.isInteger(event.seq) || event.seq < 1 ||
+    typeof event.authorAddress !== 'string' ||
+    !event.authorAddress ||
+    typeof event.authorPublicKey !== 'string' ||
+    !event.authorPublicKey ||
+    typeof event.seq !== 'number' ||
+    !Number.isInteger(event.seq) ||
+    event.seq < 1 ||
     typeof event.timestamp !== 'number' ||
     typeof event.content !== 'string' ||
-    typeof event.signature !== 'string' || !event.signature
+    typeof event.signature !== 'string' ||
+    !event.signature
   ) {
     return { ok: false, reason: 'missing or malformed required fields' };
   }
@@ -387,7 +399,10 @@ function validateChatEventSansSignature(event: ChatEvent, now: number): Validati
     event.replyTo !== undefined &&
     (typeof event.replyTo !== 'string' || !event.replyTo)
   ) {
-    return { ok: false, reason: 'replyTo must be a non-empty string when present' };
+    return {
+      ok: false,
+      reason: 'replyTo must be a non-empty string when present',
+    };
   }
 
   // 3. chatId format
@@ -408,10 +423,18 @@ function validateChatEventSansSignature(event: ChatEvent, now: number): Validati
   }
 
   // 5a. Attachment validation (when present)
-  if (event.attachmentMeta !== undefined || event.attachmentData !== undefined || event.attachmentDataHash !== undefined) {
+  if (
+    event.attachmentMeta !== undefined ||
+    event.attachmentData !== undefined ||
+    event.attachmentDataHash !== undefined
+  ) {
     // All three must be present together (or all absent).
     if (!event.attachmentMeta || !event.attachmentDataHash) {
-      return { ok: false, reason: 'partial attachment fields: attachmentMeta and attachmentDataHash required together' };
+      return {
+        ok: false,
+        reason:
+          'partial attachment fields: attachmentMeta and attachmentDataHash required together',
+      };
     }
     // sizeBytes must be within limit.
     if (
@@ -419,25 +442,46 @@ function validateChatEventSansSignature(event: ChatEvent, now: number): Validati
       event.attachmentMeta.sizeBytes <= 0 ||
       event.attachmentMeta.sizeBytes > CHAT_MAX_ATTACHMENT_BYTES
     ) {
-      return { ok: false, reason: `attachment sizeBytes exceeds ${CHAT_MAX_ATTACHMENT_BYTES} byte limit` };
+      return {
+        ok: false,
+        reason: `attachment sizeBytes exceeds ${CHAT_MAX_ATTACHMENT_BYTES} byte limit`,
+      };
     }
     // mimeType must be a non-empty string.
-    if (typeof event.attachmentMeta.mimeType !== 'string' || !event.attachmentMeta.mimeType) {
+    if (
+      typeof event.attachmentMeta.mimeType !== 'string' ||
+      !event.attachmentMeta.mimeType
+    ) {
       return { ok: false, reason: 'attachment mimeType missing' };
     }
     // attachmentDataHash must be a 64-char hex string (SHA-256).
-    if (typeof event.attachmentDataHash !== 'string' || !/^[0-9a-f]{64}$/.test(event.attachmentDataHash)) {
-      return { ok: false, reason: 'attachmentDataHash must be a 64-char hex SHA-256' };
+    if (
+      typeof event.attachmentDataHash !== 'string' ||
+      !/^[0-9a-f]{64}$/.test(event.attachmentDataHash)
+    ) {
+      return {
+        ok: false,
+        reason: 'attachmentDataHash must be a 64-char hex SHA-256',
+      };
     }
     // If attachmentData is present, verify its hash matches attachmentDataHash.
     if (event.attachmentData !== undefined) {
       if (typeof event.attachmentData !== 'string' || !event.attachmentData) {
-        return { ok: false, reason: 'attachmentData must be a non-empty string' };
+        return {
+          ok: false,
+          reason: 'attachmentData must be a non-empty string',
+        };
       }
       const dataBytes = Buffer.from(event.attachmentData, 'base64');
-      const hashHex = nodeCrypto.createHash('sha256').update(dataBytes).digest('hex');
+      const hashHex = nodeCrypto
+        .createHash('sha256')
+        .update(dataBytes)
+        .digest('hex');
       if (hashHex !== event.attachmentDataHash) {
-        return { ok: false, reason: 'attachmentData SHA-256 does not match attachmentDataHash' };
+        return {
+          ok: false,
+          reason: 'attachmentData SHA-256 does not match attachmentDataHash',
+        };
       }
     }
   }
@@ -445,7 +489,10 @@ function validateChatEventSansSignature(event: ChatEvent, now: number): Validati
   // 6. For DMs: author must be one of the two participants.
   // support: chatIds look like "support:QAddr" and share the colon format but
   // are NOT DMs — participant enforcement for them lives in ChatManager.handleChatEvent.
-  if (!event.chatId.startsWith('group:') && !event.chatId.startsWith('support:')) {
+  if (
+    !event.chatId.startsWith('group:') &&
+    !event.chatId.startsWith('support:')
+  ) {
     const colonIdx = event.chatId.indexOf(':');
     const addrA = event.chatId.slice(0, colonIdx);
     const addrB = event.chatId.slice(colonIdx + 1);
@@ -612,7 +659,10 @@ export class ChatManager extends EventEmitter {
 
     // Broadcast via hybrid routing: targeted to subscribers + fallback gossip.
     // hopsRemaining starts at CHAT_DEFAULT_HOPS and is decremented on each re-relay.
-    this.broadcastChatEvent(event.chatId, { ...env, hopsRemaining: CHAT_DEFAULT_HOPS });
+    this.broadcastChatEvent(event.chatId, {
+      ...env,
+      hopsRemaining: CHAT_DEFAULT_HOPS,
+    });
     return true;
   }
 
@@ -716,7 +766,11 @@ export class ChatManager extends EventEmitter {
   }
 
   /** Returns up to `limit` events for a chat, paginated by `beforeTimestamp`. */
-  getHistory(chatId: string, limit = 50, beforeTimestamp?: number): ChatEvent[] {
+  getHistory(
+    chatId: string,
+    limit = 50,
+    beforeTimestamp?: number
+  ): ChatEvent[] {
     return this.store.getEvents(chatId, limit, beforeTimestamp);
   }
 
@@ -816,7 +870,10 @@ export class ChatManager extends EventEmitter {
     }
   }
 
-  private handleChatEvent(fromNodeId: string, envelope: ChatEventEnvelope): void {
+  private handleChatEvent(
+    fromNodeId: string,
+    envelope: ChatEventEnvelope
+  ): void {
     const event = envelope.event;
     if (!event || typeof event !== 'object') return;
 
@@ -838,7 +895,10 @@ export class ChatManager extends EventEmitter {
       this.queueRateLimit.set(event.authorAddress, Date.now());
     }
 
-    if (event.chatId.startsWith('support:') && event.chatId !== 'support:queue') {
+    if (
+      event.chatId.startsWith('support:') &&
+      event.chatId !== 'support:queue'
+    ) {
       const userAddr = event.chatId.slice(8);
       if (
         event.authorAddress !== userAddr &&
@@ -858,7 +918,9 @@ export class ChatManager extends EventEmitter {
       })
       .then((sigOk) => {
         if (!sigOk) {
-          loggerLog(`[Chat] Rejected remote event ${event?.id}: invalid signature`);
+          loggerLog(
+            `[Chat] Rejected remote event ${event?.id}: invalid signature`
+          );
           return;
         }
         try {
@@ -1025,7 +1087,13 @@ export class ChatManager extends EventEmitter {
    */
   private handleRead(envelope: ChatReadEnvelope): void {
     const { chatId, readerAddress, eventIds, timestamp } = envelope;
-    if (!chatId || !readerAddress || !Array.isArray(eventIds) || eventIds.length === 0) return;
+    if (
+      !chatId ||
+      !readerAddress ||
+      !Array.isArray(eventIds) ||
+      eventIds.length === 0
+    )
+      return;
     if (!this.shouldAccept(chatId)) return;
 
     // Participant validation per chat type.
@@ -1034,7 +1102,8 @@ export class ChatManager extends EventEmitter {
       if (
         readerAddress !== userAddr &&
         !SUPPORT_AGENT_ADDRESSES.has(readerAddress)
-      ) return;
+      )
+        return;
     } else if (!chatId.startsWith('group:') && !chatId.startsWith('support:')) {
       // DM: readerAddress must be one of the two participants.
       const colonIdx = chatId.indexOf(':');
@@ -1103,7 +1172,7 @@ export class ChatManager extends EventEmitter {
     env: ChatEventEnvelope,
     excludeNodeId?: string
   ): void {
-    const allPeers = this.p2p.getPeers().filter(p => p.connected);
+    const allPeers = this.p2p.getPeers().filter((p) => p.connected);
     const subscriberIds = new Set<string>();
 
     // Step 1: targeted delivery to known subscribers
@@ -1117,7 +1186,7 @@ export class ChatManager extends EventEmitter {
 
     // Step 2: fallback gossip to up to 2 random non-subscribers
     const nonSubscribers = allPeers.filter(
-      p => p.id !== excludeNodeId && !subscriberIds.has(p.id)
+      (p) => p.id !== excludeNodeId && !subscriberIds.has(p.id)
     );
     for (const peer of this.pickRandomPeers(nonSubscribers, 2)) {
       this.p2p.send(peer.id, env);

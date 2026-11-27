@@ -1,0 +1,53 @@
+name: Q-Chat Scenarios
+
+# Runs the in-process chat scenarios: two identities, real SQLite, real signing,
+# real notification decision. No display server, no Qortal Core, no Reticulum
+# daemon — see electron/scenarios/readme.md.
+#
+# Separate from npm_tests.yml on purpose: scenarios need `electron/build/`
+# compiled, which the Vitest job deliberately does not do.
+
+on:
+  push:
+    branches:
+      - 'develop'
+      - 'master'
+  pull_request:
+    branches:
+      - '**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  scenarios:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install renderer dependencies
+        run: npm ci
+
+      - name: Install electron dependencies
+        # better-sqlite3 is a native module from this project; scenarios load the
+        # real binary, not the Vitest mock.
+        run: cd electron && npm ci
+
+      - name: Compile electron
+        # `tsc` only. electron-rebuild is deliberately skipped: the scenarios run
+        # under plain Node, so the Electron-ABI binary is not wanted here.
+        run: cd electron && npx tsc -p tsconfig.json
+
+      - name: Run scenarios
+        run: npm run test:scenarios

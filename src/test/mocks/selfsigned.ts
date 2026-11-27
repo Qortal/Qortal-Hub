@@ -4,4 +4,3 @@ export function generate() {
     private: '',
   };
 }
-

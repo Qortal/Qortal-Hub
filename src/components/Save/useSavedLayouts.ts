@@ -28,7 +28,6 @@ export const useUnsavedLayoutParts = (
         ? unsavedLayoutParts(state, address, readLocalLayouts(address))
         : [],
     // The layouts are read again as they change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [address, homeLayout, sidePanel, state]
   );
 };
