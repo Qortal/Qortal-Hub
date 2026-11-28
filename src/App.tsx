@@ -109,7 +109,7 @@ import { useHandleUserInfo } from './hooks/useHandleUserInfo.tsx';
 import { Minting } from './components/Minting/Minting';
 import { isRunningGateway } from './qortal/qortal-requests.ts';
 import { useBlockedAddressesLoader } from './hooks/useBlockUsers.tsx';
-import { UserLookup } from './components/UserLookup.tsx/UserLookup';
+import { ExplorerWindow } from './components/Explorer/ExplorerWindow';
 import { RegisterName } from './components/RegisterName';
 import { BuyQortInformation } from './components/BuyQortInformation';
 import { PdfViewer } from './common/PdfViewer';
@@ -2033,7 +2033,7 @@ function App() {
           setInfo={setInfoSnack}
         />
 
-        <UserLookup
+        <ExplorerWindow
           isOpenDrawerLookup={isOpenDrawerLookup}
           setIsOpenDrawerLookup={setIsOpenDrawerLookup}
         />
