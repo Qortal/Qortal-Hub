@@ -8,18 +8,22 @@ import {
 } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// The page Core reported last, as useQortalMessageListener keeps it.
-const reported = vi.hoisted(() => ({ path: '' }));
+// The page Core reported last, as useQortalMessageListener keeps it, and
+// what AppViewer passed it.
+const reported = vi.hoisted(() => ({ path: '', calls: [] as unknown[][] }));
 
 vi.mock('../../../App', () => ({
   getBaseApiReact: () => 'http://localhost:12391',
 }));
 vi.mock('../../../hooks/useQortalMessageListener', () => ({
-  useQortalMessageListener: () => ({
-    path: reported.path,
-    history: {},
-    resetHistory: vi.fn(),
-  }),
+  useQortalMessageListener: (...args: unknown[]) => {
+    reported.calls.push(args);
+    return {
+      path: reported.path,
+      history: {},
+      resetHistory: vi.fn(),
+    };
+  },
 }));
 vi.mock('../../Theme/ThemeContext', () => ({
   useThemeContext: () => ({ themeMode: 'dark' }),
@@ -36,6 +40,55 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   reported.path = '';
+  reported.calls = [];
+});
+
+describe('AppViewer and the requests of its app', () => {
+  it.each([
+    [
+      'a Q-App',
+      { tabId: 'q', name: 'Opened-App', service: 'APP' },
+      { isPrivate: false, isPreview: false },
+    ],
+    [
+      'a private app',
+      {
+        tabId: 'p',
+        name: 'Publisher',
+        service: 'DOCUMENT',
+        identifier: 'private-app',
+        isPreview: true,
+        isPrivate: true,
+        privateAppProperties: {
+          name: 'Publisher',
+          service: 'DOCUMENT',
+          identifier: 'private-app',
+        },
+      },
+      { isPrivate: true, isPreview: true },
+    ],
+    [
+      'a preview of an unpublished app',
+      {
+        tabId: 'qhub-shots-1',
+        name: 'Publisher',
+        service: 'APP',
+        isPreview: true,
+        url: 'http://localhost:12391/render/preview/abc',
+      },
+      { isPrivate: false, isPreview: true },
+    ],
+  ])('tells the request listener what %s is', (_label, app, tabKind) => {
+    vi.stubGlobal('electronAPI', {
+      qappGuestPrepare: vi.fn(() => new Promise(() => {})),
+      qappGuestRelease: vi.fn().mockResolvedValue(true),
+    });
+    render(<AppViewer app={app} isDevMode={false} />);
+    // The ninth argument: a private app's and a preview's requests never use
+    // an app budget.
+    const last = reported.calls[reported.calls.length - 1];
+    expect(last[8]).toEqual(tabKind);
+  });
 });
 
 describe('AppViewer guest recovery', () => {

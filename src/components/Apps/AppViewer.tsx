@@ -53,7 +53,11 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         app?.identifier,
         nativeViewRef,
         nativeGuestActive,
-        guestPreloadDocument
+        guestPreloadDocument,
+        {
+          isPrivate: !!(app?.isPrivate || app?.privateAppProperties),
+          isPreview: !!app?.isPreview,
+        }
       );
 
     const [url, setUrl] = useState('');

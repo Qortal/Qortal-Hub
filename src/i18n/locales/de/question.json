@@ -40,6 +40,7 @@
   },
   "message": {
     "error": {
+      "account_changed": "Das Konto oder der Knoten hat sich geändert, bevor dies signiert wurde. Es wurde daher nicht gesendet.",
       "add_to_list": "Fehler beim Hinzufügen zur Liste",
       "app_fee_not_sent": "Die Veröffentlichung war erfolgreich, aber die App-Gebühr wurde nicht gesendet: {{ error }}",
       "app_fee_outcome_unknown": "Die Veröffentlichung war erfolgreich, aber Hub konnte nicht feststellen, ob die App-Gebühr bezahlt wurde. Prüfen Sie das in Ihren Transaktionen.",
