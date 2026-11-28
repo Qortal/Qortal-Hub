@@ -73,6 +73,10 @@ vi.mock('../../Chat/MessageDisplay', () => ({
 }));
 vi.mock('../../Desktop/CustomTitleBar', () => ({ appChromeOffsetPx: '0px' }));
 vi.mock('../../Snackbar/Snackbar', () => ({ CustomizedSnackbars: () => null }));
+// The right-click menu inside apps has tests of its own.
+vi.mock('../QAppContextMenu/QAppContextMenu', () => ({
+  QAppContextMenu: () => null,
+}));
 
 import { navigationControllerAtom, userInfoAtom } from '../../../atoms/global';
 import { lightTheme } from '../../../styles/theme-light';

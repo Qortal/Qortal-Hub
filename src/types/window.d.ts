@@ -5,6 +5,13 @@ import type {
   AudioSurfaceEvent,
 } from '../lib/group-call/audioSurfaceBridge';
 import type { TabShortcutAction } from '../../electron/src/tab-shortcuts';
+import type {
+  QAppMenuAction,
+  QAppMenuOpen,
+  QAppMenuResult,
+  QAppMenuSettings,
+  QAppSaveUpdate,
+} from '../../electron/src/qapp-context-menu-types';
 
 declare global {
   interface ReticulumCalendarRecurrenceInput {
@@ -433,6 +440,37 @@ declare global {
         owner: { tabId: string; name: string; service: string },
         request: { action: 'capture' }
       ) => Promise<{ png: Uint8Array; width: number; height: number }>;
+      /** A right-click inside a Q-App: the menu main asks the Hub page to show. */
+      onQAppMenuOpen?: (callback: (menu: QAppMenuOpen) => void) => () => void;
+      /** Progress of saves started from that menu. */
+      onQAppSaveUpdate?: (
+        callback: (update: QAppSaveUpdate) => void
+      ) => () => void;
+      /**
+       * The item chosen: true or false once main has acted, or what the Hub
+       * page carries out (a link to open, a name to look up, a question).
+       */
+      qappMenuAct?: (
+        menuId: string,
+        action: QAppMenuAction,
+        index?: number
+      ) => Promise<boolean | QAppMenuResult>;
+      qappMenuDismiss?: (menuId: string) => Promise<boolean>;
+      qappSaveCancel?: (saveId: string) => Promise<boolean>;
+      qappSaveShow?: (saveId: string) => Promise<boolean>;
+      qappMenuHubLocked?: (locked: boolean) => Promise<boolean>;
+      /**
+       * A right-click passed on to the app webview `guestId` at x, y, with
+       * Shift held when it was.
+       */
+      qappMenuRightClick?: (
+        guestId: number,
+        x: number,
+        y: number,
+        shift?: boolean
+      ) => Promise<boolean>;
+      /** Hub's settings the menu follows: dev mode, Qortino set up. */
+      qappMenuSettings?: (settings: QAppMenuSettings) => Promise<boolean>;
       onQAppReticulumEvent?: (callback: (payload: any) => void) => () => void;
       qappFileSave?: (owner: any, request: any) => Promise<any>;
       privateChannelOpen?: (
