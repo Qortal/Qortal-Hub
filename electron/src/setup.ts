@@ -13,6 +13,17 @@ import {
   registerPublishProfileIpc,
 } from './publish-profiles';
 import {
+  VideoToolService,
+  isAllowedNodeEndpoint,
+  registerVideoToolIpc,
+  resolveFfmpegDir,
+} from './video-tool';
+import {
+  VIDEO_TOOL_CHANNELS,
+  VIDEO_TOOL_PAGE_ARG,
+  VIDEO_TOOL_PREVIEW_SCHEME,
+} from './video-tool-types';
+import {
   clearForeignWalletSigner,
   importForeignWalletKeys,
   foreignWalletPublicKey,
@@ -81,6 +92,7 @@ import {
   dialog,
   net,
   shell,
+  webContents,
 } from 'electron';
 import electronIsDev from 'electron-is-dev';
 import windowStateKeeper from 'electron-window-state';
@@ -1155,6 +1167,7 @@ export class ElectronCapacitorApp {
           `--hub-p2p-seeds=${seedsB64}`,
           `--window-role=${MAIN_WINDOW_ROLE}`,
           `--hub-shell-url=${this.customScheme}://-`,
+          ...(videoTool.hasBinaries() ? [VIDEO_TOOL_PAGE_ARG] : []),
         ],
       },
     });
@@ -1166,6 +1179,7 @@ export class ElectronCapacitorApp {
     );
     installMainWindowFileCleanup(this.MainWindow.webContents, (contentsId) => {
       mainWindowFiles.revoke(contentsId);
+      videoTool.releaseOwner(contentsId);
       void qappFileSaves?.cleanup();
     });
     // Tab shortcuts typed in the Hub page or in a Q-App (did-attach-webview)
@@ -1542,7 +1556,7 @@ export function setupContentSecurityPolicy(
     object-src 'self';
     connect-src 'self' blob: ${frameSources.join(' ')};
     img-src 'self' data: blob: ${frameSources.join(' ')};
-    media-src 'self' blob: ${frameSources.join(' ')};  
+    media-src 'self' blob: ${VIDEO_TOOL_PREVIEW_SCHEME}: ${frameSources.join(' ')};  
     style-src 'self' 'unsafe-inline';
     font-src 'self' data:;
   `
@@ -1750,6 +1764,52 @@ registerPublishProfileIpc({
   checkSender: requireMainShellEvent,
   getFilePath: () => path.join(app.getPath('userData'), PUBLISH_PROFILES_FILE),
   onError: (error) => loggerError('Publish profiles', error),
+});
+/** Home's Video publisher: ffmpeg jobs for the main window. */
+export const videoTool = new VideoToolService({
+  userDataDir: () => app.getPath('userData'),
+  binDir: () =>
+    resolveFfmpegDir({
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      appPath: app.getAppPath(),
+    }),
+  emit: (ownerId, event) => {
+    const contents = webContents.fromId(ownerId);
+    if (contents && !contents.isDestroyed()) {
+      contents.send(VIDEO_TOOL_CHANNELS.jobEvent, event);
+    }
+  },
+  fetch: (url, init) => net.fetch(url, init),
+  // The node origins the main window's CSP connects to, and no others.
+  allowEndpoint: (endpoint) =>
+    isAllowedNodeEndpoint(
+      endpoint,
+      domainHolder.allowedDomains,
+      isLocalPrivateHost
+    ),
+  showSaveDialog: (options) => {
+    const mainWindow = myCapacitorApp?.getMainWindow?.();
+    return mainWindow && !mainWindow.isDestroyed()
+      ? dialog.showSaveDialog(mainWindow, options)
+      : dialog.showSaveDialog(options);
+  },
+  openPath: async (filePath) => {
+    await openLocalPath(filePath, shell);
+  },
+  showItemInFolder: (filePath) => shell.showItemInFolder(filePath),
+  showOpenDialog: (options) => {
+    const mainWindow = myCapacitorApp?.getMainWindow?.();
+    return mainWindow && !mainWindow.isDestroyed()
+      ? dialog.showOpenDialog(mainWindow, options)
+      : dialog.showOpenDialog(options);
+  },
+  log: (...args) => loggerWarn(...args),
+});
+registerVideoToolIpc({
+  ipcMain,
+  checkSender: requireMainShellEvent,
+  service: videoTool,
 });
 
 // Helper to get or create the shared settings directory

@@ -1,11 +1,12 @@
 import { ThemeProvider } from '@mui/material/styles';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { createStore, Provider } from 'jotai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 // Initialises the shared i18n instance so useTranslation resolves real strings.
 import '../../../i18n/i18n';
 import { userInfoAtom } from '../../../atoms/global';
 import { lightTheme } from '../../../styles/theme-light';
+import { createFakeVideoTool } from '../../../test/mocks/videoTool';
 import {
   HOME_EDIT_LAYOUT_EVENT,
   HOME_GROUP_ACTIVITY_VISIBLE_STORAGE_KEY,
@@ -62,6 +63,23 @@ describe('HomeLayoutSettings', () => {
     ];
     names.forEach((name) => expect(panelSwitch(name)).toBeChecked());
     expect(screen.getAllByRole('checkbox')).toHaveLength(names.length);
+  });
+
+  it('has a switch for the Video publisher only where Hub can convert videos', () => {
+    renderSettings();
+    expect(
+      screen.queryByRole('checkbox', { name: 'Video publisher' })
+    ).not.toBeInTheDocument();
+    cleanup();
+
+    window.videoTool = createFakeVideoTool();
+    try {
+      renderSettings();
+      fireEvent.click(panelSwitch('Video publisher'));
+      expect(stored().hidden).toEqual(['video']);
+    } finally {
+      delete window.videoTool;
+    }
   });
 
   it('starts from the switches kept for the whole PC', () => {

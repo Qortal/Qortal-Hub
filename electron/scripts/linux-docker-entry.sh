@@ -18,6 +18,7 @@ restore_host_ownership() {
     /workspace/electron/build
     /workspace/electron/dist
     /workspace/electron/resources/__pycache__
+    /workspace/electron/resources/ffmpeg
     /workspace/electron/resources/private-transport
     /workspace/electron/resources/reticulum
   )
@@ -134,6 +135,16 @@ NODE
 
 npm run bundle:reticulum
 
+# The Video publisher's ffmpeg and ffprobe, always built here, against this
+# image's glibc (a copy built on the host may need a newer one), with the
+# image's nasm, pkg-config, cmake, meson, ninja and zlib. --release stops
+# when the AV1 parts can't be built.
+echo "Building ffmpeg for Linux ${BUILD_ARCH}…"
+npm run build:ffmpeg -- --target "linux-${BUILD_ARCH}" --release
+FFMPEG_DIR="resources/ffmpeg/linux-${BUILD_ARCH}"
+verify_glibc_baseline "${FFMPEG_DIR}/ffmpeg" "Bundled ffmpeg"
+verify_glibc_baseline "${FFMPEG_DIR}/ffprobe" "Bundled ffprobe"
+
 # Snap/rpm are painful inside Docker; AppImage + deb cover most sharing.
 # Use one -c file only: electron-builder merges multiple -c paths incorrectly
 # (only the last path wins as extends), which dropped files/build/** and broke packaging.
@@ -159,5 +170,13 @@ if [[ ! -f "${PACKAGED_BETTER_SQLITE3}" ]]; then
   exit 1
 fi
 verify_glibc_baseline "${PACKAGED_BETTER_SQLITE3}" "Packaged better-sqlite3"
+
+for program in ffmpeg ffprobe; do
+  PACKAGED_PROGRAM="${UNPACKED_DIR}/resources/ffmpeg/linux-${BUILD_ARCH}/${program}"
+  if [[ ! -x "${PACKAGED_PROGRAM}" ]]; then
+    echo "Packaged ${program} was not found at ${PACKAGED_PROGRAM}" >&2
+    exit 1
+  fi
+done
 
 echo "Artifacts: electron/dist/ (installers + latest-linux.yml + *.blockmap for auto-update)"

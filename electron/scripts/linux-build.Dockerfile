@@ -16,6 +16,14 @@ RUN echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-
     ca-certificates \
     curl \
     git \
+    nasm \
+    pkg-config \
+    cmake \
+    meson \
+    ninja-build \
+    zlib1g-dev \
+    xz-utils \
+    bzip2 \
     gnupg \
     build-essential \
     python3 \

@@ -56,7 +56,8 @@ import {
   DEFAULT_API_PORT,
 } from './p2p-network';
 import { startChatManager, flushChatStore } from './chat';
-import { readAppSettings } from './setup';
+import { readAppSettings, videoTool } from './setup';
+import { VIDEO_TOOL_PREVIEW_SCHEME } from './video-tool-types';
 import {
   isReticulumSharedDaemonOwnedByAnotherLiveInstance,
   planReticulumAppQuit,
@@ -313,6 +314,11 @@ function performAppShutdown(reason: string): Promise<void> {
       loggerError('[Reticulum] Manager shutdown failed:', error);
     }
     try {
+      videoTool.shutdown();
+    } catch (error) {
+      loggerError('[VideoTool] Shutdown failed:', error);
+    }
+    try {
       await shutdownPrivateTransportSidecar();
     } catch (error) {
       loggerError('[PrivateTransport] Sidecar shutdown failed:', error);
@@ -560,6 +566,17 @@ protocol.registerSchemesAsPrivileged([
       stream: true,
     },
   },
+  {
+    // Home's Video publisher previews its converted files (with seeking).
+    scheme: VIDEO_TOOL_PREVIEW_SCHEME,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+    },
+  },
 ]);
 
 // Initialize our app. You can pass menu templates into the app here.
@@ -690,6 +707,17 @@ async function setupMultiInstanceUserData(
 
   // Set Content Security Policy
   setupContentSecurityPolicy(myCapacitorApp.getCustomURLScheme());
+
+  // Jobs live in memory only: whatever a previous run left is stale.
+  await videoTool.removeStaleJobs().catch((error) => {
+    loggerError('[VideoTool] Could not remove old job files:', error);
+  });
+  session.defaultSession.protocol.handle(VIDEO_TOOL_PREVIEW_SCHEME, (request) =>
+    videoTool.previewResponse(
+      request,
+      `${myCapacitorApp.getCustomURLScheme()}://-`
+    )
+  );
 
   for (const desktopAppOrigin of [
     `${capacitorRendererScheme}://-`,

@@ -45,6 +45,11 @@
       "to": "reticulum/mesh-network.passphrase"
     },
     {
+      "from": "resources/ffmpeg",
+      "to": "ffmpeg",
+      "filter": ["darwin-*/**/*"]
+    },
+    {
       "from": "resources/reticulum",
       "to": "reticulum",
       "filter": [
@@ -99,7 +104,7 @@
     "entitlements": "buildmac/entitlements.mac.plist",
     "entitlementsInherit": "buildmac/entitlements.mac.plist",
     "category": "public.app-category.utilities",
-    "x64ArchFiles": "Contents/Resources/reticulum/**/*",
+    "x64ArchFiles": "Contents/Resources/{reticulum,ffmpeg}/**/*",
     "target": ["dmg", "pkg"]
   },
 

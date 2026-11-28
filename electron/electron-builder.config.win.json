@@ -39,6 +39,11 @@
       "to": "reticulum/mesh-network.passphrase"
     },
     {
+      "from": "resources/ffmpeg",
+      "to": "ffmpeg",
+      "filter": ["win-x64/**/*"]
+    },
+    {
       "from": "resources/reticulum",
       "to": "reticulum",
       "filter": [

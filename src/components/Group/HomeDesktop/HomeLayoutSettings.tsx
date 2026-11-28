@@ -7,7 +7,9 @@ import { useTranslation } from 'react-i18next';
 import { userInfoAtom } from '../../../atoms/global';
 import { executeEvent } from '../../../utils/events';
 import { HOME_EDIT_LAYOUT_EVENT } from './homeDesktopConstants';
+import { isVideoPublisherAvailable } from '../../VideoPublisher/useVideoPublisher';
 import {
+  HOME_BOTTOM_PANEL_IDS,
   HOME_LAYOUT_DEFAULT,
   HOME_STACK_PANEL_IDS,
   HOME_TOP_PANEL_IDS,
@@ -33,7 +35,12 @@ type Props = {
 const PANEL_IDS: readonly HomePanelId[] = [
   ...HOME_TOP_PANEL_IDS,
   ...HOME_STACK_PANEL_IDS,
+  ...HOME_BOTTOM_PANEL_IDS,
 ];
+
+/** A window this Hub can't show has no switch (the browser build). */
+const isPanelAvailable = (id: HomePanelId) =>
+  id !== 'video' || isVideoPublisherAvailable();
 
 /**
  * The Modules tab of the account settings: a switch for each Home window,
@@ -68,6 +75,7 @@ export const HomeLayoutSettings = ({
     qortino: t('group:dashboard.qortino_module_desc'),
     status: t('group:dashboard.node_status_module_desc'),
     tools: t('group:dashboard.quick_tools_module_desc'),
+    video: t('group:dashboard.video_publisher_module_desc'),
     wallet: t('group:dashboard.wallet_activity_module_desc'),
     widgets: t('group:dashboard.widgets_module_desc'),
     workspace: t('group:dashboard.workspace_module_desc'),
@@ -103,7 +111,7 @@ export const HomeLayoutSettings = ({
   return (
     <Box sx={{ display: 'grid', gap: 1.4 }}>
       <Box sx={cardSx}>
-        {PANEL_IDS.map((id, index) => (
+        {PANEL_IDS.filter(isPanelAvailable).map((id, index) => (
           <Fragment key={id}>
             {index > 0 ? (
               <Box sx={{ borderTop: `1px solid ${divider}`, mx: 1.35 }} />

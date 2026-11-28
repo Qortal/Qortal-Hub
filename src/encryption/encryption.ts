@@ -6,6 +6,10 @@ import {
   encryptDataGroup,
   objectToBase64,
 } from '../qdn/encryption/group-encryption.ts';
+import {
+  isRetryableStatus,
+  NodeAnswerError,
+} from '../qdn/publish/nodeAnswer.ts';
 import { publishData } from '../qdn/publish/publish.ts';
 import { getData } from '../utils/chromeStorage.ts';
 import { RequestQueueWithPromise } from '../utils/queue/queue.ts';
@@ -49,13 +53,19 @@ export async function getAllUserNames() {
   return nameData.map((item) => item.name);
 }
 
+/** A busy node (5xx, 408, 429) is worth another try; anything else isn't. */
+const lookupFailed = (message: string, response?: Response) =>
+  response && isRetryableStatus(response.status)
+    ? new NodeAnswerError(message, response.status)
+    : new Error(message);
+
 async function getQortBalanceInfo() {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
   const validApi = await getBaseApi();
   const response = await fetch(validApi + '/addresses/balance/' + address);
 
-  if (!response?.ok) throw new Error('0 QORT in your balance');
+  if (!response?.ok) throw lookupFailed('0 QORT in your balance', response);
   return await response.json();
 }
 
@@ -66,7 +76,7 @@ async function getArbitraryPublishFee() {
     `${validApi}/transactions/unitfee?txType=ARBITRARY&timestamp=${timestamp}`
   );
 
-  if (!response?.ok) throw new Error('Unable to get fee');
+  if (!response?.ok) throw lookupFailed('Unable to get fee', response);
   const fee = await response.json();
   return Number(fee) / 1e8;
 }
@@ -322,9 +332,12 @@ export const publishOnQDN = async ({
   category,
   data,
   description,
+  filename,
   identifier,
   name,
+  onProgress,
   service,
+  signal,
   tag1,
   tag2,
   tag3,
@@ -332,6 +345,26 @@ export const publishOnQDN = async ({
   tag5,
   title,
   uploadType = 'base64',
+}: {
+  category?: string;
+  data: unknown;
+  description?: string;
+  /** The file name the node stores the resource under. */
+  filename?: string;
+  identifier?: string;
+  name?: string;
+  /** Upload progress: chunks sent so far, of all. */
+  onProgress?: (done: number, total: number) => void;
+  service: string;
+  /** Stops the publish between chunks and before it's signed. */
+  signal?: AbortSignal;
+  tag1?: string;
+  tag2?: string;
+  tag3?: string;
+  tag4?: string;
+  tag5?: string;
+  title?: string;
+  uploadType?: 'base64' | 'file' | 'zip';
 }) => {
   const [balance, fee] = await Promise.all([
     getQortBalanceInfo(),
@@ -359,6 +392,7 @@ export const publishOnQDN = async ({
       registeredName,
       data,
       file: data,
+      filename,
       service,
       identifier,
       uploadType,
@@ -366,6 +400,8 @@ export const publishOnQDN = async ({
       title,
       description,
       category,
+      onProgress,
+      signal,
       tag1,
       tag2,
       tag3,

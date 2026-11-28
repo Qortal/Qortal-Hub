@@ -52,6 +52,7 @@
     "bundle:reticulum": "node ./scripts/run-build-rnsd-frozen.mjs",
     "bundle:reticulum-venv": "node ./scripts/bundle-reticulum-runtime.mjs",
     "build:private-transport": "node ./scripts/build-private-transport.mjs",
+    "build:ffmpeg": "node ./scripts/build-ffmpeg.mjs",
     "generate:mesh-network-identity": "python3 -c \"import RNS; RNS.Identity().to_file('resources/mesh-network.identity')\"",
     "build:qapp-preload": "node ./scripts/build-qapp-preload.mjs",
     "test:qapp-binary": "tsc && npm run build:qapp-preload && electron ./scripts/test-qapp-binary.cjs",

@@ -509,8 +509,8 @@ describe("a Home layout taken in, and the Workspace's copies that hold something
   });
 
   it("keeps one a newer device's layout doesn't list, where it was when that's free", () => {
-    // Moved to the bottom, under the feed.
-    savedHere(['k1'], 'feed');
+    // Moved to the bottom, under the Video publisher (the last window).
+    savedHere(['k1'], 'video');
     holdHere({ k1: MUSIC });
     const was = placeOf(homeWorkspaceCopyId('k1'));
 

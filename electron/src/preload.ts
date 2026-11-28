@@ -15,6 +15,8 @@ import {
   type GroupCallJoinIpcArguments,
 } from './group-call-ipc-contract';
 import { isMainWindowUrl } from './main-window-policy';
+import { VIDEO_TOOL_CHANNELS, VIDEO_TOOL_PAGE_ARG } from './video-tool-types';
+import type { VideoJobEvent, VideoToolBridge } from './video-tool-types';
 import { openExternalHttp } from './desktop-shell';
 import { subscribeTabShortcuts, type TabShortcutAction } from './tab-shortcuts';
 
@@ -1072,6 +1074,83 @@ try {
       ipcRenderer.invoke('file:deleteFile', filePath),
   });
 
+  // Home's Video publisher. Files cross as paths to main only: the page gets
+  // ids back, never paths.
+  const videoTool: VideoToolBridge = {
+    status: () => ipcRenderer.invoke(VIDEO_TOOL_CHANNELS.status),
+    addFiles: (files: File[], relativePaths?: (string | undefined)[]) => {
+      const picked = Array.from(files ?? []).flatMap((file, index) => {
+        let filePath = '';
+        try {
+          filePath = webUtils.getPathForFile(file);
+        } catch {
+          // Not a file from the disk (made in the page): skipped.
+        }
+        return filePath
+          ? [
+              {
+                path: filePath,
+                name: file.name,
+                size: file.size,
+                relativePath:
+                  relativePaths?.[index] ||
+                  file.webkitRelativePath ||
+                  undefined,
+              },
+            ]
+          : [];
+      });
+      return ipcRenderer.invoke(VIDEO_TOOL_CHANNELS.addFiles, picked);
+    },
+    forgetSource: (sourceId) =>
+      ipcRenderer.invoke(VIDEO_TOOL_CHANNELS.forgetSource, sourceId),
+    probe: (sourceId) =>
+      ipcRenderer.invoke(VIDEO_TOOL_CHANNELS.probe, sourceId),
+    frames: (target, options) =>
+      ipcRenderer.invoke(VIDEO_TOOL_CHANNELS.frames, target, options),
+    readSubtitleFile: (sourceId, encoding) =>
+      ipcRenderer.invoke(
+        VIDEO_TOOL_CHANNELS.readSubtitleFile,
+        sourceId,
+        encoding
+      ),
+    startJob: (spec) => ipcRenderer.invoke(VIDEO_TOOL_CHANNELS.startJob, spec),
+    cancelJob: (jobId) =>
+      ipcRenderer.invoke(VIDEO_TOOL_CHANNELS.cancelJob, jobId),
+    pauseJob: (jobId) =>
+      ipcRenderer.invoke(VIDEO_TOOL_CHANNELS.pauseJob, jobId),
+    resumeJob: (jobId) =>
+      ipcRenderer.invoke(VIDEO_TOOL_CHANNELS.resumeJob, jobId),
+    remakeSubtitles: (jobId, subtitles) =>
+      ipcRenderer.invoke(VIDEO_TOOL_CHANNELS.remakeSubtitles, jobId, subtitles),
+    listJobs: () => ipcRenderer.invoke(VIDEO_TOOL_CHANNELS.listJobs),
+    releaseJob: (jobId) =>
+      ipcRenderer.invoke(VIDEO_TOOL_CHANNELS.releaseJob, jobId),
+    readText: (jobId, file) =>
+      ipcRenderer.invoke(VIDEO_TOOL_CHANNELS.readText, jobId, file),
+    uploadChunk: (request) =>
+      ipcRenderer.invoke(VIDEO_TOOL_CHANNELS.uploadChunk, request),
+    buildOnNode: (request) =>
+      ipcRenderer.invoke(VIDEO_TOOL_CHANNELS.buildOnNode, request),
+    saveOutput: (jobId, suggestedName) =>
+      ipcRenderer.invoke(VIDEO_TOOL_CHANNELS.saveOutput, jobId, suggestedName),
+    openSaved: (savedId, how) =>
+      ipcRenderer.invoke(VIDEO_TOOL_CHANNELS.openSaved, savedId, how),
+    pickFiles: (request) =>
+      ipcRenderer.invoke(VIDEO_TOOL_CHANNELS.pickFiles, request),
+    onJobEvent: (listener) => {
+      const handler = (_event: unknown, payload: VideoJobEvent) =>
+        listener(payload);
+      ipcRenderer.on(VIDEO_TOOL_CHANNELS.jobEvent, handler);
+      return () => {
+        ipcRenderer.removeListener(VIDEO_TOOL_CHANNELS.jobEvent, handler);
+      };
+    },
+  };
+  // Only when main found ffmpeg: a Hub built without it shows no window.
+  if (process.argv.includes(VIDEO_TOOL_PAGE_ARG)) {
+    contextBridge.exposeInMainWorld('videoTool', videoTool);
+  }
   // Saved publish profiles (userData/publish-profiles.json), this PC only.
   contextBridge.exposeInMainWorld('publishProfiles', {
     get: (key: unknown) => ipcRenderer.invoke('publishProfiles:get', key),
