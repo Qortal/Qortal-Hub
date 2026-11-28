@@ -584,6 +584,45 @@ describe('transferAsset', () => {
   });
 });
 
+describe('getAssetBalanceInfo', () => {
+  /** A node that answers `body` to /assets/balances. */
+  function stubAssetBalances(body: unknown, ok = true) {
+    const fetchMock = vi.fn(async (_url: string) => response(body, ok));
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  const row = (balance: string) => ({
+    address: self.address,
+    assetId: 5,
+    balance,
+    assetName: 'TESTASSET',
+  });
+
+  it.each(['0.00000001', '900.00000000', '90071992.54740993'])(
+    'gives the decimal text the node answers, unrounded: %s',
+    async (balance) => {
+      const fetchMock = stubAssetBalances([row(balance)]);
+      await expect(bg.getAssetBalanceInfo(5)).resolves.toBe(balance);
+      expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+        `${NODE}/assets/balances?address=${self.address}&assetid=5&ordering=ASSET_BALANCE_ACCOUNT&limit=1`,
+      ]);
+    }
+  );
+
+  it('gives undefined for an asset the account never held', async () => {
+    stubAssetBalances([]);
+    await expect(bg.getAssetBalanceInfo(5)).resolves.toBeUndefined();
+  });
+
+  it('throws when the node refuses the request', async () => {
+    stubAssetBalances({ error: 601, message: 'invalid asset ID' }, false);
+    await expect(bg.getAssetBalanceInfo(5)).rejects.toThrow(
+      'Cannot fetch asset balance'
+    );
+  });
+});
+
 describe('resolveRecipient', () => {
   it('returns an address as given, without asking the node', async () => {
     const fetchMock = stubNode();

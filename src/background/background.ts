@@ -709,7 +709,14 @@ export async function getBalanceInfo() {
   return data;
 }
 
-export async function getAssetBalanceInfo(assetId: number) {
+/**
+ * The account's balance of an asset, as Core writes it: decimal text such as
+ * "12.50000000". `undefined` when the account never held the asset. Compare it
+ * with `balanceToAtomic`, which reads it without rounding.
+ */
+export async function getAssetBalanceInfo(
+  assetId: number
+): Promise<string | undefined> {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
   const validApi = await getBaseApi();
@@ -720,7 +727,7 @@ export async function getAssetBalanceInfo(assetId: number) {
 
   if (!response?.ok) throw new Error('Cannot fetch asset balance');
   const data = await response.json();
-  return +data?.[0]?.balance;
+  return data?.[0]?.balance;
 }
 
 export async function getAssetInfo(assetId: number) {

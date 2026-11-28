@@ -14,7 +14,8 @@ import {
 // publish. Same factories as the other get.ts tests (see ./common.ts), with
 // the real Base58 and SHA-256 for the address checks, and an i18n stub that
 // keeps the parameters so the dialog text can be checked. The tests of names
-// with invisible characters use the real resolveRecipient from background.ts.
+// with invisible characters use the real resolveRecipient from background.ts,
+// and those of the asset balance use its real getAssetBalanceInfo.
 
 // src/test/setup.ts stubs asmcrypto out.
 vi.mock('asmcrypto.js/asmcrypto.all.js', async (importOriginal) =>
@@ -105,6 +106,7 @@ vi.mock('../../chatComputePow.worker.js?worker', () => ({
   },
 }));
 
+import { SecureStoragePlugin } from '@evva/capacitor-secure-storage-plugin';
 import enAuth from '../../i18n/locales/en/auth.json';
 import enCore from '../../i18n/locales/en/core.json';
 import enQuestion from '../../i18n/locales/en/question.json';
@@ -170,11 +172,15 @@ const OPENED_APP = { name: 'Opened-App', service: 'APP', tabId: 4 };
 type Background = typeof import('../../background/background');
 /** The real resolveRecipient; the module mock above stands in for it. */
 let realResolveRecipient: Background['resolveRecipient'];
+/** The real getAssetBalanceInfo, for the tests that run it against a node. */
+let realGetAssetBalanceInfo: Background['getAssetBalanceInfo'];
 
 beforeAll(async () => {
-  realResolveRecipient = (
-    await vi.importActual<Background>('../../background/background')
-  ).resolveRecipient;
+  const background = await vi.importActual<Background>(
+    '../../background/background'
+  );
+  realResolveRecipient = background.resolveRecipient;
+  realGetAssetBalanceInfo = background.getAssetBalanceInfo;
 });
 
 /** Answers every approval request and records what it showed. */
@@ -232,6 +238,56 @@ function stubNodeWithNamesOf(owner: string) {
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
 }
+
+/**
+ * A node that answers `body` to /assets/balances, read by the real
+ * getAssetBalanceInfo for the signed-in account.
+ */
+function stubAssetBalances(body: unknown) {
+  vi.mocked(getAssetBalanceInfo).mockImplementation(realGetAssetBalanceInfo);
+  const storage = vi.mocked(SecureStoragePlugin.get);
+  const emptyStorage = storage.getMockImplementation();
+  storage.mockImplementation(async ({ key }) => ({
+    value:
+      key === 'walletInfo' ? btoa(JSON.stringify({ address0: ACCOUNT_S })) : '',
+  }));
+  onTestFinished(() => {
+    if (emptyStorage) storage.mockImplementation(emptyStorage);
+  });
+  const fetchMock = vi.fn(async (url: string) => {
+    if (!String(url).includes('/assets/balances?')) {
+      throw new Error(`unexpected request ${url}`);
+    }
+    const json = async () => body;
+    const text = async () => JSON.stringify(body);
+    return { ok: true, status: 200, json, text, clone: () => ({ json, text }) };
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
+/** One row of /assets/balances, as Core writes it: a balance in decimal text. */
+const assetBalanceRow = (balance: unknown) => ({
+  address: ACCOUNT_S,
+  assetId: 5,
+  balance,
+  assetName: 'TESTASSET',
+});
+
+/** Answers of /assets/balances that hold no balance Hub can read. */
+const unreadableAssetBalances: [string, unknown][] = [
+  ['no row, as Core answers for an asset never held', []],
+  ['a row without a balance', [assetBalanceRow(undefined)]],
+  ['null', [assetBalanceRow(null)]],
+  ['empty text', [assetBalanceRow('')]],
+  ['text that is not a number', [assetBalanceRow('abc')]],
+  ['NaN', [assetBalanceRow('NaN')]],
+  ['Infinity', [assetBalanceRow('Infinity')]],
+  ['scientific notation', [assetBalanceRow('1e12')]],
+  ['a negative balance', [assetBalanceRow('-100.00000000')]],
+  ['an error object', { error: 601, message: 'invalid asset ID' }],
+  ['null for the whole list', null],
+];
 
 const nameLookups = (fetchMock: ReturnType<typeof stubNodeWithNamesOf>) =>
   fetchMock.mock.calls
@@ -293,11 +349,8 @@ beforeEach(() => {
   vi.mocked(sendQortFee).mockResolvedValue(FEE as unknown as number);
   vi.mocked(getFee).mockResolvedValue({ timestamp: 1, fee: FEE });
   vi.mocked(getBalanceInfo).mockResolvedValue(100);
-  // Atomic units, as the real `getAssetBalanceInfo` reads /assets/balances.
-  // This was `100` — one micro-unit of the asset — which only passed because the
-  // asset-balance guard compared atomic against decimal text and so never fired.
-  // A realistic balance keeps that guard live instead of silently dead.
-  vi.mocked(getAssetBalanceInfo).mockResolvedValue(1e12);
+  // Decimal text, as Core answers /assets/balances: 10000 units.
+  vi.mocked(getAssetBalanceInfo).mockResolvedValue('10000.00000000');
   vi.mocked(getAssetInfo).mockResolvedValue({ name: 'TESTASSET' });
   vi.mocked(resolveRecipient).mockImplementation(async (value: unknown) => {
     if (value === 'Recipient B')
@@ -562,7 +615,7 @@ describe('TRANSFER_ASSET', () => {
 
   it('transfers 100000000 units, an amount the builder signs exactly', async () => {
     const payloads = answerPrompts({ accepted: true });
-    vi.mocked(getAssetBalanceInfo).mockResolvedValue(1e10);
+    vi.mocked(getAssetBalanceInfo).mockResolvedValue('10000000000.00000000');
     vi.mocked(transferAsset).mockResolvedValue({ signature: 'SIG' });
 
     await expect(
@@ -596,6 +649,60 @@ describe('TRANSFER_ASSET', () => {
     expect(getAssetBalanceInfo).not.toHaveBeenCalled();
     expect(transferAsset).not.toHaveBeenCalled();
   });
+
+  // [the amount, the balance, whether it funds the amount]
+  const transferBalances: [string, string, boolean][] = [
+    ['2.5', '2.50000000', true],
+    ['2.5', '900.00000000', true],
+    ['2.5', '2.49999999', false],
+    ['2.5', '0.00000000', false],
+    ['0.00000001', '0.00000001', true],
+    ['0.00000002', '0.00000001', false],
+    // Above 2^53 of the smallest unit, where a float no longer holds each one.
+    ['100000000.1', '100000000.10000001', true],
+    ['100000000.1', '100000000.09999999', false],
+  ];
+
+  it.each(transferBalances)(
+    'reads an amount of %s against a balance of %s to the last digit',
+    async (amount, balance, funded) => {
+      const payloads = answerPrompts({ accepted: true });
+      stubAssetBalances([assetBalanceRow(balance)]);
+      vi.mocked(transferAsset).mockResolvedValue({ signature: 'SIG' });
+      const outcome = await transferAssetRequest(
+        { amount, assetId: 5, recipient: 'Recipient B' },
+        false,
+        OPENED_APP
+      ).catch((error: Error) => error.message);
+
+      expect(outcome).toEqual(
+        funded
+          ? { signature: 'SIG' }
+          : 'question:message.error.insufficient_balance'
+      );
+      expect(payloads).toHaveLength(funded ? 1 : 0);
+      expect(transferAsset).toHaveBeenCalledTimes(funded ? 1 : 0);
+    }
+  );
+
+  it.each(unreadableAssetBalances)(
+    'is refused when the asset balance cannot be read, before asking: %s',
+    async (_label, body) => {
+      const payloads = answerPrompts({ accepted: true });
+      stubAssetBalances(body);
+
+      await expect(
+        transferAssetRequest(
+          { amount: '2.5', assetId: 5, recipient: 'Recipient B' },
+          false,
+          OPENED_APP
+        )
+      ).rejects.toThrow(/^question:message\.error\.insufficient_balance$/);
+
+      expect(payloads).toHaveLength(0);
+      expect(transferAsset).not.toHaveBeenCalled();
+    }
+  );
 
   it('never shows a recipient that does not resolve', async () => {
     const payloads = answerPrompts({ accepted: true });
@@ -788,10 +895,8 @@ describe('MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA', () => {
       return { signature: 'PAY' };
     });
     // This case is about a large amount surviving the round trip, so the balance
-    // must fund it. 1e10 atomic is 100 whole units, which the 100000000.1-unit
-    // payment below exceeds; it only passed before because the asset-balance
-    // guard compared atomic against decimal and could never fire.
-    vi.mocked(getAssetBalanceInfo).mockResolvedValue(1e20);
+    // must fund it.
+    vi.mocked(getAssetBalanceInfo).mockResolvedValue('200000000.00000000');
     const large = {
       ...request,
       assetId: 5,
@@ -826,19 +931,113 @@ describe('MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA', () => {
     expect(transferAsset).toHaveBeenCalledTimes(2);
   });
 
-  it('refuses a multi-payment the asset balance cannot fund, before asking', async () => {
-    const payloads = answerPrompts({ accepted: true });
-    // The request totals 3.25 units (1 + 2.25). The node answers /assets/balances
-    // in atomic units, so 100000000 is 1 whole unit: not enough for 3.25.
-    vi.mocked(getAssetBalanceInfo).mockResolvedValue(100000000);
+  // The request totals 3.25 units (1 + 2.25).
+  it.each(['0.00000000', '1.00000000', '3.00000000', '3.24999999'])(
+    'refuses a multi-payment an asset balance of %s cannot fund, before asking',
+    async (balance) => {
+      const payloads = answerPrompts({ accepted: true });
+      const fetchMock = stubAssetBalances([assetBalanceRow(balance)]);
 
-    await expect(
-      multiPaymentWithPrivateData(request, false, OPENED_APP)
-    ).rejects.toThrow('question:message.error.insufficient_balance');
+      await expect(
+        multiPaymentWithPrivateData(
+          { ...request, assetId: 5 },
+          false,
+          OPENED_APP
+        )
+      ).rejects.toThrow(/^question:message\.error\.insufficient_balance$/);
 
-    expect(payloads).toHaveLength(0);
-    expect(transferAsset).not.toHaveBeenCalled();
-  });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(String(fetchMock.mock.calls[0][0])).toContain(
+        `/assets/balances?address=${ACCOUNT_S}&assetid=5&`
+      );
+      expect(payloads).toHaveLength(0);
+      expect(transferAsset).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['3.25000000', '3.25000001', '900.00000000'])(
+    'sends a multi-payment an asset balance of %s funds',
+    async (balance) => {
+      const payloads = answerPrompts({ accepted: true });
+      stubAssetBalances([assetBalanceRow(balance)]);
+      vi.mocked(transferAsset).mockResolvedValue({ signature: 'PAY' });
+
+      await expect(
+        multiPaymentWithPrivateData(
+          { ...request, assetId: 5 },
+          false,
+          OPENED_APP
+        )
+      ).resolves.toEqual(['PAY', 'PUBLISH_SIG', 'PAY', 'PUBLISH_SIG']);
+
+      expect(payloads).toHaveLength(1);
+      expect(transferAsset).toHaveBeenCalledTimes(2);
+    }
+  );
+
+  // [the two amounts, the balance, whether it funds them]
+  const fractionalBalances: [string, string, string, boolean][] = [
+    ['0.00000001', '0.00000001', '0.00000002', true],
+    ['0.00000001', '0.00000001', '0.00000001', false],
+    // As floats, 0.1 + 0.2 is more than 0.3.
+    ['0.1', '0.2', '0.30000000', true],
+    ['0.1', '0.2', '0.29999999', false],
+    // Above 2^53 of the smallest unit, where a float no longer holds each one.
+    ['90071992', '0.54740993', '90071992.54740993', true],
+    ['90071992', '0.54740994', '90071992.54740993', false],
+    ['10000000000', '0.00000001', '10000000000.00000001', true],
+    ['10000000000', '0.00000001', '10000000000.00000000', false],
+  ];
+
+  it.each(fractionalBalances)(
+    'reads %s + %s against a balance of %s to the last digit',
+    async (first, second, balance, funded) => {
+      const payloads = answerPrompts({ accepted: true });
+      stubAssetBalances([assetBalanceRow(balance)]);
+      vi.mocked(transferAsset).mockResolvedValue({ signature: 'PAY' });
+      const outcome = await multiPaymentWithPrivateData(
+        {
+          assetId: 5,
+          payments: [
+            { recipient: 'Recipient B', amount: first },
+            { recipient: 'Recipient D', amount: second },
+          ],
+          additionalArbitraryTxsWithoutPayment: [
+            { service: 'DOCUMENT_PRIVATE', identifier: 'all', base64: 'Qw==' },
+          ],
+        },
+        false,
+        OPENED_APP
+      ).catch((error: Error) => error.message);
+
+      expect(outcome).toEqual(
+        funded
+          ? ['PAY', 'PAY', 'PUBLISH_SIG']
+          : 'question:message.error.insufficient_balance'
+      );
+      expect(payloads).toHaveLength(funded ? 1 : 0);
+      expect(transferAsset).toHaveBeenCalledTimes(funded ? 2 : 0);
+    }
+  );
+
+  it.each(unreadableAssetBalances)(
+    'refuses a multi-payment when the asset balance cannot be read, before asking: %s',
+    async (_label, body) => {
+      const payloads = answerPrompts({ accepted: true });
+      stubAssetBalances(body);
+
+      await expect(
+        multiPaymentWithPrivateData(
+          { ...request, assetId: 5 },
+          false,
+          OPENED_APP
+        )
+      ).rejects.toThrow(/^question:message\.error\.insufficient_balance$/);
+
+      expect(payloads).toHaveLength(0);
+      expect(transferAsset).not.toHaveBeenCalled();
+    }
+  );
 
   it('passes the first failure through when nothing was sent', async () => {
     answerPrompts({ accepted: true });
