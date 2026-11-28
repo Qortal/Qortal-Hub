@@ -8,6 +8,8 @@ offers what is under the pointer:
 - **A picture:** save it, copy it, or copy it as a Qortal link for Q-Chat.
 - **A video:** save it, copy or save its frame, and picture in picture. A
   sound gets "Save sound as…".
+- **A Qortal name or address:** "Look up", which opens Hub's user lookup
+  (see [Names and addresses](#names-and-addresses)).
 - **Text:**
   - in a box: editing and spelling suggestions;
   - selected: copy, "Look up" for a name or address, and "Ask Qortino" (only
@@ -42,6 +44,62 @@ shows a menu of its own.
 The menu acts only on the user's click in it. An app can't open it or choose
 an item, and what the menu reads from the page is checked in Hub's main
 process (`electron/src/qapp-context-menu.ts`).
+
+## Names and addresses
+
+"Look up “<name>”" opens Hub's user lookup for a Qortal name or address the
+app shows at the right-click. Hub takes it from, in this order:
+
+1. **A profile picture** right-clicked: a picture loaded from the app's node
+   at `/arbitrary/THUMBNAIL/<name>/qortal_avatar`, the address apps show a
+   name's avatar from (Core's `GET_QDN_RESOURCE_URL` gives the same one).
+2. **The text selected**, when it can be a name or an address (a leading `@`
+   and a sentence's punctuation at its end are left out). On macOS a
+   right-click first selects the word under it, or a link's whole text: a
+   selection that is part of a name found there (below), or holds it, stands
+   for that name.
+3. **An attribute on the element right-clicked**: `data-qortal-name` for a
+   name, `data-qortal-address` for an address.
+4. **Text under the pointer**: an address written out, or a name written in
+   the same row, card or header as a profile picture of that name, also as
+   `@name` or inside a sentence, as a whole word (not inside a longer one,
+   such as `Name_2`). When one name is part of another written there, the
+   longer one.
+5. **The element right-clicked, when the pointer isn't on its own text**: a
+   layer laid over it, such as a person's link stretched over the whole card
+   with the picture (`::after` with `position: absolute; inset: 0`), or a
+   part of it with no text. Its own text counts when it is short (up to 80
+   characters, nothing typed into a field) and is an address, or names one
+   profile picture beside it.
+6. **An attribute on an element it is in**, such as a post marked with its
+   author.
+
+Rules 3 to 6 don't apply in a box typed into.
+
+"Beside a profile picture" means in the nearest element around the text that
+holds one: one person's row, card or header, up to four elements out, never a
+list of people. A place for a person's picture with none loaded in it (the
+letter shown instead, in MUI's `Avatar` or an element with `data-avatar`)
+ends the search: further out are other people's rows.
+
+Text alone isn't taken for a name: most short words are registered names on
+Qortal (Home, Reply, Share, Music, Like…), so a menu that asked the node
+about every word would offer "Look up" on nearly every button. A name the app
+shows without a profile picture beside it can be selected and looked up, or
+the app can mark it:
+
+```html
+<div class="author" data-qortal-name="Publisher">
+  <span>Publisher</span>
+</div>
+```
+
+The attribute gives an app nothing it can't already do: `OPEN_USER_LOOKUP`
+opens the same lookup for any name. Hub's main process checks every name
+before offering it, the text selected too: 3 to 40 bytes on one line, taken
+as it is, none of `/ \ ? # % ;`, no space but a plain one, and none of the
+characters Hub itself takes for hidden ones (`src/utils/hasInvisibleCharacters.ts`).
+An address must pass its own checksum.
 
 ## Spelling
 

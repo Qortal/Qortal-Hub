@@ -202,14 +202,24 @@ export type QAppPictureAt = {
 };
 
 /**
+ * A Qortal name or address the app shows at the right-click, for "Look up":
+ * one the app puts on an element (data-qortal-name, data-qortal-address), or
+ * one written as text there (an address, or the name of a profile picture
+ * beside it).
+ */
+export type QAppNameAt = { kind: 'name' | 'address'; value: string };
+
+/**
  * What the app shows at the right-click besides what Chromium names: a
- * picture or a video (at most one of them), and a link not in an <a> (an
- * attribute, a link written as text, a box showing one).
+ * picture or a video (at most one of them), a link not in an <a> (an
+ * attribute, a link written as text, a box showing one), and a Qortal name
+ * or address.
  */
 export type QAppFoundAt = {
   video: QAppVideoAt | null;
   picture: QAppPictureAt | null;
   link: string | null;
+  name: QAppNameAt | null;
 };
 
 /** What the app's preload offers main (QAPP_MENU_GUEST_KEY). */

@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { EventEmitter } from 'events';
 import path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -7,18 +8,22 @@ import {
   MENU_TTL_MS,
   QAppContextMenus,
   appPageLink,
+  avatarName,
   browserLink,
   cleanFileName,
   copyableLink,
   elementText,
   hubLink,
   isLinkedFile,
+  isQortalAddress,
+  lookUpName,
   lookUpText,
   menuItemsFor,
   openableLink,
   pictureEmbedLink,
   qortinoText,
   readElementInfo,
+  readFoundName,
   registerQAppMenuIpc,
   shownPageLink,
   LOOKUP_MS,
@@ -81,6 +86,29 @@ const QORTINO_SET_UP = { devMode: false, qortino: true };
 
 const actions = (items: ReturnType<typeof menuItemsFor>) =>
   items.map((item) => ('separator' in item ? '|' : item.action));
+
+const BASE58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+const sha256 = (data: Buffer) => createHash('sha256').update(data).digest();
+/**
+ * A Qortal address as Core makes one from a public key's 20-byte hash: its
+ * first byte (58, the Q), the hash, and 4 bytes checking them.
+ */
+const addressFrom = (hash: Buffer, version = 58) => {
+  const body = Buffer.concat([Buffer.from([version]), hash]);
+  const whole = Buffer.concat([body, sha256(sha256(body)).subarray(0, 4)]);
+  let number = BigInt(`0x${whole.toString('hex')}`);
+  let text = '';
+  while (number > BigInt(0)) {
+    text = BASE58[Number(number % BigInt(58))] + text;
+    number /= BigInt(58);
+  }
+  return text;
+};
+const ADDRESS = addressFrom(Buffer.alloc(20, 7));
+/** Shaped as an address, but its last bytes don't check it. */
+const MADE_UP_ADDRESS = 'QPubsherAddrxyz123456789ABCDEFGHJK';
+const avatarOf = (name: string) =>
+  `${NODE}/arbitrary/THUMBNAIL/${encodeURIComponent(name)}/qortal_avatar?async=true`;
 
 class FakeSession extends EventEmitter {
   words: string[] = [];
@@ -521,6 +549,7 @@ describe('links, names and questions the menu hands on', () => {
       'a\\b',
       'name?x',
       'name#x',
+      'name;x',
       '50%25',
       'a‮b',
       'two\nlines',
@@ -529,6 +558,117 @@ describe('links, names and questions the menu hands on', () => {
       42,
     ]) {
       expect(lookUpText(text)).toBeNull();
+    }
+  });
+
+  it('takes a name an app gives as it is, with the same rules', () => {
+    expect(lookUpName('Publisher Name')).toBe('Publisher Name');
+    // Nothing is left out: "Wow!" is another name than "Wow", as "@x" is.
+    expect(lookUpName('Wow!')).toBe('Wow!');
+    expect(lookUpName('@Publisher')).toBe('@Publisher');
+    for (const value of [
+      ' Publisher',
+      'Publisher ',
+      'ab',
+      'x'.repeat(41),
+      'a/b',
+      'name?x',
+      'name#x',
+      'name;x',
+      '50%',
+      'a\u202eb',
+      'a\u200bb',
+      'two\nlines',
+      'too  spaced',
+      '...',
+      42,
+      null,
+    ]) {
+      expect(lookUpName(value)).toBeNull();
+    }
+  });
+
+  it('knows a Qortal address by the check in its last bytes', () => {
+    expect(ADDRESS).toMatch(/^Q[1-9A-HJ-NP-Za-km-z]{33}$/);
+    expect(isQortalAddress(ADDRESS)).toBe(true);
+    // One character changed: the check no longer holds.
+    const changed = `${ADDRESS.slice(0, 9)}${ADDRESS[9] === 'a' ? 'b' : 'a'}${ADDRESS.slice(10)}`;
+    expect(isQortalAddress(changed)).toBe(false);
+    for (const value of [
+      MADE_UP_ADDRESS,
+      `${ADDRESS}x`,
+      ADDRESS.slice(1),
+      `q${ADDRESS.slice(1)}`,
+      ` ${ADDRESS}`,
+      42,
+      null,
+    ]) {
+      expect(isQortalAddress(value)).toBe(false);
+    }
+  });
+
+  it('takes no name with what Hub itself calls hidden, nor other spaces than a plain one', () => {
+    for (const name of [
+      'Publisher\u2800', // Braille blank, used for look-alike names
+      'Publisher\u3164', // Hangul filler
+      'Pub\u00adlisher', // soft hyphen
+      'Pub\u2060lisher', // word joiner
+      'Pub\u061clisher', // Arabic letter mark
+      'Publisher\u2028Name', // line separator
+      'Publisher\u2029Name', // paragraph separator
+      'Publisher\u00a0Name', // no-break space: the menu would show a space
+      'Publisher\tName',
+    ]) {
+      expect(lookUpName(name)).toBeNull();
+      expect(lookUpText(name)).toBeNull();
+    }
+  });
+
+  it("checks the name or address the app's preload found", () => {
+    expect(readFoundName({ kind: 'name', value: 'Publisher' })).toBe(
+      'Publisher'
+    );
+    expect(readFoundName({ kind: 'address', value: ADDRESS })).toBe(ADDRESS);
+    for (const found of [
+      { kind: 'address', value: 'Publisher' },
+      { kind: 'address', value: MADE_UP_ADDRESS },
+      { kind: 'name', value: '../admin/stop' },
+      { kind: 'name', value: ' Publisher' },
+      { kind: 'group', value: 'Publisher' },
+      { value: 'Publisher' },
+      'Publisher',
+      null,
+    ]) {
+      expect(readFoundName(found)).toBeNull();
+    }
+  });
+
+  it("reads the name a profile picture from the app's node is of", () => {
+    expect(
+      avatarName(`${NODE}/arbitrary/THUMBNAIL/Publisher/qortal_avatar`, NODE)
+    ).toBe('Publisher');
+    expect(avatarName(avatarOf('Publisher Name'), NODE)).toBe('Publisher Name');
+    expect(
+      avatarName(`${NODE}/arbitrary/THUMBNAIL/Wow!/qortal_avatar`, NODE)
+    ).toBe('Wow!');
+    for (const url of [
+      // Another site's picture at the same path.
+      'http://127.0.0.1:9999/arbitrary/THUMBNAIL/Publisher/qortal_avatar',
+      // Other pictures of the name.
+      `${NODE}/arbitrary/THUMBNAIL/Publisher/pic-1`,
+      `${NODE}/arbitrary/IMAGE/Publisher/qortal_avatar`,
+      `${NODE}/arbitrary/THUMBNAIL/Publisher/qortal_avatar/more`,
+      `${NODE}/render/THUMBNAIL/Publisher/qortal_avatar`,
+      // A name the lookup can't take, or no text at all.
+      `${NODE}/arbitrary/THUMBNAIL/a%2Fb/qortal_avatar`,
+      `${NODE}/arbitrary/THUMBNAIL/a%3Bb/qortal_avatar`,
+      `${NODE}/arbitrary/THUMBNAIL/Publisher%C2%A0Name/qortal_avatar`,
+      `${NODE}/arbitrary/THUMBNAIL/%E0%A4/qortal_avatar`,
+      `${NODE}/arbitrary/THUMBNAIL/ab/qortal_avatar`,
+      'not a link',
+      42,
+    ]) {
+      expect(avatarName(url, NODE)).toBeNull();
     }
   });
 
@@ -681,6 +821,25 @@ describe("a picture the app's preload found", () => {
     ]) {
       expect(withFound(named, answer)).toEqual(named);
     }
+  });
+});
+
+describe("a name the app's preload found", () => {
+  it('takes it checked, on a link Chromium named too', () => {
+    const named = (value: unknown) =>
+      withFound(params(), { name: value }).foundName;
+    expect(named({ kind: 'name', value: 'Publisher' })).toBe('Publisher');
+    expect(named({ kind: 'address', value: ADDRESS })).toBe(ADDRESS);
+    expect(named({ kind: 'name', value: '../admin/stop' })).toBeUndefined();
+    expect(named({ kind: 'address', value: MADE_UP_ADDRESS })).toBeUndefined();
+    const link = `${NODE}/render/APP/Opened-App/profile/Publisher`;
+    const onLink = withFound(params({ linkURL: link }), {
+      link: 'qortal://APP/Other-App',
+      name: { kind: 'name', value: 'Publisher' },
+    });
+    // Chromium's own link stays; the name comes with it.
+    expect(onLink.linkURL).toBe(link);
+    expect(onLink.foundName).toBe('Publisher');
   });
 });
 
@@ -1069,6 +1228,73 @@ describe('menuItemsFor', () => {
       'askQortino',
     ]);
     expect(selected(paragraph)).toEqual(['copy']);
+  });
+
+  it('offers "Look up" for a profile picture, the text selected or a name the app shows', () => {
+    const avatar = {
+      mediaType: 'image',
+      srcURL: avatarOf('Publisher Name'),
+      hasImageContents: true,
+    };
+    expect(actions(menuItemsFor(params(avatar), guestInfo))).toEqual([
+      'savePicture',
+      'copyPicture',
+      'copyPictureLink',
+      '|',
+      'lookUp',
+    ]);
+    expect(menuItemsFor(params(avatar), guestInfo)).toContainEqual({
+      action: 'lookUp',
+      label: 'Publisher Name',
+    });
+    // A picture from another site isn't taken for the name's.
+    const elsewhere = params({
+      ...avatar,
+      srcURL:
+        'http://127.0.0.1:9999/arbitrary/THUMBNAIL/Publisher/qortal_avatar',
+    });
+    expect(actions(menuItemsFor(elsewhere, guestInfo))).not.toContain('lookUp');
+    // A name the app shows there, found by its preload.
+    expect(menuItemsFor(params({ foundName: 'Publisher' }), guestInfo)).toEqual(
+      [{ action: 'lookUp', label: 'Publisher' }]
+    );
+    // Not in a box typed into.
+    const typed = params({ foundName: 'Publisher', isEditable: true });
+    expect(actions(menuItemsFor(typed, guestInfo))).not.toContain('lookUp');
+    // The picture right-clicked comes first, then the text selected.
+    const lookUp = (overrides: Partial<QAppMenuParams>) =>
+      menuItemsFor(params(overrides), guestInfo).filter(
+        (item) => 'action' in item && item.action === 'lookUp'
+      );
+    expect(lookUp({ ...avatar, selectionText: 'Other Name' })).toEqual([
+      { action: 'lookUp', label: 'Publisher Name' },
+    ]);
+    expect(
+      lookUp({ selectionText: 'Other Name', foundName: 'Publisher' })
+    ).toEqual([{ action: 'lookUp', label: 'Other Name' }]);
+  });
+
+  it('takes the name found there over the word a right-click selected in it (macOS)', () => {
+    const lookUp = (overrides: Partial<QAppMenuParams>) =>
+      menuItemsFor(params(overrides), guestInfo).filter(
+        (item) => 'action' in item && item.action === 'lookUp'
+      );
+    // On macOS a right-click selects the word under it, or a link's whole
+    // text, before the menu opens.
+    expect(
+      lookUp({ selectionText: 'Publisher', foundName: 'Publisher Name' })
+    ).toEqual([{ action: 'lookUp', label: 'Publisher Name' }]);
+    expect(
+      lookUp({
+        linkURL: `${NODE}/render/APP/Opened-App/vote/2`,
+        selectionText: 'Publisher Name (answered)',
+        foundName: 'Publisher Name',
+      })
+    ).toEqual([{ action: 'lookUp', label: 'Publisher Name' }]);
+    // Text selected apart from the name found is the user's own choice.
+    expect(
+      lookUp({ selectionText: 'Other Name', foundName: 'Publisher Name' })
+    ).toEqual([{ action: 'lookUp', label: 'Other Name' }]);
   });
 
   it('names what it looks up, and the app whose page it opens', () => {
@@ -1626,6 +1852,37 @@ describe('QAppContextMenus', () => {
     ]);
   });
 
+  it('hands back the name of a profile picture, or of one the app shows on a link', async () => {
+    setup();
+    let open = await rightClick({
+      mediaType: 'image',
+      srcURL: avatarOf('Publisher'),
+      hasImageContents: true,
+    });
+    expect(await menus.act(open.menuId, 'lookUp')).toEqual({
+      lookUp: 'Publisher',
+    });
+    guest.answer = (code) =>
+      code.endsWith('at(false)')
+        ? {
+            video: null,
+            picture: null,
+            link: null,
+            name: { kind: 'name', value: 'Publisher Name' },
+          }
+        : null;
+    open = await rightClick({
+      linkURL: `${NODE}/render/APP/Opened-App/profile/1`,
+    });
+    expect(open.items).toContainEqual({
+      action: 'lookUp',
+      label: 'Publisher Name',
+    });
+    expect(await menus.act(open.menuId, 'lookUp')).toEqual({
+      lookUp: 'Publisher Name',
+    });
+  });
+
   it("hands back the name to look up and the app's page", async () => {
     setup();
     let open = await rightClick({ selectionText: '@Publisher.' });
@@ -1949,7 +2206,7 @@ describe('QAppContextMenus', () => {
     ]);
   });
 
-  it('asks the app what it shows unless Chromium named a link, and about a picture or video only on a plain spot', async () => {
+  it('asks the app what it shows (on a link too, for a name), and about a picture or video only on a plain spot', async () => {
     setup();
     const asked = async (overrides: Partial<QAppMenuParams>) => {
       guest.guestCalls = [];
@@ -1958,7 +2215,7 @@ describe('QAppContextMenus', () => {
     };
     expect(
       await asked({ linkURL: `${NODE}/render/APP/Opened-App/item/7` })
-    ).toEqual([]);
+    ).toEqual(['at(false)']);
     expect(await asked({ isEditable: true })).toEqual(['at(false)']);
     expect(await asked({ selectionText: 'some text' })).toEqual(['at(false)']);
     expect(await asked(picture)).toEqual(['at(false)']);

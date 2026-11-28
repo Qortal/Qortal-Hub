@@ -548,6 +548,7 @@ describe("a picture or video Chromium doesn't see at the point", () => {
       video: null,
       picture: { src: `${NODE_PICTURE}/pic-1`, loaded: true },
       link: null,
+      name: null,
     });
     // Not loaded yet: there, but nothing to copy.
     loaded(byId('shown'), 0, 0);
@@ -568,6 +569,7 @@ describe("a picture or video Chromium doesn't see at the point", () => {
       video: null,
       picture: null,
       link: null,
+      name: null,
     });
     expect(helper.videoFrame()).toBeNull();
     expect(await helper.pictureInPicture(true)).toBe(false);
@@ -1026,6 +1028,343 @@ describe('a link the app shows outside an <a>', () => {
       video: null,
       picture: null,
       link: null,
+      name: null,
     });
+  });
+});
+
+describe('a Qortal name or address the app shows', () => {
+  const NODE = 'http://127.0.0.1:12391';
+  /** A page from the node, as an app's is (its pictures load from there). */
+  const nodePage = (html: string) =>
+    new JSDOM(`<!doctype html><html><body>${html}</body></html>`, {
+      url: `${NODE}/render/APP/Opened-App`,
+    }).window as unknown as TestWindow;
+  const avatar = (name: string) =>
+    `<img src="/arbitrary/THUMBNAIL/${encodeURIComponent(name)}/qortal_avatar?async=true">`;
+  /** Shaped as an address: main checks the rest. */
+  const ADDRESS = 'QPubsherAddrxyz123456789ABCDEFGHJK';
+
+  /** jsdom lays nothing out: the text and the place in it under the point. */
+  const pointAt = (win: TestWindow, text: Node, offset: number) =>
+    Object.defineProperty(win.document, 'caretRangeFromPoint', {
+      configurable: true,
+      value: () => ({ startContainer: text, startOffset: offset }),
+    });
+
+  const helpers = new WeakMap<TestWindow, ReturnType<typeof install>>();
+  /** What the menu gets for a right-click on `element` at `text`'s offset. */
+  const nameAt = async (
+    win: TestWindow,
+    element: Element,
+    offset = 1,
+    text: Node = element.firstChild
+  ) => {
+    if (!helpers.has(win)) helpers.set(win, install(win));
+    const helper = helpers.get(win);
+    pointAt(win, text, offset);
+    rightClick(win, element);
+    return (await helper.at(false)).name;
+  };
+
+  it('reads a name or address the app puts on the element, or on one it is in', async () => {
+    const win = nodePage(
+      '<li data-qortal-name="Publisher Name"><span>A row</span></li>' +
+        `<li data-qortal-address="${ADDRESS}"><span>Another</span></li>`
+    );
+    const [first, second] = win.document.querySelectorAll('span');
+    expect(await nameAt(win, first)).toEqual({
+      kind: 'name',
+      value: 'Publisher Name',
+    });
+    expect(await nameAt(win, second)).toEqual({
+      kind: 'address',
+      value: ADDRESS,
+    });
+  });
+
+  it('reads a name written beside its profile picture, also as @name and in a sentence', async () => {
+    const win = nodePage(
+      '<article><header>' +
+        avatar('Publisher Name') +
+        '<div><span id="name">Publisher Name</span>' +
+        '<span id="handle">@publisher name</span></div></header>' +
+        '<p id="body">Posted by Publisher Name, not Publisher Namesake.</p>' +
+        '</article>'
+    );
+    const byId = (id: string) => win.document.getElementById(id);
+    const named = { kind: 'name', value: 'Publisher Name' };
+    expect(await nameAt(win, byId('name'), 3)).toEqual(named);
+    expect(await nameAt(win, byId('handle'), 3)).toEqual(named);
+    const sentence = byId('body').textContent;
+    expect(
+      await nameAt(win, byId('body'), sentence.indexOf('Publisher') + 2)
+    ).toEqual(named);
+    // Elsewhere in the sentence, and inside a longer word: no name.
+    expect(await nameAt(win, byId('body'), 1)).toBeNull();
+    expect(
+      await nameAt(win, byId('body'), sentence.indexOf('Namesake') + 2)
+    ).toBeNull();
+  });
+
+  it('takes no text for a name without its profile picture close by', async () => {
+    // Most short words are registered names: text alone isn't one.
+    const alone = nodePage('<button>Reply</button>');
+    expect(await nameAt(alone, alone.document.querySelector('button'))).toBe(
+      null
+    );
+    // The picture further out than the row or card holding the text.
+    const far = nodePage(
+      `<section>${avatar('Share')}<div><div><div><div><div>` +
+        '<b>Share</b></div></div></div></div></div></section>'
+    );
+    expect(await nameAt(far, far.document.querySelector('b'))).toBeNull();
+    // Another site's picture, or another picture of the name.
+    const other = nodePage(
+      '<div><img src="http://127.0.0.1:9999/arbitrary/THUMBNAIL/Publisher/qortal_avatar">' +
+        '<img src="/arbitrary/THUMBNAIL/Publisher/pic-1"><b>Publisher</b></div>'
+    );
+    expect(await nameAt(other, other.document.querySelector('b'))).toBeNull();
+  });
+
+  it('reads an address written as text under the pointer', async () => {
+    const win = nodePage(
+      `<p id="sent">Sent to ${ADDRESS} today</p>` +
+        `<p id="longer">Signature 2${ADDRESS}</p>`
+    );
+    const sent = win.document.getElementById('sent');
+    const at = sent.textContent.indexOf(ADDRESS);
+    expect(await nameAt(win, sent, at + 5)).toEqual({
+      kind: 'address',
+      value: ADDRESS,
+    });
+    expect(await nameAt(win, sent, 1)).toBeNull();
+    // Part of a longer run of the same letters (a signature) isn't one.
+    const longer = win.document.getElementById('longer');
+    expect(
+      await nameAt(win, longer, longer.textContent.indexOf(ADDRESS) + 5)
+    ).toBeNull();
+  });
+
+  it('reads the name of a link laid over its card, picture and all', async () => {
+    // As Q-Mintership+ shows people: the name's link has a layer (::after)
+    // stretched over the whole card, so a right-click on the picture or the
+    // name lands on the link, with no text under the pointer.
+    const win = nodePage(
+      '<div>' +
+        `<span data-avatar>${avatar('Publisher')}</span>` +
+        '<div><span><a id="link" href="/render/APP/Opened-App/account/1">' +
+        '<span>Publisher</span></a></span></div></div>' +
+        `<div>${avatar('Publisher Name')}` +
+        '<a id="answered" href="/render/APP/Opened-App/vote/2">' +
+        '<span>Publisher Name</span><span>(answered)</span></a></div>'
+    );
+    const byId = (id: string) => win.document.getElementById(id);
+    expect(await nameAt(win, byId('link'), 0, byId('link'))).toEqual({
+      kind: 'name',
+      value: 'Publisher',
+    });
+    // The name and a word or two.
+    expect(await nameAt(win, byId('answered'), 0, byId('answered'))).toEqual({
+      kind: 'name',
+      value: 'Publisher Name',
+    });
+  });
+
+  it("reads a label's address, but no label with two names, nor a long one", async () => {
+    const win = nodePage(
+      `<a id="address" href="/render/APP/Opened-App/1">${ADDRESS}</a>` +
+        `<div>${avatar('Publisher')}${avatar('Other Name')}` +
+        '<a id="both" href="/render/APP/Opened-App/2">Publisher and Other Name</a></div>' +
+        `<div>${avatar('Publisher')}` +
+        `<a id="long" href="/render/APP/Opened-App/3">Publisher ${'wrote a long post. '.repeat(5)}</a></div>`
+    );
+    const byId = (id: string) => win.document.getElementById(id);
+    const onLayer = (id: string) => nameAt(win, byId(id), 0, byId(id));
+    expect(await onLayer('address')).toEqual({
+      kind: 'address',
+      value: ADDRESS,
+    });
+    expect(await onLayer('both')).toBeNull();
+    expect(await onLayer('long')).toBeNull();
+  });
+
+  it("reads no name from what is typed, nor a long card's text away from the pointer", async () => {
+    const win = nodePage(
+      `<div id="row">${avatar('Publisher')}` +
+        '<div id="typed" contenteditable="true">Publisher</div></div>' +
+        `<article id="card">${avatar('Publisher')}` +
+        `<p>${'A long post about the network. '.repeat(4)}</p>` +
+        '<span id="name">Publisher</span></article>'
+    );
+    const byId = (id: string) => win.document.getElementById(id);
+    expect(await nameAt(win, byId('typed'))).toBeNull();
+    // The row beside the typed text: its own text is only what's typed.
+    expect(await nameAt(win, byId('row'), 0, byId('row'))).toBeNull();
+    // The card right-clicked away from its text: the caret's nearest text
+    // is the name, but the pointer isn't on it, and the card is no label.
+    expect(
+      await nameAt(win, byId('card'), 1, byId('name').firstChild)
+    ).toBeNull();
+  });
+
+  it('reads the longest name written there, the same on the text as beside it', async () => {
+    // "Publisher mentioned Publisher Name", both people's pictures in the
+    // header: the second text is all of "Publisher Name".
+    const win = nodePage(
+      `<header>${avatar('Publisher')}<span>Publisher</span> mentioned ` +
+        `${avatar('Publisher Name')}<span id="second">Publisher Name</span></header>` +
+        `<div>${avatar('Publisher')}${avatar('Publisher Name')}` +
+        '<a id="answered" href="/render/APP/Opened-App/vote/2">' +
+        '<span>Publisher Name</span><span>(answered)</span></a></div>' +
+        `<div>${avatar('Publisher')}${avatar('Publisher Name')}` +
+        '<a id="both" href="/render/APP/Opened-App/vote/3">' +
+        'Publisher and Publisher Name</a></div>' +
+        `<p>${avatar('Publisher')}${avatar('Publisher Name')}` +
+        '<span id="thanks">Thanks to Publisher Name for this</span></p>'
+    );
+    const byId = (id: string) => win.document.getElementById(id);
+    const named = { kind: 'name', value: 'Publisher Name' };
+    expect(await nameAt(win, byId('second'), 2)).toEqual(named);
+    // In a sentence, on the part both names share: the longer one.
+    expect(await nameAt(win, byId('thanks'), 'Thanks to Pub'.length)).toEqual(
+      named
+    );
+    expect(await nameAt(win, byId('second'), 0, byId('second'))).toEqual(named);
+    // In a label, a name that is only part of a longer one written there
+    // doesn't count; two names written apart say nothing about which one.
+    expect(await nameAt(win, byId('answered'), 0, byId('answered'))).toEqual(
+      named
+    );
+    expect(await nameAt(win, byId('both'), 0, byId('both'))).toBeNull();
+  });
+
+  it('takes no name inside a longer one: joined by _ or -, before a vowel sign, beside a long character, or across a highlight', async () => {
+    const win = nodePage(
+      `<ul><li>${avatar('Publisher')}<span>Publisher</span>` +
+        '<span id="under">Publisher_2</span><span id="dash">Publisher-Two</span>' +
+        '<span id="sentence">Thanks, Publisher.</span></li></ul>' +
+        `<ul><li>${avatar('\u0930\u093e\u092e')}` +
+        '<span id="vowel">\u0930\u093e\u092e\u093e</span></li></ul>' +
+        `<ul><li>${avatar('\u91ce\u5bb6')}` +
+        '<span id="long">\u{20bb7}\u91ce\u5bb6</span>' +
+        '<span id="longAfter">\u91ce\u5bb6\u{20bb7}</span></li></ul>' +
+        `<ul><li>${avatar('Pub')}${avatar('Publisher')}` +
+        '<a href="/render/APP/Opened-App/1"><b id="hit">Pub</b>lisher</a></li></ul>'
+    );
+    const byId = (id: string) => win.document.getElementById(id);
+    expect(await nameAt(win, byId('under'), 3)).toBeNull();
+    expect(await nameAt(win, byId('dash'), 3)).toBeNull();
+    // A sentence's punctuation ends a word.
+    expect(await nameAt(win, byId('sentence'), 10)).toEqual({
+      kind: 'name',
+      value: 'Publisher',
+    });
+    // रामा (a vowel sign at its end) is another name than राम.
+    expect(await nameAt(win, byId('vowel'), 1)).toBeNull();
+    // 𠮷 is one character written as two UTF-16 units.
+    expect(await nameAt(win, byId('long'), 3)).toBeNull();
+    expect(await nameAt(win, byId('longAfter'), 1)).toBeNull();
+    // "Pub" bolded inside "Publisher" (a search highlight) is no "Pub".
+    expect(await nameAt(win, byId('hit'), 1)).toBeNull();
+  });
+
+  it("doesn't reach past one person's row for a name (a chat, a list)", async () => {
+    const win = nodePage(
+      `<ul><li>${avatar('Bitcoin')}<div><span>Bitcoin</span><p>gm</p></div></li>` +
+        `<li>${avatar('Reply')}<div><span>Reply</span><p>hi</p></div></li>` +
+        `<li>${avatar('Publisher')}<div><span>Publisher</span>` +
+        '<p id="message">I sold some Bitcoin today</p>' +
+        '<button id="reply">Reply</button></div></li>' +
+        // A person with no picture loaded: the letter in its place.
+        '<li><span data-avatar>B</span><div><p id="letter">Bitcoin</p></div></li></ul>'
+    );
+    const byId = (id: string) => win.document.getElementById(id);
+    const message = byId('message');
+    const at = message.textContent.indexOf('Bitcoin') + 2;
+    expect(await nameAt(win, message, at)).toBeNull();
+    expect(await nameAt(win, byId('reply'), 2)).toBeNull();
+    expect(await nameAt(win, byId('letter'), 2)).toBeNull();
+  });
+
+  it('looks past a hidden place for a picture (a copy for another layout)', async () => {
+    // As Torq keeps a letter avatar in a display: none part beside the name,
+    // one level below the shown picture.
+    const win = nodePage(
+      `<section>${avatar('Publisher')}<div>` +
+        '<div><span class="MuiAvatar-root" id="hidden">P</span></div>' +
+        '<div><div><b id="name">Publisher</b></div></div></div></section>'
+    );
+    const byId = (id: string) => win.document.getElementById(id);
+    Object.defineProperty(byId('hidden'), 'checkVisibility', {
+      value: () => false,
+    });
+    expect(await nameAt(win, byId('name'))).toEqual({
+      kind: 'name',
+      value: 'Publisher',
+    });
+  });
+
+  it('finds the picture four elements out from the text, not five', async () => {
+    const nested = (depth: number, id: string) =>
+      `<section>${avatar('Publisher')}` +
+      '<div>'.repeat(depth - 1) +
+      `<b id="${id}">Publisher</b>` +
+      '</div>'.repeat(depth - 1) +
+      '</section>';
+    const win = nodePage(nested(4, 'four') + nested(5, 'five'));
+    const byId = (id: string) => win.document.getElementById(id);
+    expect(await nameAt(win, byId('four'))).toEqual({
+      kind: 'name',
+      value: 'Publisher',
+    });
+    expect(await nameAt(win, byId('five'))).toBeNull();
+  });
+
+  it('takes a name shown under the pointer before one put on an element further out', async () => {
+    const win = nodePage(
+      `<article data-qortal-name="Publisher">${avatar('Publisher')}<span>Publisher</span>` +
+        `<p>Thanks to ${avatar('Other Name')}<span id="mention">Other Name</span>, again</p>` +
+        '<p id="plain">A post</p>' +
+        '<b id="marked" data-qortal-name="Marked Name">Other Name</b></article>'
+    );
+    const byId = (id: string) => win.document.getElementById(id);
+    expect(await nameAt(win, byId('mention'), 2)).toEqual({
+      kind: 'name',
+      value: 'Other Name',
+    });
+    // Nothing written there: the post's own name.
+    expect(await nameAt(win, byId('plain'), 2)).toEqual({
+      kind: 'name',
+      value: 'Publisher',
+    });
+    // Put on the element right-clicked itself: that comes first.
+    expect(await nameAt(win, byId('marked'), 2)).toEqual({
+      kind: 'name',
+      value: 'Marked Name',
+    });
+  });
+
+  it("reads an element's own text no further than a label can be, typed text too", async () => {
+    const win = nodePage(
+      `<div id="frame"><div contenteditable="true">${'<p>typed</p>'.repeat(3_000)}</div></div>`
+    );
+    const original = win.document.createTreeWalker.bind(win.document);
+    let visited = 0;
+    win.document.createTreeWalker = ((
+      ...args: Parameters<Document['createTreeWalker']>
+    ) => {
+      const walker = original(...args);
+      const next = walker.nextNode.bind(walker);
+      walker.nextNode = () => {
+        visited += 1;
+        return next();
+      };
+      return walker;
+    }) as Document['createTreeWalker'];
+    const frame = win.document.getElementById('frame');
+    expect(await nameAt(win, frame, 0, frame)).toBeNull();
+    // 80 characters at most (320 read), not all 3,000 pieces.
+    expect(visited).toBeLessThan(100);
   });
 });

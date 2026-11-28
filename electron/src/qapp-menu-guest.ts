@@ -15,6 +15,7 @@ import {
   type QAppElementInfo,
   type QAppFoundAt,
   type QAppMenuGuestHelper,
+  type QAppNameAt,
   type QAppPictureAt,
   type QAppPixels,
   type QAppVideoAt,
@@ -61,6 +62,97 @@ const WHOLE_LINK = /^(qortal:\/\/|https?:\/\/)\S+$/i;
 const LINK_IN_TEXT = /(?:qortal:\/\/|https?:\/\/)[^\s<>"'`]+/gi;
 /** A sentence's punctuation after a link written as text. */
 const AFTER_LINK = /[),.;:!?'"\]]+$/;
+/**
+ * Where an app puts the Qortal name or address an element stands for (a
+ * user's row, a post's author), for the menu's "Look up": Hub's own
+ * data-qortal-name and data-qortal-address.
+ */
+const NAME_ATTRIBUTES: [string, QAppNameAt['kind']][] = [
+  ['data-qortal-name', 'name'],
+  ['data-qortal-address', 'address'],
+];
+/** A name or address put on an element longer than this isn't one. */
+const MAX_NAME_VALUE = 200;
+/**
+ * A name's profile picture, /arbitrary/THUMBNAIL/<name>/qortal_avatar: the
+ * address apps load it from (Core's GET_QDN_RESOURCE_URL gives the same).
+ */
+const AVATAR_PATH = /^\/arbitrary\/THUMBNAIL\/([^/]+)\/qortal_avatar$/;
+/**
+ * How many elements out from a name written as text the profile picture of
+ * that name is looked for in: the row, card or header holding both.
+ */
+const NAME_HOLDERS = 4;
+/** Pictures read at most for their names (a long feed has many). */
+const MAX_AVATARS_READ = 500;
+/**
+ * Where a person's picture goes even when none is loaded (the letter shown
+ * instead): MUI's Avatar, and Q-Mintership+'s data-avatar.
+ */
+const AVATAR_PLACES = '[data-avatar], .MuiAvatar-root';
+/**
+ * Elements that mark part of a word (a search highlight): text on either
+ * side of one is the same word. Other pieces of a line can sit apart on
+ * screen (a margin), so they are taken as words of their own.
+ */
+const HIGHLIGHTS = 'b, strong, em, i, mark, u';
+/** An address written as text: Q and 33 more base58 characters. */
+const ADDRESS_IN_TEXT =
+  /(?<![1-9A-HJ-NP-Za-km-z])Q[1-9A-HJ-NP-Za-km-z]{33}(?![1-9A-HJ-NP-Za-km-z])/g;
+/**
+ * What a word goes on with: a letter, a digit, a mark (a vowel sign), or _
+ * and -, which join names. A name inside a longer word isn't that name.
+ */
+const WORD_CHARACTER = /[\p{L}\p{N}\p{M}_-]/u;
+/** An element's own text longer than this is no label for a name. */
+const MAX_LABEL_TEXT = 80;
+/** NodeFilter.SHOW_TEXT. */
+const SHOW_TEXT = 4;
+
+/** The whole character (code point) before `index` in a text, or ''. */
+function characterBefore(text: string, index: number): string {
+  if (index <= 0) return '';
+  const low = text.charCodeAt(index - 1);
+  if (low >= 0xdc00 && low <= 0xdfff && index >= 2) {
+    const high = text.charCodeAt(index - 2);
+    if (high >= 0xd800 && high <= 0xdbff) return text.slice(index - 2, index);
+  }
+  return text.charAt(index - 1);
+}
+
+/** The whole character (code point) at `index` in a text, or ''. */
+function characterAt(text: string, index: number): string {
+  const code = text.codePointAt(index);
+  return code === undefined ? '' : String.fromCodePoint(code);
+}
+
+/**
+ * Where a name is written in a text as a whole word, not inside one. At the
+ * text's own ends, `before` and `after` are the characters next to it on the
+ * page (another piece of the same line, as around a highlight).
+ */
+function wordsOf(
+  text: string,
+  name: string,
+  before = '',
+  after = ''
+): number[] {
+  const found: number[] = [];
+  if (!name) return found;
+  for (
+    let from = text.indexOf(name);
+    from >= 0;
+    from = text.indexOf(name, from + 1)
+  ) {
+    const to = from + name.length;
+    const left = from === 0 ? before : characterBefore(text, from);
+    const right = to === text.length ? after : characterAt(text, to);
+    if (!WORD_CHARACTER.test(left) && !WORD_CHARACTER.test(right)) {
+      found.push(from);
+    }
+  }
+  return found;
+}
 /** Text read around the pointer for a link written there. */
 const TEXT_AROUND = 2_000;
 const TEXT_NODE = 3;
@@ -545,6 +637,281 @@ export function installQAppMenuGuest(
     return null;
   };
 
+  /**
+   * The name a picture is the profile picture of, if it is one, loaded from
+   * the app's own node (the page's origin).
+   */
+  const avatarNameOf = (image: HTMLImageElement): string | null => {
+    let url: URL;
+    try {
+      url = new URL(srcOf(image));
+    } catch {
+      return null;
+    }
+    if (url.origin !== win.location.origin) return null;
+    const match = AVATAR_PATH.exec(url.pathname);
+    if (!match) return null;
+    try {
+      return decodeURIComponent(match[1]);
+    } catch {
+      return null;
+    }
+  };
+
+  /**
+   * Whether an element is shown: apps keep hidden copies of a person's
+   * picture place for other layouts (Torq: a letter in a display: none
+   * part), which don't count.
+   */
+  const isShown = (node: Element) => {
+    const check = (
+      node as Element & {
+        checkVisibility?: (options?: Record<string, boolean>) => boolean;
+      }
+    ).checkVisibility;
+    return (
+      typeof check !== 'function' ||
+      check.call(node, { checkOpacity: true, checkVisibilityCSS: true })
+    );
+  };
+
+  /**
+   * The names of the profile pictures nearest an element: in it, or in the
+   * nearest element it is in that holds any (one person's row, card or
+   * header, not a list of people), NAME_HOLDERS out at most, short of the
+   * page's <body>. A shown place for a person's picture with none loaded in
+   * it (the letter shown instead) ends the search with none: further out are
+   * other people's rows.
+   */
+  const avatarNamesNear = (start: Element): string[] => {
+    let read = 0;
+    let node: Element | null = start;
+    for (let level = 0; node && level <= NAME_HOLDERS; level += 1) {
+      if (pageEdge(node)) break;
+      const names = new Set<string>();
+      for (const image of node.querySelectorAll('img')) {
+        read += 1;
+        if (read > MAX_AVATARS_READ) return [];
+        const name = avatarNameOf(image as HTMLImageElement);
+        if (name) names.add(name);
+      }
+      if (names.size) return [...names];
+      const places = [
+        ...(node.matches(AVATAR_PLACES) ? [node] : []),
+        ...node.querySelectorAll(AVATAR_PLACES),
+      ];
+      if (places.some(isShown)) return [];
+      node = holderOf(node);
+    }
+    return [];
+  };
+
+  /**
+   * Whether an element is a box of its own (a block, an inline-block, a list
+   * item…): text in it isn't on the same line as text around it.
+   */
+  const isBox = (node: Element) => {
+    const display = win.getComputedStyle(node).display;
+    return display !== '' && display !== 'inline' && display !== 'contents';
+  };
+
+  /** The box a text is in: the nearest element holding it that is one. */
+  const lineBoxOf = (node: Node): Element | null => {
+    let holder = node.parentElement;
+    while (holder && !isBox(holder)) holder = holder.parentElement;
+    return holder;
+  };
+
+  /** Whether two pieces of text are parts of one word (a highlight). */
+  const onePiece = (first: Text, second: Text) =>
+    lineBoxOf(first) === lineBoxOf(second) &&
+    [first.parentElement, second.parentElement].some((holder) =>
+      holder?.matches(HIGHLIGHTS)
+    );
+
+  /**
+   * The character next to a text on the page when the word goes on there
+   * (around a search highlight); '' where it doesn't.
+   */
+  const characterBeside = (text: Text, before: boolean): string => {
+    const box = lineBoxOf(text);
+    if (!box) return '';
+    const walker = win.document.createTreeWalker(box, SHOW_TEXT);
+    walker.currentNode = text;
+    for (let step = 0; step < 50; step += 1) {
+      const node = (
+        before ? walker.previousNode() : walker.nextNode()
+      ) as Text | null;
+      if (!node) return '';
+      if (!node.data) continue;
+      if (!onePiece(text, node)) return '';
+      return before
+        ? characterBefore(node.data, node.data.length)
+        : characterAt(node.data, 0);
+    }
+    return '';
+  };
+
+  /**
+   * A Qortal name or address written in a text where the pointer is (at
+   * offset): an address, or the name of a profile picture in the row or
+   * header holding both, the longest one written there (one name can be a
+   * word of another).
+   */
+  const nameAtCaret = (
+    target: Element,
+    text: Text,
+    caretOffset: number
+  ): QAppNameAt | null => {
+    const data = text.data;
+    const start = Math.max(0, caretOffset - TEXT_AROUND);
+    const end = Math.min(data.length, caretOffset + TEXT_AROUND);
+    const around = data.slice(start, end);
+    const offset = caretOffset - start;
+    for (const match of around.matchAll(ADDRESS_IN_TEXT)) {
+      const from = match.index ?? 0;
+      if (offset >= from && offset <= from + match[0].length) {
+        return { kind: 'address', value: match[0] };
+      }
+    }
+    const names = avatarNamesNear(target);
+    if (!names.length) return null;
+    // What comes before and after what was read: the rest of the text, or
+    // at its ends the rest of the line on the page.
+    const before =
+      start === 0 ? characterBeside(text, true) : characterBefore(data, start);
+    const after =
+      end === data.length
+        ? characterBeside(text, false)
+        : characterAt(data, end);
+    // The whole text as a handle (@name), or in other letter case, when it
+    // is a whole word on the page.
+    const alone = !WORD_CHARACTER.test(before) && !WORD_CHARACTER.test(after);
+    if (alone && data.length <= MAX_LABEL_TEXT * 4) {
+      const whole = oneLine(data).replace(/^@/, '').toLowerCase();
+      const exact = names.find((name) => name.toLowerCase() === whole);
+      if (exact) return { kind: 'name', value: exact };
+    }
+    const written = names
+      .filter((name) =>
+        wordsOf(around, name, before, after).some(
+          (from) => offset >= from && offset <= from + name.length
+        )
+      )
+      .sort((a, b) => b.length - a.length);
+    return written.length ? { kind: 'name', value: written[0] } : null;
+  };
+
+  /**
+   * The element's own text, when short (a label: a name, a handle, a name
+   * and a few words), on one line; without what's typed into a field in it.
+   * Parts of one word join up (a highlight); other pieces are kept apart.
+   */
+  const labelTextOf = (element: Element): string => {
+    const walker = win.document.createTreeWalker(element, SHOW_TEXT);
+    let text = '';
+    let read = 0;
+    let last: Text | null = null;
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const piece = node as Text;
+      read += piece.data.length;
+      // Read no further than a label can be, typed text too (a big part of
+      // the page, or an editor in it, is no label).
+      if (read > MAX_LABEL_TEXT * 4) return '';
+      const holder = piece.parentElement;
+      if (holder && isField(holder)) continue;
+      if (last && !onePiece(last, piece)) text += ' ';
+      text += piece.data;
+      last = piece;
+    }
+    const line = oneLine(text);
+    return line.length > MAX_LABEL_TEXT ? '' : line;
+  };
+
+  /**
+   * A name or address the element right-clicked stands for, when the
+   * pointer isn't on its own text (a layer laid over it, as a person's link
+   * stretched over the whole card with the picture, or a part of it with no
+   * text): its own short text, when that is an address, or names one profile
+   * picture beside it (a name that is only part of a longer one written
+   * there doesn't count; two names say nothing about which one).
+   */
+  const nameInLabel = (target: Element): QAppNameAt | null => {
+    const text = labelTextOf(target);
+    if (!text) return null;
+    const bare = text.replace(/^@/, '');
+    const addresses = bare.match(ADDRESS_IN_TEXT);
+    if (addresses?.length === 1 && addresses[0] === bare) {
+      return { kind: 'address', value: bare };
+    }
+    const names = avatarNamesNear(target);
+    const exact = names.find(
+      (name) => name.toLowerCase() === bare.toLowerCase()
+    );
+    if (exact) return { kind: 'name', value: exact };
+    const written = names
+      .map((name) => ({ name, at: wordsOf(text, name) }))
+      .filter(({ at }) => at.length > 0);
+    const inLonger = (name: string, from: number) =>
+      written.some(
+        (other) =>
+          other.name.length > name.length &&
+          other.at.some(
+            (start) =>
+              start <= from && from + name.length <= start + other.name.length
+          )
+      );
+    const own = written.filter(({ name, at }) =>
+      at.some((from) => !inLonger(name, from))
+    );
+    return own.length === 1 ? { kind: 'name', value: own[0].name } : null;
+  };
+
+  /**
+   * A Qortal name or address written as text where the element right-clicked
+   * is: at the pointer when it is on the element's own text, else in the
+   * element's own short text. Text alone isn't taken for a name (many words
+   * are registered names), nor what's typed into a field.
+   */
+  const nameInText = (target: Element): QAppNameAt | null => {
+    if (isField(target)) return null;
+    const caret = win.document.caretRangeFromPoint?.(point.x, point.y);
+    const node = caret?.startContainer;
+    // The text of the element right-clicked, not the nearest text elsewhere.
+    if (node?.nodeType === TEXT_NODE && node.parentElement === target) {
+      return nameAtCaret(target, node as Text, caret.startOffset);
+    }
+    return nameInLabel(target);
+  };
+
+  /** A name or address the app puts on an element (NAME_ATTRIBUTES). */
+  const markedOn = (node: Element): QAppNameAt | null => {
+    for (const [attribute, kind] of NAME_ATTRIBUTES) {
+      const value = node.getAttribute(attribute)?.trim() ?? '';
+      if (value && value.length <= MAX_NAME_VALUE) return { kind, value };
+    }
+    return null;
+  };
+
+  /**
+   * The Qortal name or address the app shows at the right-click, for "Look
+   * up", the nearest first: one the app puts on the element, else one
+   * written as text there, else one the app puts on an element it is in.
+   * (Main reads a profile picture right-clicked from the picture's own
+   * address.)
+   */
+  const nameAt = (): QAppNameAt | null => {
+    const target = element();
+    if (!target) return null;
+    const found = markedOn(target) ?? nameInText(target);
+    if (found) return found;
+    for (let node = holderOf(target); node; node = holderOf(node)) {
+      const marked = markedOn(node);
+      if (marked) return marked;
+    }
+    return null;
+  };
+
   /** A picture found at the right-click, kept for "Copy picture". */
   const pictureAt = (image: HTMLImageElement): QAppPictureAt => {
     const src = srcOf(image);
@@ -557,8 +924,8 @@ export function installQAppMenuGuest(
 
   /**
    * What the app shows at the right-click besides what Chromium named: a
-   * link, and on a spot where Chromium named nothing (wantMedia), a picture
-   * or a video.
+   * link, a Qortal name or address, and on a spot where Chromium named
+   * nothing (wantMedia), a picture or a video.
    */
   const at = async (wantMedia: boolean): Promise<QAppFoundAt> => {
     offered = null;
@@ -568,6 +935,7 @@ export function installQAppMenuGuest(
         media instanceof win.HTMLVideoElement ? await videoInfo(media) : null,
       picture: media instanceof win.HTMLImageElement ? pictureAt(media) : null,
       link: linkAt(),
+      name: nameAt(),
     };
   };
 

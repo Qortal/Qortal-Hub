@@ -18,7 +18,7 @@
  * here. A link to open, a name to look up and a question for Qortino go back
  * to the Hub page, which carries them out with Hub's own openers.
  */
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import path from 'path';
 import type {
   DownloadItem,
@@ -119,6 +119,11 @@ export type QAppMenuParams = {
    * finds no picture at the point).
    */
   foundPicture?: boolean;
+  /**
+   * Set here, not by Electron: the Qortal name or address the app's preload
+   * found at the right-click (checked), for "Look up".
+   */
+  foundName?: string;
   editFlags: {
     canUndo: boolean;
     canRedo: boolean;
@@ -198,7 +203,32 @@ const UNSAFE_IN_HTML =
  * Hub's name lookup puts a name into the node's address as it is: text with
  * these would ask the node for something else.
  */
-const NOT_IN_LOOKUPS = /[/\\?#%]/;
+const NOT_IN_LOOKUPS = /[/\\?#%;]/;
+/**
+ * Characters Hub itself takes for hidden ones (src/utils/hasInvisibleCharacters.ts,
+ * after NFKC): a name with them looks like another one.
+ */
+const HIDDEN_IN_NAMES =
+  // eslint-disable-next-line no-misleading-character-class
+  /[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180E\u2000-\u200F\u2028-\u202F\u205F-\u206F\u2800\u3164\uFEFF\uFFA0]/u;
+/**
+ * Space other than a plain one (a no-break space, a line separator): the
+ * menu would show it as a plain space, and the lookup would get another name.
+ */
+const OTHER_SPACE = /[^\S ]/;
+
+/** Whether a name has something in it the menu can't show as it is. */
+const hidesSomething = (name: string) =>
+  UNSAFE_CHARACTER.test(name) ||
+  OTHER_SPACE.test(name) ||
+  HIDDEN_IN_NAMES.test(name.normalize('NFKC'));
+/** A name's profile picture: /arbitrary/THUMBNAIL/<name>/qortal_avatar. */
+const AVATAR_PATH = /^\/arbitrary\/THUMBNAIL\/([^/]+)\/qortal_avatar$/;
+const BASE58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+/** A Qortal address: Q and 33 more base58 characters. */
+const ADDRESS = /^Q[1-9A-HJ-NP-Za-km-z]{33}$/;
+/** The byte a Qortal address starts with (its Q). */
+const ADDRESS_VERSION = 58;
 /** Pictures Q-Chat shows from a qortal://use-embed/IMAGE link. */
 const PICTURE_SERVICES = new Set(['IMAGE', 'THUMBNAIL', 'QCHAT_IMAGE']);
 /** Services whose page Hub's library shows. */
@@ -530,9 +560,100 @@ export function lookUpText(value: unknown): string | null {
     .replace(/[),.;:!?]+$/, '');
   const bytes = Buffer.byteLength(text);
   if (bytes < MIN_NAME_BYTES || bytes > MAX_NAME_BYTES) return null;
-  if (UNSAFE_CHARACTER.test(text) || NOT_IN_LOOKUPS.test(text)) return null;
+  if (hidesSomething(text) || NOT_IN_LOOKUPS.test(text)) return null;
   if (/\s{2,}/.test(text) || /^\.+$/.test(text)) return null;
   return text;
+}
+
+/**
+ * A Qortal name as an app gives it (in a profile picture's address, an
+ * attribute): the same rules as for text selected, but taken as it is, with
+ * nothing left out of it.
+ */
+export function lookUpName(value: unknown): string | null {
+  if (typeof value !== 'string' || value !== value.trim()) return null;
+  const bytes = Buffer.byteLength(value);
+  if (bytes < MIN_NAME_BYTES || bytes > MAX_NAME_BYTES) return null;
+  if (hidesSomething(value) || NOT_IN_LOOKUPS.test(value)) return null;
+  if (/\s{2,}/.test(value) || /^\.+$/.test(value)) return null;
+  return value;
+}
+
+const sha256 = (data: Buffer) => createHash('sha256').update(data).digest();
+
+/**
+ * Whether text is a Qortal address: Q and 33 more base58 characters, whose
+ * last 4 bytes check the rest (the start of its double SHA-256, as Core
+ * checks it).
+ */
+export function isQortalAddress(value: unknown): value is string {
+  if (typeof value !== 'string' || !ADDRESS.test(value)) return false;
+  let number = BigInt(0);
+  for (const character of value) {
+    number = number * BigInt(58) + BigInt(BASE58.indexOf(character));
+  }
+  const hex = number.toString(16);
+  if (hex.length > 50) return false;
+  const bytes = Buffer.from(hex.padStart(50, '0'), 'hex');
+  if (bytes[0] !== ADDRESS_VERSION) return false;
+  const check = sha256(sha256(bytes.subarray(0, 21))).subarray(0, 4);
+  return check.equals(bytes.subarray(21));
+}
+
+/** The Qortal name or address the app's preload found, checked. */
+export function readFoundName(found: unknown): string | null {
+  if (!found || typeof found !== 'object') return null;
+  const { kind, value } = found as { kind?: unknown; value?: unknown };
+  if (kind === 'address') return isQortalAddress(value) ? value : null;
+  return kind === 'name' ? lookUpName(value) : null;
+}
+
+/**
+ * The name a profile picture is of: one loaded from the app's own node at
+ * /arbitrary/THUMBNAIL/<name>/qortal_avatar.
+ */
+export function avatarName(url: unknown, nodeOrigin: string): string | null {
+  if (typeof url !== 'string' || url.length > MAX_OPENED_LINK) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.origin !== nodeOrigin) return null;
+  const match = AVATAR_PATH.exec(parsed.pathname);
+  if (!match) return null;
+  try {
+    return lookUpName(decodeURIComponent(match[1]));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The name or address "Look up" takes: that of the profile picture
+ * right-clicked, else the text selected, else the one the app's preload
+ * found at the right-click (not in a box typed into). On macOS a right-click
+ * first selects the word under it (on a link, its whole text): a selection
+ * that is part of the name found there, or holds it, stands for that name.
+ */
+export function lookUpFor(
+  params: QAppMenuParams,
+  guest: QAppMenuGuest
+): string | null {
+  const avatar =
+    params.mediaType === 'image'
+      ? avatarName(params.srcURL, guest.nodeOrigin)
+      : null;
+  if (avatar) return avatar;
+  const found = params.isEditable === true ? null : (params.foundName ?? null);
+  const selected = lookUpText(params.selectionText);
+  if (found && selected) {
+    const name = found.toLowerCase();
+    const text = selected.toLowerCase();
+    if (name.includes(text) || text.includes(name)) return found;
+  }
+  return selected ?? found;
 }
 
 /** The selected text Qortino is asked about: on one line, not too long. */
@@ -635,18 +756,19 @@ const mayCoverMedia = (params: QAppMenuParams) =>
 
 /**
  * The right-click with what the app's preload found there (checked): a
- * picture or video Chromium doesn't see, and a link not in an <a> when
- * Chromium named none.
+ * picture or video Chromium doesn't see, a link not in an <a> when Chromium
+ * named none, and a Qortal name or address.
  */
 export function withFound(
   params: QAppMenuParams,
   found: unknown
 ): QAppMenuParams {
   if (!found || typeof found !== 'object') return params;
-  const { video, picture, link } = found as {
+  const { video, picture, link, name } = found as {
     video?: unknown;
     picture?: unknown;
     link?: unknown;
+    name?: unknown;
   };
   let result = params;
   if (mayCoverMedia(params)) {
@@ -661,6 +783,8 @@ export function withFound(
   ) {
     result = { ...result, linkURL: link };
   }
+  const foundName = readFoundName(name);
+  if (foundName) result = { ...result, foundName };
   return result;
 }
 
@@ -1002,11 +1126,12 @@ export function menuItemsFor(
   ) {
     groups.push([{ action: 'copy' }]);
   }
-  // What the text selected can be looked up as or asked about: not a
+  // The name or address to look up (a profile picture's, the text selected,
+  // one the app shows there) and the text selected to ask about: not a
   // misspelled word (selected by the right-click), nor a password.
   if (!misspelled && params.formControlType !== 'input-password') {
     const group: QAppMenuEntry[] = [];
-    const name = lookUpText(params.selectionText);
+    const name = lookUpFor(params, guest);
     if (name) group.push({ action: 'lookUp', label: cleanLabel(name) });
     if (settings.qortino && qortinoText(params.selectionText)) {
       group.push({ action: 'askQortino' });
@@ -1105,12 +1230,12 @@ export class QAppContextMenus {
   }
 
   /**
-   * A right-click in an app. Unless Chromium named a link, the app's preload
-   * is asked first (briefly) what it shows there: a link not in an <a> (an
-   * attribute, a link written as text, a box showing one), and on a spot
-   * Chromium names nothing at, a picture or video Chromium doesn't see there
-   * (a paused video's play button over it, an image viewer's picture that
-   * doesn't take the pointer).
+   * A right-click in an app. The app's preload is asked first (briefly) what
+   * it shows there: a Qortal name or address (on a link too), a link not in
+   * an <a> where Chromium named none (an attribute, a link written as text,
+   * a box showing one), and on a spot Chromium names nothing at, a picture
+   * or video Chromium doesn't see there (a paused video's play button over
+   * it, an image viewer's picture that doesn't take the pointer).
    */
   open(guest: WebContents, params: QAppMenuParams): void {
     if (this.locked || guest.isDestroyed()) return;
@@ -1118,8 +1243,8 @@ export class QAppContextMenus {
     const ticket = (this.rightClicks.get(guest) ?? 0) + 1;
     this.rightClicks.set(guest, ticket);
     const inMainFrame = !params.frame || params.frame === guest.mainFrame;
-    // Chromium names a link only in an <a>; the app may show one otherwise.
-    if (!inMainFrame || params.linkURL) {
+    // In a frame inside the app, the preload knows another element.
+    if (!inMainFrame) {
       this.show(guest, params, inMainFrame);
       return;
     }
@@ -1276,7 +1401,7 @@ export class QAppContextMenus {
           )) === true
         );
       case 'lookUp': {
-        const lookUp = lookUpText(params.selectionText);
+        const lookUp = lookUpFor(params, info);
         return lookUp ? { lookUp } : false;
       }
       case 'askQortino': {
