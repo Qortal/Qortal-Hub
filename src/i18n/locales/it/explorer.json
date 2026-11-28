@@ -1,0 +1,1057 @@
+{
+  "account": {
+    "failed": "Impossibile caricare questo account.",
+    "invalid": "Questo non è un indirizzo Qortal valido.",
+    "name_failed": "Impossibile cercare questo nome.",
+    "no_similar_names": "Nemmeno un nome registrato inizia così.",
+    "no_such_name": "Nessuno ha il nome «{{name}}».",
+    "similar_failed": "Impossibile cercare i nomi che iniziano così.",
+    "similar_names": "Nomi che iniziano così:",
+    "unused": "Questo indirizzo non è mai stato usato: nessuna transazione lo ha ancora coinvolto."
+  },
+  "at": {
+    "about": "Un contratto automatizzato (AT): un programma sulla blockchain, non un account personale.",
+    "title": "indirizzo AT"
+  },
+  "chip": {
+    "dev_admin": "Dev Admin",
+    "dev_admin_explained": "Un amministratore del gruppo dev (gruppo 1), il gruppo degli sviluppatori di Qortal.",
+    "exchange": "exchange",
+    "exchange_explained": "Questo è l'account di {{exchange}}, un exchange.",
+    "minter_admin": "Minter Admin",
+    "minter_admin_explained": "Un amministratore di MINTER, il gruppo i cui membri fanno minting. I Minter Admin decidono chi entra.",
+    "minter_member": "membro di MINTER",
+    "minter_member_explained": "Un membro di MINTER, il gruppo i cui membri fanno minting.",
+    "minting_now": "minting attivo",
+    "minting_now_explained": "Fa parte di un reward-share online in questo momento, quindi partecipa al minting dei blocchi.",
+    "minting_penalty": "penalità di minting",
+    "minting_penalty_explained": "Il nodo ha registrato una penalità di minting su questo account. Il numero è indicato in «Note»."
+  },
+  "connections": {
+    "at_label": "AT {{address}}",
+    "block": "blocco {{block}}",
+    "blocks": "blocchi {{first}}–{{last}}",
+    "common_loading": "lettura di ciò che ha in comune",
+    "common_title": "in comune",
+    "coverage": {
+      "ceiling": "L'Explorer legge fino a {{max}} voci per ogni elenco.",
+      "level_moves_all": "Sono stati letti tutti i trasferimenti del livello di minting.",
+      "minting_all_one": "tutte le sue {{shown}} transazioni di minting",
+      "minting_all_other": "tutte le sue {{shown}} transazioni di minting",
+      "minting_failed": "le sue transazioni di minting (impossibile leggerle)",
+      "minting_newest_one": "la sua {{shown}} transazione di minting più recente",
+      "minting_newest_other": "le sue {{shown}} transazioni di minting più recenti",
+      "minting_none": "le sue transazioni di minting (nessuna)",
+      "minting_single": "la sua unica transazione di minting",
+      "names_all_one": "tutte le sue {{shown}} transazioni di nomi",
+      "names_all_other": "tutte le sue {{shown}} transazioni di nomi",
+      "names_failed": "le sue transazioni di nomi (impossibile leggerle)",
+      "names_newest_one": "la sua {{shown}} transazione di nomi più recente",
+      "names_newest_other": "le sue {{shown}} transazioni di nomi più recenti",
+      "names_none": "le sue transazioni di nomi (nessuna)",
+      "names_single": "la sua unica transazione di nomi",
+      "payments_all_one": "tutti i suoi {{shown}} pagamenti e trasferimenti di asset",
+      "payments_all_other": "tutti i suoi {{shown}} pagamenti e trasferimenti di asset",
+      "payments_failed": "i suoi pagamenti e trasferimenti di asset (impossibile leggerli)",
+      "payments_newest_one": "il suo {{shown}} pagamento o trasferimento di asset più recente",
+      "payments_newest_other": "i suoi {{shown}} pagamenti e trasferimenti di asset più recenti",
+      "payments_none": "i suoi pagamenti e trasferimenti di asset (nessuno)",
+      "payments_single": "il suo unico pagamento o trasferimento di asset",
+      "read": "Letto: {{list}}.",
+      "read_older": "leggi transazioni più vecchie",
+      "reading_older": "lettura di transazioni più vecchie…",
+      "trades_all_one": "tutti i suoi {{shown}} ordini di asset eseguiti",
+      "trades_all_other": "tutti i suoi {{shown}} ordini di asset eseguiti",
+      "trades_ceiling": "L'Explorer legge fino a {{max}} ordini eseguiti.",
+      "trades_failed": "i suoi ordini di asset eseguiti (impossibile leggerli)",
+      "trades_fills_cut_one": "Gli scambi di {{shown}} dei suoi ordini sono stati letti solo in parte (fino a {{max}} per ordine).",
+      "trades_fills_cut_other": "Gli scambi di {{shown}} dei suoi ordini sono stati letti solo in parte (fino a {{max}} per ordine).",
+      "trades_newest_one": "il suo {{shown}} ordine di asset eseguito più recente",
+      "trades_newest_other": "i suoi {{shown}} ordini di asset eseguiti più recenti",
+      "trades_none": "i suoi ordini di asset eseguiti (nessuno)",
+      "trades_single": "il suo unico ordine di asset eseguito"
+    },
+    "empty": {
+      "asset_trades": "scambi di asset",
+      "first_qort": "da dove sono arrivati i suoi primi QORT",
+      "level_moves": "trasferimenti del livello di minting",
+      "minting_with": "minting attivo con un altro account",
+      "name_sales": "vendite di nomi",
+      "payments": "pagamenti",
+      "sponsees": "account che ha sponsorizzato",
+      "sponsor": "uno sponsor"
+    },
+    "evidence": {
+      "list": "{{words}} alla base di questa connessione",
+      "list_with": "{{words}} con {{name}}",
+      "loading": "lettura delle transazioni alla base di questa connessione",
+      "orders_one": "{{shown}} ordine",
+      "orders_other": "{{shown}} ordini",
+      "payments_one": "{{shown}} pagamento",
+      "payments_other": "{{shown}} pagamenti",
+      "show": "mostra {{words}} alla base di questa connessione",
+      "show_with": "mostra {{words}} con {{name}}",
+      "transactions_one": "{{shown}} transazione",
+      "transactions_other": "{{shown}} transazioni"
+    },
+    "exchange": {
+      "exact_note": "Somma di tutti i pagamenti in QORT tra i due account, letti con esattezza (fino a 1.000 per direzione).",
+      "from_lists": "Questo nodo non può leggere con esattezza i pagamenti tra due account: questi provengono dai pagamenti letti qui sotto.",
+      "hide": "nascondi i pagamenti",
+      "own": "Questo è l'account di {{exchange}}, un exchange.",
+      "own_title": "un exchange",
+      "received_title": "ha ricevuto QORT da un exchange",
+      "sent_title": "ha inviato QORT a un exchange",
+      "show": "mostra i pagamenti"
+    },
+    "failed": {
+      "evidence": "Impossibile leggere alcune delle transazioni alla base di questa connessione.",
+      "exchanges": "Impossibile leggere i suoi pagamenti da e verso gli exchange.",
+      "funding": "Impossibile trovare da dove sono arrivati i suoi primi QORT.",
+      "level_moves": "Impossibile leggere tutti i suoi trasferimenti del livello di minting.",
+      "minting": "Impossibile leggere le sue transazioni di minting (reward-share e trasferimenti del livello di minting).",
+      "names": "Impossibile leggere le sue transazioni di nomi.",
+      "names_search": "Impossibile leggere i nomi di alcuni degli account presenti: la ricerca non può trovare questi account per nome.",
+      "older": "Impossibile leggere le sue transazioni più vecchie.",
+      "online": "Impossibile leggere chi sta facendo minting ora.",
+      "payments": "Impossibile leggere i suoi pagamenti e trasferimenti di asset.",
+      "sponsor_list": "Impossibile leggere i reward-share del suo sponsor.",
+      "trades": "Impossibile leggere i suoi scambi di asset."
+    },
+    "links_loading": "lettura dei suoi reward-share, trasferimenti del livello di minting e vendite di nomi",
+    "nothing_found": "Controllato anche, nessun risultato: {{list}}.",
+    "nothing_found_so_far": "In ciò che è stato letto finora, nessun risultato: {{list}}.",
+    "part": {
+      "level": "livello di minting",
+      "names": "nomi",
+      "payments": "pagamenti",
+      "shares": "reward-share",
+      "trades": "scambi di asset"
+    },
+    "payments": {
+      "ats_label": "indirizzi AT (programmi sulla blockchain)",
+      "loading": "lettura dei suoi pagamenti",
+      "no_match_received": "Nulla in «Ricevuti da» corrisponde a «{{typed}}».",
+      "no_match_sent": "Nulla in «Inviati a» corrisponde a «{{typed}}».",
+      "none_received": "Nessun pagamento ricevuto in ciò che è stato letto.",
+      "none_sent": "Nessun pagamento inviato in ciò che è stato letto.",
+      "other_way_received_one": "«Ricevuti da» ha {{shown}} risultato.",
+      "other_way_received_other": "«Ricevuti da» ha {{shown}} risultati.",
+      "other_way_sent_one": "«Inviati a» ha {{shown}} risultato.",
+      "other_way_sent_other": "«Inviati a» ha {{shown}} risultati.",
+      "received_from": "ricevuti da",
+      "received_label": "ricevuti da",
+      "sent_label": "inviati a",
+      "sent_to": "inviati a",
+      "show_more_one": "mostra altri {{shown}}",
+      "show_more_other": "mostra altri {{shown}}",
+      "sort": "ordina",
+      "sort_count": "più pagamenti",
+      "sort_first": "primo pagamento prima",
+      "sort_latest": "ultimo pagamento prima",
+      "sort_total": "più QORT",
+      "way_label": "quali pagamenti"
+    },
+    "recorded_title": "registrato tra loro",
+    "reward_share_note": "Prima di ottobre 2024 la maggior parte dei nuovi account iniziava a fare minting tramite il reward-share di un altro account (uno sponsor). Da allora conta l'appartenenza a MINTER.",
+    "say": {
+      "exchange": {
+        "received_maybe_one": "Ha ricevuto {{amount}} da {{exchange}}, un exchange, in {{payments}} pagamento ({{when}}); potrebbero essercene di più vecchi.",
+        "received_maybe_other": "Ha ricevuto {{amount}} da {{exchange}}, un exchange, in {{payments}} pagamenti ({{when}}); potrebbero essercene di più vecchi.",
+        "received_more_one": "Ha ricevuto {{amount}} da {{exchange}}, un exchange, nel suo {{payments}} pagamento più recente ({{when}}); ce ne sono di più vecchi.",
+        "received_more_other": "Ha ricevuto {{amount}} da {{exchange}}, un exchange, nei suoi {{payments}} pagamenti più recenti ({{when}}); ce ne sono di più vecchi.",
+        "received_one": "Ha ricevuto {{amount}} da {{exchange}}, un exchange, in {{payments}} pagamento ({{when}}).",
+        "received_other": "Ha ricevuto {{amount}} da {{exchange}}, un exchange, in {{payments}} pagamenti ({{when}}).",
+        "sent_maybe_one": "Ha inviato {{amount}} a {{exchange}}, un exchange, in {{payments}} pagamento ({{when}}); potrebbero essercene di più vecchi.",
+        "sent_maybe_other": "Ha inviato {{amount}} a {{exchange}}, un exchange, in {{payments}} pagamenti ({{when}}); potrebbero essercene di più vecchi.",
+        "sent_more_one": "Ha inviato {{amount}} a {{exchange}}, un exchange, nel suo {{payments}} pagamento più recente ({{when}}); ce ne sono di più vecchi.",
+        "sent_more_other": "Ha inviato {{amount}} a {{exchange}}, un exchange, nei suoi {{payments}} pagamenti più recenti ({{when}}); ce ne sono di più vecchi.",
+        "sent_one": "Ha inviato {{amount}} a {{exchange}}, un exchange, in {{payments}} pagamento ({{when}}).",
+        "sent_other": "Ha inviato {{amount}} a {{exchange}}, un exchange, in {{payments}} pagamenti ({{when}})."
+      },
+      "first": {
+        "at": "I suoi primi QORT sono arrivati da un AT (un programma sulla blockchain): {{amount}} da {{from}}",
+        "at_unknown": "I suoi primi QORT sono arrivati da un AT (un programma sulla blockchain): {{amount}}",
+        "genesis_asset": "La sua prima transazione in entrata: {{amount}} nel blocco genesi",
+        "genesis_qort": "Ha ricevuto {{amount}} nel blocco genesi",
+        "level": "Ha ricevuto il livello di minting da {{from}}",
+        "level_unknown": "Ha ricevuto il livello di minting da un altro account",
+        "payment": "Primo pagamento in QORT ricevuto: {{amount}} da {{from}}",
+        "payment_unknown": "Primo pagamento in QORT ricevuto: {{amount}}",
+        "reward_share": "La sua prima transazione in entrata: un reward-share da {{from}} (quota {{percent}})",
+        "reward_share_unknown": "La sua prima transazione in entrata: un reward-share (quota {{percent}})",
+        "transfer": "La sua prima transazione in entrata: un trasferimento di asset di {{amount}} da {{from}}",
+        "transfer_unknown": "La sua prima transazione in entrata: un trasferimento di asset di {{amount}}"
+      },
+      "minting_with": {
+        "its_share": "Fa minting con {{other}} ora, nel proprio reward-share (quota {{percent}})",
+        "their_share": "Fa minting con {{other}} ora, nel reward-share dell'altro account (quota {{percent}})"
+      },
+      "paid_one": "Ha pagato {{amount}} a {{other}} in {{payments}} pagamento ({{when}})",
+      "paid_other": "Ha pagato {{amount}} a {{other}} in {{payments}} pagamenti ({{when}})",
+      "received_one": "Ha ricevuto {{amount}} da {{other}} in {{payments}} pagamento ({{when}})",
+      "received_other": "Ha ricevuto {{amount}} da {{other}} in {{payments}} pagamenti ({{when}})",
+      "siblings_more_one": "{{sponsor}} ha sponsorizzato anche altri {{others}}+ account",
+      "siblings_more_other": "{{sponsor}} ha sponsorizzato anche altri {{others}}+ account",
+      "siblings_one": "{{sponsor}} ha sponsorizzato anche {{others}} altro account",
+      "siblings_other": "{{sponsor}} ha sponsorizzato anche altri {{others}} account",
+      "sponsees_more_one": "Ha sponsorizzato {{accounts}}+ account ({{when}})",
+      "sponsees_more_other": "Ha sponsorizzato {{accounts}}+ account ({{when}})",
+      "sponsees_one": "Ha sponsorizzato {{accounts}} account ({{when}})",
+      "sponsees_other": "Ha sponsorizzato {{accounts}} account ({{when}})",
+      "sponsor": {
+        "for_blocks_one": "Sponsorizzato da {{sponsor}} (quota {{percent}}) per {{blocks}} blocco",
+        "for_blocks_other": "Sponsorizzato da {{sponsor}} (quota {{percent}}) per {{blocks}} blocchi",
+        "not_removed": "Sponsorizzato da {{sponsor}} (quota {{percent}}), non rimosso"
+      },
+      "trade": {
+        "bought": "Ha acquistato {{got}} da {{other}} per {{gave}}",
+        "many_one": "{{trades}} scambio di asset con {{other}}: ha ricevuto {{got}}, ha dato {{gave}}",
+        "many_other": "{{trades}} scambi di asset con {{other}}: ha ricevuto {{got}}, ha dato {{gave}}",
+        "sold": "Ha venduto {{gave}} a {{other}} per {{got}}",
+        "swapped": "Ha scambiato {{gave}} per {{got}} con {{other}}"
+      }
+    },
+    "search": {
+      "clear": "cancella la ricerca",
+      "found_one": "{{shown}} riga corrisponde a «{{typed}}».",
+      "found_other": "{{shown}} righe corrispondono a «{{typed}}».",
+      "label": "cerca in queste connessioni",
+      "looking": "Ricerca di «{{typed}}»…",
+      "names_capped_one": "I nomi sono stati letti per i primi {{shown}} dei suoi {{total}} account, nell'ordine in cui sono elencati qui; gli altri si trovano solo tramite il loro indirizzo.",
+      "names_capped_other": "I nomi sono stati letti per i primi {{shown}} dei suoi {{total}} account, nell'ordine in cui sono elencati qui; gli altri si trovano solo tramite il loro indirizzo.",
+      "none": "Nulla nelle connessioni di questo account corrisponde a «{{typed}}».",
+      "none_partial": "Nulla corrisponde a «{{typed}}» in ciò che è stato possibile cercare.",
+      "placeholder": "un nome, un indirizzo, un importo, una data…",
+      "reading_lists": "Alcuni dei suoi elenchi sono ancora in lettura.",
+      "reading_names": "Lettura dei nomi degli account presenti…"
+    },
+    "show_all_one": "mostra tutti ({{shown}})",
+    "show_all_other": "mostra tutti ({{shown}})",
+    "siblings_when": "reward-share del suo sponsor ad altri account: {{span}}",
+    "tag": {
+      "core_sponsor": "lo sponsor che Core considera",
+      "exchange_row": "dai pagamenti letti qui; in alto si sommano tutti i pagamenti in QORT con questo exchange",
+      "first_incoming": "la sua prima transazione in entrata è arrivata da questo account",
+      "first_level": "il suo livello di minting è arrivato da questo account",
+      "first_qort": "i suoi primi QORT sono arrivati da questo account",
+      "level_now": "ora livello {{level}}",
+      "sponsor": "il suo sponsor"
+    },
+    "trades_left_out_one": "{{shown}} dei suoi scambi di asset non è elencato: è avvenuto con l'account stesso o con un ordine che il nodo non conosce.",
+    "trades_left_out_other": "{{shown}} dei suoi scambi di asset non sono elencati: sono avvenuti con l'account stesso o con un ordine che il nodo non conosce.",
+    "unread": {
+      "level_moves": "tutti i suoi trasferimenti del livello di minting",
+      "minting": "i suoi reward-share e trasferimenti del livello di minting",
+      "names": "le sue transazioni di nomi",
+      "online": "chi sta facendo minting ora",
+      "payments": "i suoi pagamenti e trasferimenti di asset",
+      "trades": "i suoi scambi di asset"
+    },
+    "when_one": "{{date}} · blocco {{block}}",
+    "when_span": "{{span}} · blocchi {{first}}–{{last}}"
+  },
+  "direct_links": {
+    "all_more_one": "tutte le connessioni ({{shown}}+)",
+    "all_more_other": "tutte le connessioni ({{shown}}+)",
+    "all_none": "tutte le connessioni",
+    "all_one": "tutte le connessioni ({{shown}})",
+    "all_other": "tutte le connessioni ({{shown}})",
+    "failed": "Impossibile leggere {{parts}}.",
+    "loading": "lettura dei suoi collegamenti diretti",
+    "none": "Nessun collegamento diretto trovato in ciò che è stato letto.",
+    "short": "Dalle sue transazioni più recenti lette: potrebbero essercene di più vecchie.",
+    "title": "collegamenti diretti"
+  },
+  "facts": {
+    "adjustment": "rettifica {{blocks}}",
+    "at_block": "al blocco {{block}}",
+    "balance": "saldo",
+    "balance_exact": "esattamente {{amount}} QORT",
+    "balance_failed": "Impossibile caricare il saldo.",
+    "blocks_to_level_one": "manca {{blocks}} blocco al livello {{level}}",
+    "blocks_to_level_other": "mancano {{blocks}} blocchi al livello {{level}}",
+    "days_to_level_one": "circa {{count}} giorno di minting",
+    "days_to_level_other": "circa {{count}} giorni di minting",
+    "first_seen": "prima apparizione",
+    "first_seen_failed": "Impossibile caricare la prima apparizione.",
+    "first_seen_none": "nessun dato trovato",
+    "groups": "gruppi",
+    "in_groups_one": "in {{groups}} gruppo",
+    "in_groups_other": "in {{groups}} gruppi",
+    "in_no_groups": "in nessun gruppo",
+    "level_progress": "avanzamento verso il livello {{level}}: {{percent}}%",
+    "pace_failed": "Impossibile caricare il ritmo del nodo, necessario per i blocchi e i giorni fino al livello successivo.",
+    "payments_all_one": "in tutti i suoi {{payments}} pagamenti",
+    "payments_all_other": "in tutti i suoi {{payments}} pagamenti",
+    "payments_newest_one": "nei suoi {{payments}} pagamenti più recenti",
+    "payments_newest_other": "nei suoi {{payments}} pagamenti più recenti",
+    "payments_none": "ancora nessun pagamento",
+    "payments_single": "nel suo unico pagamento",
+    "penalty": "penalità {{blocks}}",
+    "received_sent": "QORT ricevuti / inviati",
+    "received_sent_info": "Solo pagamenti in QORT: pagamenti multipli, scambi e minting non sono conteggiati.",
+    "title": "a colpo d'occhio",
+    "top_level": "livello massimo"
+  },
+  "groups": {
+    "admin": "amministratore",
+    "closed": "gruppo chiuso",
+    "failed": "Impossibile caricare i suoi gruppi.",
+    "members_one": "{{members}} membro",
+    "members_other": "{{members}} membri",
+    "none": "Non fa parte di alcun gruppo.",
+    "open": "gruppo aperto",
+    "owner": "proprietario",
+    "sort": "ordina",
+    "sort_az": "nome A–Z",
+    "sort_members": "più membri",
+    "sort_minter": "prima MINTER",
+    "sort_roles": "prima proprietario e amministratore",
+    "title": "gruppi",
+    "title_count": "gruppi ({{n}})",
+    "unnamed": "gruppo #{{id}}"
+  },
+  "header": {
+    "about": "informazioni su questo account",
+    "blocked": "Account bloccato.",
+    "copy_public_key": "copia chiave pubblica",
+    "name_failed": "Impossibile caricare il nome.",
+    "name_matched": "Hai cercato «{{typed}}»; il nodo ha trovato il nome «{{matched}}», ignorando maiuscole e minuscole e lettere simili.",
+    "no_primary_name": "nessun nome principale",
+    "opened_from_name": "Aperto dal suo nome «{{name}}».",
+    "public_key_copied": "Chiave pubblica copiata negli appunti.",
+    "unblocked": "Account sbloccato."
+  },
+  "latest": {
+    "all": "tutte le transazioni",
+    "failed": "Impossibile caricare le sue ultime transazioni.",
+    "none": "Ancora nessuna transazione confermata.",
+    "title": "ultime transazioni"
+  },
+  "minter": {
+    "open_app": "apri {{app}}",
+    "standing_admin": "Minter Admin e membro di MINTER.",
+    "standing_member": "Membro di MINTER.",
+    "standing_outside": "Non fa parte di MINTER.",
+    "story": "La sua storia in MINTER, dalle nomine alle decisioni, è conservata in {{app}}.",
+    "title": "MINTER"
+  },
+  "minting": {
+    "last_signed": "Ha firmato l'ultimo blocco il {{date}} (blocco {{block}}).",
+    "last_signed_block": "Ultimo blocco firmato: {{block}}.",
+    "last_signed_failed": "Impossibile caricare l'ultimo blocco che ha firmato.",
+    "last_signed_none": "Non ha firmato alcun blocco.",
+    "not_now": "Nessun minting in questo momento.",
+    "online_failed": "Impossibile caricare chi sta facendo minting ora.",
+    "own_key": "Minting attivo, con la propria chiave.",
+    "own_key_and_shares": "Minting attivo, con la propria chiave e tramite reward-share con:",
+    "shares": "Minting attivo tramite reward-share con:",
+    "show_all_one": "mostra tutti ({{count}})",
+    "show_all_other": "mostra tutti ({{count}})",
+    "show_fewer": "mostra meno",
+    "title": "minting"
+  },
+  "name_page": {
+    "changes_found_one": "{{shown}} modifica trovata",
+    "changes_found_other": "{{shown}} modifiche trovate",
+    "changes_since_one": "{{shown}} modifica da allora",
+    "changes_since_other": "{{shown}} modifiche da allora",
+    "cut_capped": "Le transazioni di nomi di {{account}} risalgono più indietro delle {{max}} che legge l'Explorer: ciò che c'era prima non è mostrato.",
+    "cut_hops": "È passato per più di {{n}} proprietari e nomi: i primi non sono mostrati.",
+    "cut_not_found": "Come l'ha ottenuto {{account}} non compare nelle sue transazioni di nomi, quindi ciò che c'era prima non è mostrato.",
+    "failed": "Impossibile cercare questo nome.",
+    "history": "cronologia completa",
+    "kind": "nome registrato",
+    "life_failed": "Impossibile leggere tutta la sua cronologia.",
+    "matched": "Aperto come «{{asked}}»; il nodo ha trovato il nome «{{matched}}», ignorando maiuscole e minuscole e lettere simili.",
+    "no_changes_since": "nessuna modifica da allora",
+    "nobody": "Ora nessuno ha il nome «{{name}}».",
+    "nobody_hint": "Il nodo conserva il record di un nome solo finché qualcuno lo possiede. Un nome rinominato da allora continua con il suo nuovo nome.",
+    "other_registration": "Il suo record indica un'altra registrazione, {{date}}: qui manca una parte della sua cronologia.",
+    "owner": "proprietario",
+    "owners_one": "{{shown}} proprietario",
+    "owners_other": "{{shown}} proprietari",
+    "reading": "Lettura a ritroso degli account che l'hanno avuto…",
+    "steps_label": "ogni modifica di «{{name}}»",
+    "summary_registered": "registrato il {{date}}"
+  },
+  "names": {
+    "coverage_ceiling": "L'Explorer legge fino a {{max}} delle sue transazioni di nomi.",
+    "coverage_older": "Quelle più vecchie non sono ancora state lette.",
+    "coverage_one": "La cronologia di ogni nome viene dalla sua {{shown}} transazione di nomi più recente.",
+    "coverage_other": "La cronologia di ogni nome viene dalle sue {{shown}} transazioni di nomi più recenti.",
+    "coverage_without_one": "{{shown}} dei suoi nomi non vi compare.",
+    "coverage_without_other": "{{shown}} dei suoi nomi non vi compaiono.",
+    "failed": "Impossibile caricare i suoi nomi.",
+    "for_sale": "in vendita",
+    "for_sale_at": "in vendita a {{price}} QORT",
+    "had_label": "nomi che ha avuto",
+    "had_note": "Nomi che ha venduto o rinominato in altro.",
+    "had_note_partial_one": "Nomi che ha venduto o rinominato in altro, nella sua {{shown}} transazione di nomi più recente.",
+    "had_note_partial_other": "Nomi che ha venduto o rinominato in altro, nelle sue {{shown}} transazioni di nomi più recenti.",
+    "had_title": "nomi che ha avuto ({{n}})",
+    "history": "cronologia",
+    "history_count": "cronologia · {{n}}",
+    "history_failed": "Impossibile caricare la sua cronologia dei nomi.",
+    "history_loading": "Lettura della sua cronologia dei nomi…",
+    "history_more_failed": "Impossibile leggere le sue transazioni di nomi più vecchie.",
+    "history_none": "Nessuna trovata nelle sue transazioni di nomi.",
+    "history_of": "cronologia di «{{name}}»",
+    "history_refresh_failed": "Impossibile verificare se ci sono transazioni di nomi più recenti.",
+    "list_label": "i suoi nomi",
+    "loading": "caricamento dei suoi nomi",
+    "no_primary": "Nessun nome principale. Il nodo assegna un nome principale a un account quando registra, acquista o rinomina un nome senza averne uno.",
+    "no_record": "Il nodo non ha ora alcun record di questo nome.",
+    "nobody_now": "Ora nessuno ha questo nome.",
+    "none": "Nessun nome registrato.",
+    "note": {
+      "address_like": "Questo nome è scritto come un indirizzo.",
+      "invisible_one": "Questo nome contiene {{count}} caratteri invisibili o vuoti.",
+      "invisible_other": "Questo nome contiene {{count}} caratteri invisibili o vuoti.",
+      "invisible_single": "Questo nome contiene un carattere invisibile o vuoto.",
+      "owner_end": "Questo nome termina con gli stessi caratteri dell'indirizzo del suo proprietario (…{{end}}).",
+      "owner_start": "Questo nome inizia con gli stessi caratteri dell'indirizzo del suo proprietario ({{start}}…)."
+    },
+    "notes_label": "note su «{{name}}»",
+    "now_owned_by": "ora appartiene a {{owner}}",
+    "now_spelled_own": "Ora si scrive «{{matched}}», suo.",
+    "now_spelled_owned_by": "Ora si scrive «{{matched}}», appartiene a {{owner}}.",
+    "own_again": "Di nuovo suo.",
+    "owner_failed": "Impossibile leggere chi ha ora questo nome.",
+    "owner_loading": "lettura di chi ha ora questo nome",
+    "primary": "principale",
+    "primary_failed": "Impossibile leggere il suo nome principale.",
+    "read_older": "leggi transazioni di nomi più vecchie",
+    "record_failed": "Impossibile caricare il record di questo nome.",
+    "record_loading": "caricamento del record di questo nome",
+    "registered": "registrato il {{date}}",
+    "registered_again": "Registrato di nuovo da allora, come «{{matched}}», da {{owner}}.",
+    "show_all_of_one": "mostra tutte le {{count}} voci della cronologia di «{{name}}»",
+    "show_all_of_other": "mostra tutte le {{count}} voci della cronologia di «{{name}}»",
+    "show_more_one": "mostra altri {{shown}}",
+    "show_more_other": "mostra altri {{shown}}",
+    "sort": "ordina",
+    "sort_activity": "attività più recente",
+    "sort_az": "dalla A alla Z",
+    "sort_newest": "registrati per ultimi",
+    "sort_oldest": "registrati per primi",
+    "sort_primary": "prima il principale",
+    "sort_za": "dalla Z alla A",
+    "title": "nomi",
+    "title_count": "nomi ({{n}})",
+    "title_more": "nomi ({{n}}+)",
+    "truncated_one": "{{shown}}+ nomi; sono elencati i primi {{shown}}.",
+    "truncated_other": "{{shown}}+ nomi; sono elencati i primi {{shown}}.",
+    "updated": "aggiornato il {{date}}",
+    "view_label": "mostra i nomi come",
+    "whole_history": "tutta la sua cronologia",
+    "whole_history_of": "tutta la cronologia di «{{name}}»"
+  },
+  "notes": {
+    "name_address_like": "Il suo nome principale «{{name}}» è scritto come un indirizzo.",
+    "name_invisible_one": "Il suo nome principale «{{name}}» contiene {{count}} caratteri invisibili o vuoti.",
+    "name_invisible_other": "Il suo nome principale «{{name}}» contiene {{count}} caratteri invisibili o vuoti.",
+    "name_invisible_single": "Il suo nome principale «{{name}}» contiene un carattere invisibile o vuoto.",
+    "name_owner_end": "Il suo nome principale «{{name}}» termina con gli stessi caratteri del suo indirizzo (…{{end}}).",
+    "name_owner_start": "Il suo nome principale «{{name}}» inizia con gli stessi caratteri del suo indirizzo ({{start}}…).",
+    "names_listed_one": "{{shown}} dei {{total}} nomi elencati ha note.",
+    "names_listed_other": "{{shown}} dei {{total}} nomi elencati hanno note.",
+    "names_one": "{{shown}} dei suoi {{total}} nomi ha note.",
+    "names_other": "{{shown}} dei suoi {{total}} nomi hanno note.",
+    "only_name": "Il suo nome ha note.",
+    "other_name_only": "Il suo altro nome ha note.",
+    "other_names_listed_one": "{{shown}} dei {{total}} altri nomi elencati ha note.",
+    "other_names_listed_other": "{{shown}} dei {{total}} altri nomi elencati hanno note.",
+    "other_names_one": "{{shown}} dei suoi {{total}} altri nomi ha note.",
+    "other_names_other": "{{shown}} dei suoi {{total}} altri nomi hanno note.",
+    "penalty": "Il nodo ha registrato su questo account una penalità di minting di {{blocks}} blocchi.",
+    "title": "note"
+  },
+  "payments": {
+    "failed": "Impossibile caricare i suoi pagamenti."
+  },
+  "search": {
+    "clear": "cancella",
+    "compact_placeholder": "cerca nell'Explorer",
+    "helper": "Scegli un suggerimento o premi Invio per cercare esattamente ciò che hai digitato.",
+    "label": "cerca un account o una transazione",
+    "placeholder": "nome, indirizzo o firma di transazione"
+  },
+  "settings": {
+    "remember": "ricorda su questo dispositivo gli account che esploro",
+    "remember_hint": "Solo i loro indirizzi, per questo account Hub. Disattivandolo vengono dimenticati.",
+    "title": "impostazioni dell'Explorer"
+  },
+  "start": {
+    "clear": "cancella",
+    "clear_recent": "cancella le esplorazioni recenti",
+    "recent": "esplorazioni recenti",
+    "your_account": "il tuo account"
+  },
+  "summary": {
+    "first_seen": "prima apparizione a {{date}}",
+    "last_sent": "ultima transazione inviata {{ago}}",
+    "minter_admin": "Minter Admin, membro di MINTER",
+    "minter_member": "membro di MINTER",
+    "minter_outside": "non membro di MINTER",
+    "no_names": "nessun nome registrato",
+    "owns_names_more_one": "possiede {{shown}}+ nomi",
+    "owns_names_more_other": "possiede {{shown}}+ nomi",
+    "owns_names_one": "possiede {{shown}} nome",
+    "owns_names_other": "possiede {{shown}} nomi"
+  },
+  "tabs": {
+    "connections": "connessioni",
+    "label": "sezioni dell'account",
+    "names": "nomi",
+    "overview": "panoramica",
+    "transactions": "transazioni"
+  },
+  "trail": {
+    "label": "il tuo percorso"
+  },
+  "transactions": {
+    "all_kind_one": "In tutto, {{shown}} transazione di questo tipo.",
+    "all_kind_other": "Tutte le {{shown}} di questo tipo.",
+    "all_one": "In tutto, {{shown}} transazione.",
+    "all_other": "Tutte le sue {{shown}} transazioni.",
+    "ceiling": "L'Explorer legge fino a {{max}} transazioni per ogni tipo.",
+    "every_type": "tutti i tipi",
+    "failed": "Impossibile caricare le sue transazioni.",
+    "kind_label": "mostra un solo tipo di transazione",
+    "more_failed": "Impossibile caricare altre sue transazioni.",
+    "newest_kind_one": "{{shown}} transazione, la più recente di questo tipo.",
+    "newest_kind_other": "Le {{shown}} più recenti di questo tipo.",
+    "newest_one": "{{shown}} transazione, la sua più recente.",
+    "newest_other": "Le sue {{shown}} transazioni più recenti.",
+    "none": "Non ha ancora transazioni confermate.",
+    "none_kind": "Nessuna delle sue transazioni confermate è di questo tipo.",
+    "only": "La sua unica transazione.",
+    "only_kind": "L'unica di questo tipo.",
+    "refresh_failed": "Impossibile verificare se ci sono transazioni più recenti.",
+    "show_more": "mostra altro",
+    "title_all": "tutte le transazioni",
+    "type": "tipo",
+    "waiting_failed": "Impossibile verificare le sue transazioni in attesa di un blocco.",
+    "waiting_loading": "Verifica delle sue transazioni in attesa di un blocco…",
+    "waiting_note": "Il tuo nodo le conserva finché un blocco non le include. Le transazioni inviate a questo account compaiono solo quando sono in un blocco.",
+    "waiting_title": "inviate da questo account, in attesa di conferma ({{n}})",
+    "waiting_title_more": "inviate da questo account, in attesa di conferma (almeno {{n}})"
+  },
+  "tx": {
+    "approval": {
+      "approved": "approvata",
+      "expired": "non approvata in tempo",
+      "invalid": "non valida",
+      "pending": "in attesa di approvazioni",
+      "rejected": "rifiutata"
+    },
+    "asset_number": "asset #{{id}}",
+    "creator": "creatore",
+    "details_of": "dettagli: {{type}}",
+    "field": {
+      "account": "account",
+      "admin": "amministratore",
+      "amount": "importo",
+      "answer": "risposta",
+      "asset": "asset",
+      "at": "AT (contratto automatizzato)",
+      "at_address": "indirizzo AT",
+      "at_kind": "tipo",
+      "at_name": "nome dell'AT",
+      "change": "modifica",
+      "data": "dati",
+      "description": "descrizione",
+      "divisible": "divisibile",
+      "encrypted": "cifrato",
+      "funded_with": "finanziato con",
+      "group": "gruppo",
+      "group_approval": "approvazione del gruppo",
+      "identifier": "identificativo",
+      "invitee": "invitato",
+      "level": "livello",
+      "member": "membro",
+      "moved_to": "trasferito a",
+      "name": "nome",
+      "new_admin": "nuovo amministratore",
+      "new_data": "nuovi dati",
+      "new_description": "nuova descrizione",
+      "new_name": "nuovo nome",
+      "new_owner": "nuovo proprietario",
+      "open": "aperto a chiunque",
+      "option": "opzione",
+      "options": "opzioni",
+      "order": "ordine",
+      "owner": "proprietario",
+      "payment": "pagamento",
+      "poll": "sondaggio",
+      "price": "prezzo",
+      "quantity": "quantità",
+      "reason": "motivo",
+      "recipient": "destinatario",
+      "seller": "venditore",
+      "service": "servizio",
+      "share": "quota",
+      "size": "dimensione",
+      "tags": "tag",
+      "transaction": "transazione"
+    },
+    "incoming": "in entrata",
+    "not_shown": "(non mostrato)",
+    "open": "apri la transazione",
+    "outcome": {
+      "expired": "(non approvata in tempo)",
+      "invalid": "(non valida)",
+      "pending": "(in attesa dell'approvazione del gruppo)",
+      "rejected": "(rifiutata in fase di approvazione del gruppo)"
+    },
+    "outgoing": "in uscita",
+    "people": "account coinvolti",
+    "privs_failed": "Impossibile leggere quale account ha ricevuto il livello di minting.",
+    "raw": "risposta grezza dell'API",
+    "raw_caption": "La risposta del tuo nodo, in JSON.",
+    "raw_copied": "Risposta grezza copiata negli appunti.",
+    "raw_copy": "copia la risposta grezza",
+    "say": {
+      "account_flags": {
+        "in": "I flag di questo account sono stati impostati nel blocco genesi",
+        "none": "I flag dell'account {{target}} sono stati impostati nel blocco genesi"
+      },
+      "account_level": {
+        "in": "Il livello di questo account è stato impostato a {{level}} nel blocco genesi",
+        "none": "Il livello dell'account {{target}} è stato impostato a {{level}} nel blocco genesi"
+      },
+      "add_group_admin": {
+        "in": "{{actor}} ha assegnato a questo account il ruolo di amministratore del gruppo {{group}}",
+        "in_proposed": "{{actor}} ha proposto di assegnare a questo account il ruolo di amministratore del gruppo {{group}}",
+        "none": "{{actor}} ha assegnato a {{member}} il ruolo di amministratore del gruppo {{group}}",
+        "none_proposed": "{{actor}} ha proposto di assegnare a {{member}} il ruolo di amministratore del gruppo {{group}}",
+        "out": "Ha assegnato a {{member}} il ruolo di amministratore del gruppo {{group}}",
+        "out_proposed": "Ha proposto di assegnare a {{member}} il ruolo di amministratore del gruppo {{group}}",
+        "self": {
+          "mine": "Ha assunto il ruolo di amministratore del gruppo {{group}}",
+          "mine_proposed": "Ha proposto di assumere il ruolo di amministratore del gruppo {{group}}",
+          "none": "{{actor}} ha assunto il ruolo di amministratore del gruppo {{group}}",
+          "none_proposed": "{{actor}} ha proposto di assumere il ruolo di amministratore del gruppo {{group}}"
+        }
+      },
+      "airdrop": {
+        "mine": "Ha effettuato un airdrop",
+        "none": "{{actor}} ha effettuato un airdrop"
+      },
+      "arbitrary": {
+        "in": "Ha ricevuto {{amount}} da {{from}} con una pubblicazione su QDN",
+        "named": {
+          "mine": "Ha pubblicato {{what}} con il nome «{{name}}»",
+          "none": "{{actor}} ha pubblicato {{what}} con il nome «{{name}}»"
+        },
+        "unnamed": {
+          "mine": "Ha pubblicato {{what}}",
+          "none": "{{actor}} ha pubblicato {{what}}"
+        }
+      },
+      "at": {
+        "ran": "{{at}} ha eseguito il suo programma",
+        "ran_mine": "Ha eseguito il suo programma"
+      },
+      "buy_name": {
+        "in": "Ha venduto il nome «{{name}}» a {{buyer}} per {{price}}",
+        "none": "{{actor}} ha acquistato il nome «{{name}}» da {{seller}} per {{price}}",
+        "out": "Ha acquistato il nome «{{name}}» da {{seller}} per {{price}}"
+      },
+      "cancel_asset_order": {
+        "mine": "Ha annullato un ordine di asset",
+        "none": "{{actor}} ha annullato un ordine di asset"
+      },
+      "cancel_group_ban": {
+        "in": "{{actor}} ha revocato l'esclusione di questo account dal gruppo {{group}}",
+        "in_proposed": "{{actor}} ha proposto di revocare l'esclusione di questo account dal gruppo {{group}}",
+        "none": "{{actor}} ha revocato l'esclusione di {{member}} dal gruppo {{group}}",
+        "none_proposed": "{{actor}} ha proposto di revocare l'esclusione di {{member}} dal gruppo {{group}}",
+        "out": "Ha revocato l'esclusione di {{member}} dal gruppo {{group}}",
+        "out_proposed": "Ha proposto di revocare l'esclusione di {{member}} dal gruppo {{group}}"
+      },
+      "cancel_group_invite": {
+        "mine": "Ha annullato un invito a un gruppo",
+        "mine_proposed": "Ha proposto di annullare un invito a un gruppo",
+        "none": "{{actor}} ha annullato un invito a un gruppo",
+        "none_proposed": "{{actor}} ha proposto di annullare un invito a un gruppo"
+      },
+      "cancel_sell_name": {
+        "mine": "Ha ritirato dalla vendita il nome «{{name}}»",
+        "none": "{{actor}} ha ritirato dalla vendita il nome «{{name}}»"
+      },
+      "chat": {
+        "group": {
+          "mine": "Ha inviato un messaggio di chat a un gruppo",
+          "none": "{{actor}} ha inviato un messaggio di chat a un gruppo"
+        },
+        "in": "Ha ricevuto un messaggio di chat da {{from}}",
+        "none": "{{from}} ha inviato un messaggio di chat a {{to}}",
+        "out": "Ha inviato un messaggio di chat a {{to}}"
+      },
+      "create_asset_order": {
+        "mine": "Ha inserito un ordine per scambiare {{have}} con {{want}}",
+        "none": "{{actor}} ha inserito un ordine per scambiare {{have}} con {{want}}"
+      },
+      "create_group": {
+        "mine": "Ha creato il gruppo {{group}}",
+        "none": "{{actor}} ha creato il gruppo {{group}}"
+      },
+      "create_poll": {
+        "for_me": "{{actor}} ha creato il sondaggio «{{poll}}» di proprietà di questo account",
+        "mine": "Ha creato il sondaggio «{{poll}}»",
+        "none": "{{actor}} ha creato il sondaggio «{{poll}}»",
+        "owned_by": "{{actor}} ha creato il sondaggio «{{poll}}» di proprietà di {{owner}}",
+        "owned_by_mine": "Ha creato il sondaggio «{{poll}}» di proprietà di {{owner}}"
+      },
+      "deploy_at": {
+        "in": "{{actor}} ha creato questo AT (contratto automatizzato)",
+        "mine": "Ha creato un AT (contratto automatizzato)",
+        "none": "{{actor}} ha creato un AT (contratto automatizzato)"
+      },
+      "enable_forging": {
+        "for": {
+          "in": "{{actor}} ha abilitato il forging per questo account",
+          "none": "{{actor}} ha abilitato il forging per {{target}}",
+          "out": "Ha abilitato il forging per {{target}}"
+        },
+        "mine": "Ha abilitato il forging",
+        "none": "{{actor}} ha abilitato il forging"
+      },
+      "generic": {
+        "mine": "Ha effettuato una transazione: {{type}}",
+        "nobody": "Una transazione: {{type}}",
+        "none": "{{actor}} ha effettuato una transazione: {{type}}"
+      },
+      "genesis": {
+        "in": "Ha ricevuto {{amount}} nel blocco genesi",
+        "none": "{{to}} ha ricevuto {{amount}} nel blocco genesi"
+      },
+      "group_approval": {
+        "approved": {
+          "mine": "Ha approvato la transazione {{tx}}",
+          "none": "{{actor}} ha approvato la transazione {{tx}}"
+        },
+        "rejected": {
+          "mine": "Ha rifiutato la transazione {{tx}}",
+          "none": "{{actor}} ha rifiutato la transazione {{tx}}"
+        }
+      },
+      "group_ban": {
+        "in": "{{actor}} ha escluso questo account dal gruppo {{group}}",
+        "in_proposed": "{{actor}} ha proposto di escludere questo account dal gruppo {{group}}",
+        "none": "{{actor}} ha escluso {{member}} dal gruppo {{group}}",
+        "none_proposed": "{{actor}} ha proposto di escludere {{member}} dal gruppo {{group}}",
+        "out": "Ha escluso {{member}} dal gruppo {{group}}",
+        "out_proposed": "Ha proposto di escludere {{member}} dal gruppo {{group}}"
+      },
+      "group_invite": {
+        "in": "{{actor}} ha invitato questo account nel gruppo {{group}}",
+        "in_proposed": "{{actor}} ha proposto di invitare questo account nel gruppo {{group}}",
+        "none": "{{actor}} ha invitato {{invitee}} nel gruppo {{group}}",
+        "none_proposed": "{{actor}} ha proposto di invitare {{invitee}} nel gruppo {{group}}",
+        "out": "Ha invitato {{invitee}} nel gruppo {{group}}",
+        "out_proposed": "Ha proposto di invitare {{invitee}} nel gruppo {{group}}"
+      },
+      "group_kick": {
+        "in": "{{actor}} ha rimosso questo account dal gruppo {{group}}",
+        "in_proposed": "{{actor}} ha proposto di rimuovere questo account dal gruppo {{group}}",
+        "none": "{{actor}} ha rimosso {{member}} dal gruppo {{group}}",
+        "none_proposed": "{{actor}} ha proposto di rimuovere {{member}} dal gruppo {{group}}",
+        "out": "Ha rimosso {{member}} dal gruppo {{group}}",
+        "out_proposed": "Ha proposto di rimuovere {{member}} dal gruppo {{group}}"
+      },
+      "issue_asset": {
+        "mine": "Ha emesso l'asset «{{asset}}»",
+        "nobody": "È stato emesso l'asset «{{asset}}»",
+        "none": "{{actor}} ha emesso l'asset «{{asset}}»"
+      },
+      "join_group": {
+        "mine": "Ha aderito o ha chiesto di aderire al gruppo {{group}}",
+        "none": "{{actor}} ha aderito o ha chiesto di aderire al gruppo {{group}}"
+      },
+      "leave_group": {
+        "mine": "Ha lasciato il gruppo {{group}}",
+        "none": "{{actor}} ha lasciato il gruppo {{group}}"
+      },
+      "message": {
+        "in": "Ha ricevuto un messaggio da {{from}}",
+        "in_amount": "Ha ricevuto un messaggio con {{amount}} da {{from}}",
+        "none": "{{from}} ha inviato un messaggio a {{to}}",
+        "none_amount": "{{from}} ha inviato un messaggio con {{amount}} a {{to}}",
+        "none_nobody": "{{from}} ha inviato un messaggio",
+        "out": "Ha inviato un messaggio a {{to}}",
+        "out_amount": "Ha inviato un messaggio con {{amount}} a {{to}}",
+        "out_nobody": "Ha inviato un messaggio"
+      },
+      "multi": {
+        "in_one": "Ha ricevuto {{amount}} da {{from}} in un pagamento a {{accounts}} account",
+        "in_other": "Ha ricevuto {{amount}} da {{from}} in un pagamento a {{accounts}} account",
+        "none_one": "{{actor}} ha pagato {{amount}} a {{accounts}} account con un unico pagamento",
+        "none_other": "{{actor}} ha pagato {{amount}} a {{accounts}} account con un unico pagamento",
+        "out_one": "Ha pagato {{amount}} a {{accounts}} account con un unico pagamento",
+        "out_other": "Ha pagato {{amount}} a {{accounts}} account con un unico pagamento"
+      },
+      "payment_line": "{{amount}} a {{to}}",
+      "presence": {
+        "minting": {
+          "mine": "Ha segnalato di essere online (minting)",
+          "none": "{{actor}} ha segnalato di essere online (minting)"
+        },
+        "trade_bot": {
+          "mine": "Ha segnalato di essere online (bot di trading)",
+          "none": "{{actor}} ha segnalato di essere online (bot di trading)"
+        }
+      },
+      "publicize": {
+        "mine": "Ha pubblicato la sua chiave pubblica",
+        "none": "{{actor}} ha pubblicato la sua chiave pubblica"
+      },
+      "register_name": {
+        "mine": "Ha registrato il nome «{{name}}»",
+        "none": "{{actor}} ha registrato il nome «{{name}}»"
+      },
+      "remove_group_admin": {
+        "in": "{{actor}} ha rimosso questo account dal ruolo di amministratore del gruppo {{group}}",
+        "in_proposed": "{{actor}} ha proposto di rimuovere questo account dal ruolo di amministratore del gruppo {{group}}",
+        "none": "{{actor}} ha rimosso {{member}} dal ruolo di amministratore del gruppo {{group}}",
+        "none_proposed": "{{actor}} ha proposto di rimuovere {{member}} dal ruolo di amministratore del gruppo {{group}}",
+        "out": "Ha rimosso {{member}} dal ruolo di amministratore del gruppo {{group}}",
+        "out_proposed": "Ha proposto di rimuovere {{member}} dal ruolo di amministratore del gruppo {{group}}",
+        "self": {
+          "mine": "Ha lasciato il ruolo di amministratore del gruppo {{group}}",
+          "mine_proposed": "Ha proposto di lasciare il ruolo di amministratore del gruppo {{group}}",
+          "none": "{{actor}} ha lasciato il ruolo di amministratore del gruppo {{group}}",
+          "none_proposed": "{{actor}} ha proposto di lasciare il ruolo di amministratore del gruppo {{group}}"
+        }
+      },
+      "reward_share": {
+        "removed": {
+          "in": "{{actor}} ha rimosso il suo reward-share con questo account",
+          "none": "{{actor}} ha rimosso il reward-share con {{other}}",
+          "out": "Ha rimosso il reward-share con {{other}}"
+        },
+        "self_start": "{{actor}} ha iniziato a fare minting (con un self-share)",
+        "self_start_mine": "Ha iniziato a fare minting (con un self-share)",
+        "self_stop": "{{actor}} ha smesso di fare minting (ha rimosso il suo self-share)",
+        "self_stop_mine": "Ha smesso di fare minting (ha rimosso il suo self-share)",
+        "started": {
+          "in": "{{actor}} ha avviato un reward-share con questo account (quota {{percent}})",
+          "none": "{{actor}} ha avviato un reward-share con {{other}} (quota {{percent}})",
+          "out": "Ha avviato un reward-share con {{other}} (quota {{percent}})"
+        }
+      },
+      "sell_name": {
+        "mine": "Ha messo in vendita il nome «{{name}}» a {{price}}",
+        "none": "{{actor}} ha messo in vendita il nome «{{name}}» a {{price}}"
+      },
+      "set_group": {
+        "cleared": {
+          "mine": "Ha rimosso il suo gruppo predefinito",
+          "none": "{{actor}} ha rimosso il suo gruppo predefinito"
+        },
+        "set": {
+          "mine": "Ha impostato il suo gruppo predefinito su {{group}}",
+          "none": "{{actor}} ha impostato il suo gruppo predefinito su {{group}}"
+        }
+      },
+      "transfer": {
+        "in": "Ha ricevuto {{amount}} da {{from}}",
+        "none": "{{from}} ha inviato {{amount}} a {{to}}",
+        "out": "Ha inviato {{amount}} a {{to}}",
+        "self": "{{actor}} ha inviato {{amount}} al proprio account",
+        "self_mine": "Ha inviato {{amount}} al proprio account"
+      },
+      "transfer_privs": {
+        "in": "Ha ricevuto il livello di minting da {{from}}",
+        "none": "{{actor}} ha trasferito il suo livello di minting a {{to}}",
+        "none_unknown": "{{actor}} ha trasferito il suo livello di minting a un altro account",
+        "out": "Ha trasferito il suo livello di minting a {{to}}",
+        "out_unknown": "Ha trasferito il suo livello di minting a un altro account"
+      },
+      "update_asset": {
+        "details": {
+          "mine": "Ha aggiornato l'asset {{asset}}",
+          "none": "{{actor}} ha aggiornato l'asset {{asset}}"
+        },
+        "owner": {
+          "in": "{{actor}} ha ceduto l'asset {{asset}} a questo account",
+          "none": "{{actor}} ha ceduto l'asset {{asset}} a {{new_owner}}",
+          "out": "Ha ceduto l'asset {{asset}} a {{new_owner}}"
+        }
+      },
+      "update_group": {
+        "owner": {
+          "in": "{{actor}} ha trasferito la proprietà del gruppo {{group}} a questo account",
+          "in_proposed": "{{actor}} ha proposto di trasferire la proprietà del gruppo {{group}} a questo account",
+          "none": "{{actor}} ha trasferito la proprietà del gruppo {{group}} a {{new_owner}}",
+          "none_proposed": "{{actor}} ha proposto di trasferire la proprietà del gruppo {{group}} a {{new_owner}}",
+          "out": "Ha trasferito la proprietà del gruppo {{group}} a {{new_owner}}",
+          "out_proposed": "Ha proposto di trasferire la proprietà del gruppo {{group}} a {{new_owner}}"
+        },
+        "settings": {
+          "mine": "Ha aggiornato le impostazioni del gruppo {{group}}",
+          "mine_proposed": "Ha proposto di aggiornare le impostazioni del gruppo {{group}}",
+          "none": "{{actor}} ha aggiornato le impostazioni del gruppo {{group}}",
+          "none_proposed": "{{actor}} ha proposto di aggiornare le impostazioni del gruppo {{group}}"
+        }
+      },
+      "update_name": {
+        "details": {
+          "mine": "Ha aggiornato i dati del nome «{{name}}»",
+          "none": "{{actor}} ha aggiornato i dati del nome «{{name}}»"
+        },
+        "renamed": {
+          "mine": "Ha rinominato «{{name}}» in «{{new_name}}»",
+          "none": "{{actor}} ha rinominato «{{name}}» in «{{new_name}}»"
+        }
+      },
+      "vote_on_poll": {
+        "mine": "Ha votato nel sondaggio «{{poll}}»",
+        "none": "{{actor}} ha votato nel sondaggio «{{poll}}»"
+      }
+    },
+    "service": {
+      "app": "un'app",
+      "arbitrary_data": "dei dati",
+      "attachment": "un allegato",
+      "audio": "un file audio",
+      "auto_update": "un aggiornamento di Core",
+      "blog": "un blog",
+      "blog_comment": "un commento su un blog",
+      "blog_post": "un post di blog",
+      "chain_comment": "un commento sulla blockchain",
+      "chain_data": "dei dati sulla blockchain",
+      "code": "del codice",
+      "comment": "un commento",
+      "coupon": "un coupon",
+      "database": "un database",
+      "document": "un documento",
+      "encrypted": "una risorsa cifrata",
+      "extension": "un'estensione",
+      "file": "un file",
+      "files": "dei file",
+      "game": "un gioco",
+      "gif_repository": "una raccolta di GIF",
+      "git_repository": "un repository Git",
+      "image": "un'immagine",
+      "item": "un articolo",
+      "json": "dei dati JSON",
+      "list": "un elenco",
+      "message": "un messaggio",
+      "metadata": "dei metadati",
+      "nft": "un NFT",
+      "offer": "un'offerta",
+      "playlist": "una playlist",
+      "plugin": "un plugin",
+      "podcast": "un podcast",
+      "product": "un prodotto",
+      "qchat_attachment": "un allegato di Q-Chat",
+      "qchat_audio": "un file audio di Q-Chat",
+      "qchat_image": "un'immagine di Q-Chat",
+      "qchat_voice": "un messaggio vocale di Q-Chat",
+      "snapshot": "uno snapshot",
+      "store": "un negozio",
+      "thumbnail": "una miniatura",
+      "unknown": "una risorsa QDN",
+      "video": "un video",
+      "voice": "una registrazione vocale",
+      "website": "un sito web"
+    },
+    "show_all_one": "mostra tutti ({{count}})",
+    "show_all_other": "mostra tutti ({{count}})",
+    "unknown_account": "un account sconosciuto",
+    "value": {
+      "approve": "approvazione",
+      "flags": "AND {{and}}, OR {{or}}, XOR {{xor}}",
+      "no": "no",
+      "option": "opzione {{n}}",
+      "reject": "rifiuto",
+      "removed": "rimossa",
+      "yes": "sì"
+    },
+    "when_block": "{{time}} · blocco {{block}}",
+    "when_waiting": "in attesa di conferma · inviata {{ago}}"
+  },
+  "tx_family": {
+    "all": "tutte",
+    "groups": "gruppi",
+    "messages": "messaggi",
+    "minting": "minting",
+    "names": "nomi",
+    "other": "altre",
+    "payments": "pagamenti",
+    "qdn": "dati QDN",
+    "trading": "scambi"
+  },
+  "tx_page": {
+    "about": "informazioni su questa transazione",
+    "answers": "la transazione a cui risponde",
+    "answers_failed": "Impossibile caricare la transazione a cui risponde.",
+    "answers_unknown": "Il tuo nodo non ha la transazione a cui risponde.",
+    "block": "blocco",
+    "copy_signature": "copia firma",
+    "details": "dettagli",
+    "failed": "Impossibile caricare questa transazione.",
+    "fee": "commissione",
+    "open_answered": "apri quella transazione",
+    "sent": "inviata",
+    "signature": "firma",
+    "signature_copied": "Firma copiata negli appunti.",
+    "time": "data e ora",
+    "unknown": "Sul tuo nodo non c'è nessuna transazione con questa firma.",
+    "unknown_hint": "Forse non ha ancora raggiunto il tuo nodo, oppure c'è un carattere sbagliato.",
+    "waiting": "in attesa di conferma"
+  },
+  "tx_type": {
+    "account_flags": "flag dell'account",
+    "account_level": "livello dell'account",
+    "add_group_admin": "amministratore di gruppo aggiunto",
+    "airdrop": "airdrop",
+    "arbitrary": "pubblicazione su QDN",
+    "at": "transazione AT",
+    "buy_name": "acquisto di un nome",
+    "cancel_asset_order": "ordine di asset annullato",
+    "cancel_group_ban": "esclusione da un gruppo revocata",
+    "cancel_group_invite": "invito a un gruppo annullato",
+    "cancel_sell_name": "vendita di un nome annullata",
+    "chat": "messaggio di chat",
+    "create_asset_order": "ordine di asset",
+    "create_group": "gruppo creato",
+    "create_poll": "sondaggio creato",
+    "deploy_at": "AT creato",
+    "enable_forging": "forging abilitato",
+    "genesis": "assegnazione nel blocco genesi",
+    "group_approval": "approvazione di gruppo",
+    "group_ban": "esclusione da un gruppo",
+    "group_invite": "invito a un gruppo",
+    "group_kick": "rimozione da un gruppo",
+    "issue_asset": "asset emesso",
+    "join_group": "adesione a un gruppo",
+    "leave_group": "uscita da un gruppo",
+    "message": "messaggio",
+    "multi_payment": "pagamento multiplo",
+    "payment": "pagamento",
+    "presence": "presenza",
+    "publicize": "chiave pubblica pubblicata",
+    "register_name": "registrazione di un nome",
+    "remove_group_admin": "amministratore di gruppo rimosso",
+    "reward_share": "reward-share",
+    "sell_name": "nome messo in vendita",
+    "set_group": "gruppo predefinito impostato",
+    "transfer_asset": "trasferimento di asset",
+    "transfer_privs": "trasferimento del livello di minting",
+    "update_asset": "aggiornamento di un asset",
+    "update_group": "aggiornamento di un gruppo",
+    "update_name": "aggiornamento di un nome",
+    "vote_on_poll": "voto in un sondaggio"
+  },
+  "window": {
+    "forward": "avanti",
+    "full": "espandi a tutta la finestra",
+    "leave_full": "torna alla dimensione normale",
+    "subtitle": "Cerca qualsiasi account o transazione di Qortal"
+  }
+}
