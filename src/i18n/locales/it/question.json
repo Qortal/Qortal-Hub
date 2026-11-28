@@ -40,6 +40,7 @@
   },
   "message": {
     "error": {
+      "account_changed": "L'account o il nodo è cambiato prima della firma, quindi non è stato inviato nulla.",
       "add_to_list": "impossibile aggiungere alla lista",
       "app_fee_not_sent": "la pubblicazione è riuscita, ma la commissione dell'app non è stata inviata: {{ error }}",
       "app_fee_outcome_unknown": "la pubblicazione è riuscita, ma Hub non è riuscito a stabilire se la commissione dell'app è stata pagata. Controllalo nelle tue transazioni.",

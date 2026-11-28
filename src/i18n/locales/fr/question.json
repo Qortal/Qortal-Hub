@@ -40,6 +40,7 @@
   },
   "message": {
     "error": {
+      "account_changed": "Le compte ou le nœud a changé avant la signature : rien n'a été envoyé.",
       "add_to_list": "échec de l'ajout à la liste",
       "app_fee_not_sent": "la publication a réussi, mais les frais de l'application n'ont pas été envoyés : {{ error }}",
       "app_fee_outcome_unknown": "la publication a réussi, mais Hub n'a pas pu déterminer si les frais de l'application ont été payés. Vérifiez-le dans vos transactions.",

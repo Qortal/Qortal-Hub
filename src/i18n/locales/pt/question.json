@@ -40,6 +40,7 @@
   },
   "message": {
     "error": {
+      "account_changed": "A conta ou o nó mudou antes da assinatura, por isso nada foi enviado.",
       "add_to_list": "falha ao adicionar à lista",
       "app_fee_not_sent": "a publicação foi concluída, mas a taxa do aplicativo não foi enviada: {{ error }}",
       "app_fee_outcome_unknown": "a publicação foi concluída, mas o Hub não conseguiu determinar se a taxa do aplicativo foi paga. Confira nas suas transações.",
