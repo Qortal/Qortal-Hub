@@ -28,6 +28,7 @@ export const qortalRequestsFactory = () => ({
   setPermission: vi.fn(),
   setSessionPermissions: vi.fn(),
   hasSessionPermission: vi.fn(),
+  isSessionPermissionTakenBack: vi.fn(() => false),
   VALID_SESSION_PERMISSIONS: [],
   AUTO_GRANTED_PERMISSIONS_ON_AUTH: [],
 });

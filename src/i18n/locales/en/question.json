@@ -40,6 +40,7 @@
   },
   "message": {
     "error": {
+      "account_changed": "The account or node changed before this was signed, so it wasn't sent.",
       "add_to_list": "failed to add to list",
       "app_fee_not_sent": "the publish went through, but the app fee was not sent: {{ error }}",
       "app_fee_outcome_unknown": "the publish went through, but Hub couldn't tell whether the app fee was paid. Check your transactions to see whether it was.",

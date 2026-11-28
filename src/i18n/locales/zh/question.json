@@ -40,6 +40,7 @@
   },
   "message": {
     "error": {
+      "account_changed": "签名前账户或节点已更改，因此未发送。",
       "add_to_list": "添加到列表失败",
       "app_fee_not_sent": "发布已完成，但应用费用未发送：{{ error }}",
       "app_fee_outcome_unknown": "发布已完成，但 Hub 无法确定应用费用是否已支付。请在您的交易中查看。",

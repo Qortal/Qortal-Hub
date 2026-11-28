@@ -40,6 +40,7 @@
   },
   "message": {
     "error": {
+      "account_changed": "Konto või sõlm muutus enne allkirjastamist, seega seda ei saadetud.",
       "add_to_list": "nimekirja lisamine ebaõnnestus",
       "app_fee_not_sent": "avaldamine õnnestus, kuid rakenduse tasu ei saadetud: {{ error }}",
       "app_fee_outcome_unknown": "avaldamine õnnestus, kuid Hub ei suutnud kindlaks teha, kas rakenduse tasu maksti. Kontrolli seda oma tehingutest.",

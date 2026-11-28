@@ -361,6 +361,93 @@ export async function getAppsWithNotificationPermission(
   return apps;
 }
 
+/**
+ * The choices stored for one account ("always allow" boxes), by the key their
+ * callers use, for listing them and turning them off.
+ */
+export async function accountChoices(
+  address: string
+): Promise<{ key: string; value: unknown }[]> {
+  if (!address) return [];
+  const prefix = `${ACCOUNT_PERMISSION_PREFIX}${address}:`;
+  const permissions = toPermissionRecord(await getQortalRequestPermissions());
+  return Object.keys(permissions)
+    .filter((key) => key.startsWith(prefix))
+    .map((key) => ({ key: key.slice(prefix.length), value: permissions[key] }));
+}
+
+/**
+ * Turns one of an account's stored choices off. Choices are stored under the
+ * account signed in, so only while that is `address`. True when done.
+ */
+export async function turnOffAccountChoice(
+  address: string,
+  key: string
+): Promise<boolean> {
+  if (!address || getCurrentAddress() !== address) return false;
+  await setPermission(key, false);
+  return true;
+}
+
+/**
+ * Turns one of an account's stored choices back on, as ticking its box in the
+ * approval window does. Only while that account is signed in. True when done.
+ */
+export async function turnOnAccountChoice(
+  address: string,
+  key: string
+): Promise<boolean> {
+  if (!address || getCurrentAddress() !== address) return false;
+  await setPermission(key, true);
+  return true;
+}
+
+/**
+ * Turns the app's notifications off for the account, as the notification
+ * settings do: its rules leave the websocket at the reconnect. Only while
+ * that account is signed in. True when done.
+ */
+export async function turnOffNotifications(
+  address: string,
+  appName: string
+): Promise<boolean> {
+  if (!address || !appName || getCurrentAddress() !== address) return false;
+  await setPermission(getNotificationPermissionKey(appName, address), false);
+  executeEvent('notifications-websocket-reconnect', undefined);
+  return true;
+}
+
+/**
+ * The account's answer about the app's notifications: allowed (`on`), turned
+ * off or declined (`off`), or never given (`none`).
+ */
+export async function notificationsChoice(
+  address: string,
+  appName: string
+): Promise<'on' | 'off' | 'none'> {
+  if (!address || !appName) return 'none';
+  const value = await getPermission(
+    getNotificationPermissionKey(appName, address)
+  );
+  if (value === true) return 'on';
+  return value === false ? 'off' : 'none';
+}
+
+/**
+ * Turns the app's notifications back on for the account, as allowing them in
+ * the prompt does: its rules join the websocket at the reconnect. Only while
+ * that account is signed in. True when done.
+ */
+export async function turnOnNotifications(
+  address: string,
+  appName: string
+): Promise<boolean> {
+  if (!address || !appName || getCurrentAddress() !== address) return false;
+  await setPermission(getNotificationPermissionKey(appName, address), true);
+  executeEvent('notifications-websocket-reconnect', undefined);
+  return true;
+}
+
 const QORTAL_NOTIFICATION_OS_PUSH_DISABLED_KEY =
   'qortalNotificationOsPushDisabled';
 
@@ -415,6 +502,104 @@ function getSessionPermissionKey(tabId, qapName) {
 
 function getAddressScopedSessionPermissionKey(tabId, qapName) {
   return `${tabId}-${getCurrentAddress()}-${qapName}`;
+}
+
+// What the user took back from a tab in the budget panel, until the tab
+// closes: the panel offers it again, and a sign-in doesn't hand it back.
+// Kept under the same keys as the permissions themselves.
+const takenBackSessionPermissions = new Map<string, Set<string>>();
+
+function takenBackKey(tabId, qapName, permission) {
+  return permission === 'NOTIFICATION_PERMISSION'
+    ? getAddressScopedSessionPermissionKey(tabId, qapName)
+    : getSessionPermissionKey(tabId, qapName);
+}
+
+/** What the user took back from the tab and hasn't allowed again. */
+export function getTakenBackSessionPermissions(tabId, qapName): string[] {
+  return [
+    ...new Set([
+      ...(takenBackSessionPermissions.get(
+        getSessionPermissionKey(tabId, qapName)
+      ) ?? []),
+      ...(takenBackSessionPermissions.get(
+        getAddressScopedSessionPermissionKey(tabId, qapName)
+      ) ?? []),
+    ]),
+  ];
+}
+
+export function isSessionPermissionTakenBack(tabId, qapName, permission) {
+  return !!takenBackSessionPermissions
+    .get(takenBackKey(tabId, qapName, permission))
+    ?.has(permission);
+}
+
+function forgetTakenBack(tabId, qapName, permission) {
+  const key = takenBackKey(tabId, qapName, permission);
+  const taken = takenBackSessionPermissions.get(key);
+  if (!taken?.delete(permission)) return;
+  if (!taken.size) takenBackSessionPermissions.delete(key);
+}
+
+const sessionPermissionListeners = new Set<() => void>();
+
+/** Calls `listener` whenever a tab's session permissions change. */
+export function subscribeSessionPermissions(listener: () => void) {
+  sessionPermissionListeners.add(listener);
+  return () => {
+    sessionPermissionListeners.delete(listener);
+  };
+}
+
+function sessionPermissionsChanged() {
+  for (const listener of [...sessionPermissionListeners]) {
+    try {
+      listener();
+    } catch (error) {
+      console.error('Error in a session permissions listener:', error);
+    }
+  }
+}
+
+/**
+ * Takes one permission out of a tab's session: the next such request asks.
+ * The private data channel takes the tab's approved Reticulum destinations
+ * with it, as reaching one of them would give it back without asking.
+ *
+ * `takeBack`: the user took this one back in the panel. It is remembered
+ * until the tab closes, so the panel can offer it again and a sign-in doesn't
+ * hand it back.
+ */
+export function revokeSessionPermission(
+  tabId,
+  qapName,
+  permission,
+  { takeBack = false }: { takeBack?: boolean } = {}
+) {
+  if (permission === 'PRIVATE_DATA_CHANNEL') {
+    clearRnsDestinationPermissionsByTabId(tabId);
+  }
+  for (const key of [
+    getSessionPermissionKey(tabId, qapName),
+    getAddressScopedSessionPermissionKey(tabId, qapName),
+  ]) {
+    const entry = sessionPermissionsStore.get(key);
+    if (!entry) continue;
+    const permissions = entry.permissions.filter((p) => p !== permission);
+    if (permissions.length) {
+      sessionPermissionsStore.set(key, { ...entry, permissions });
+    } else {
+      sessionPermissionsStore.delete(key);
+    }
+  }
+  if (takeBack) {
+    const key = takenBackKey(tabId, qapName, permission);
+    const taken = takenBackSessionPermissions.get(key) ?? new Set<string>();
+    taken.add(permission);
+    takenBackSessionPermissions.set(key, taken);
+  }
+  sessionPermissionsChanged();
 }
 
 // Valid permissions that can be granted in a session
@@ -473,6 +658,11 @@ export function setSessionPermissions(tabId, qapName, permissions) {
       (permission) => permission !== 'NOTIFICATION_PERMISSION'
     );
 
+    // Allowed again: no longer taken back.
+    validPermissions.forEach((permission) =>
+      forgetTakenBack(tabId, qapName, permission)
+    );
+
     const savePermissions = (key, permissionsToSave) => {
       if (permissionsToSave.length === 0) return [];
       const existing = sessionPermissionsStore.get(key);
@@ -495,6 +685,7 @@ export function setSessionPermissions(tabId, qapName, permissions) {
       getAddressScopedSessionPermissionKey(tabId, qapName),
       notificationPermissions
     );
+    sessionPermissionsChanged();
 
     return [
       ...new Set([
@@ -506,6 +697,14 @@ export function setSessionPermissions(tabId, qapName, permissions) {
     console.error('Error setting session permissions:', error);
     throw error;
   }
+}
+
+/**
+ * The user allowed again, in the panel, something taken back from the tab: it
+ * is the tab's again until the tab closes.
+ */
+export function allowSessionPermissionAgain(tabId, qapName, permission) {
+  setSessionPermissions(tabId, qapName, [permission]);
 }
 
 export function getSessionPermissions(tabId, qapName) {
@@ -545,6 +744,11 @@ export function clearSessionPermissions(tabId, qapName) {
     sessionPermissionsStore.delete(
       getAddressScopedSessionPermissionKey(tabId, qapName)
     );
+    takenBackSessionPermissions.delete(getSessionPermissionKey(tabId, qapName));
+    takenBackSessionPermissions.delete(
+      getAddressScopedSessionPermissionKey(tabId, qapName)
+    );
+    sessionPermissionsChanged();
   } catch (error) {
     console.error('Error clearing session permissions:', error);
     throw error;
@@ -554,6 +758,8 @@ export function clearSessionPermissions(tabId, qapName) {
 export function clearAllSessionPermissions() {
   try {
     sessionPermissionsStore.clear();
+    takenBackSessionPermissions.clear();
+    sessionPermissionsChanged();
   } catch (error) {
     console.error('Error clearing all session permissions:', error);
     throw error;
@@ -570,6 +776,10 @@ export function clearSessionPermissionsByTabId(tabId) {
       }
     }
     keysToDelete.forEach((key) => sessionPermissionsStore.delete(key));
+    for (const key of [...takenBackSessionPermissions.keys()]) {
+      if (key.startsWith(`${tabId}-`)) takenBackSessionPermissions.delete(key);
+    }
+    sessionPermissionsChanged();
     clearRnsDestinationPermissionsByTabId(tabId);
 
     // Also cleanup any encrypted media associated with this tab

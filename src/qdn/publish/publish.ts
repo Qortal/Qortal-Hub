@@ -215,6 +215,7 @@ async function getKeyPair() {
 }
 
 export const publishData = async ({
+  beforeSigning,
   category,
   data,
   description,
@@ -322,6 +323,9 @@ export const publishData = async ({
 
     const resKeyPair = await getKeyPair();
     const parsedData = resKeyPair;
+    // The caller's check of the key that signs (an app budget's: its own
+    // account's); throwing stops the publish before it is signed.
+    beforeSigning?.(parsedData.publicKey);
     const uint8PrivateKey = Base58.decode(parsedData.privateKey);
     const uint8PublicKey = Base58.decode(parsedData.publicKey);
     const keyPair = {

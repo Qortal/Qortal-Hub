@@ -83,6 +83,7 @@ import { DesktopSideBar } from '../Desktop/DesktopLeftSideBar';
 import { LayoutRestoreOffer } from '../Save/LayoutRestoreOffer';
 import { LayoutSavePrompt } from '../Save/LayoutSavePrompt';
 import { QdnCardDock } from '../Save/QdnSettingsCard';
+import { AppBudgetNotices } from '../AppBudgets/AppBudgetNotices';
 import { AdminSpace } from '../Chat/AdminSpace';
 import {
   addressInfoControllerAtom,
@@ -5912,6 +5913,7 @@ export const Group = ({
         <QdnCardDock page>
           <LayoutRestoreOffer />
           <LayoutSavePrompt />
+          <AppBudgetNotices />
         </QdnCardDock>
         <DesktopSideBar
           desktopViewMode={desktopViewMode}

@@ -70,6 +70,8 @@ import { TaskManager } from '../TaskManager/TaskManager';
 import { GlobalActions } from '../GlobalActions/GlobalActions';
 import { SubscriptionsStatus } from './SubscriptionsStatus';
 import { AppBookmarksButton } from '../Apps/AppBookmarks';
+import { AppBudgetsButton } from '../AppBudgets/AppBudgetsButton';
+import { budgetAppFrom } from '../../qortal/appBudgets';
 import { useOpenLauncherPin } from '../Apps/AppsLauncher/LauncherPinTile';
 import { useLauncherBookmarks } from '../Apps/AppsLauncher/useLauncherBookmarks';
 import { resourceIdentifierKey } from '../Apps/resourceIdentifier';
@@ -968,6 +970,16 @@ export function GlobalQortalNavBar({
     () => isPinnedApp(sortablePinnedApps, pinnedCandidate),
     [pinnedCandidate, sortablePinnedApps]
   );
+  // The Q-App or website on screen, for its budget: not a launcher tab, one
+  // of Hub's own pages or a private app.
+  const budgetApp = useMemo(() => {
+    if (desktopViewMode !== 'apps' || !selectedTab) return null;
+    if (selectedTab.internal || selectedTab.service === INTERNAL_TAB_SERVICE) {
+      return null;
+    }
+    if (selectedTab.isPrivate || selectedTab.privateAppProperties) return null;
+    return budgetAppFrom(selectedTab.service, selectedTab.name);
+  }, [desktopViewMode, selectedTab]);
 
   useEffect(() => {
     if (isInputFocusedRef.current) return;
@@ -1493,6 +1505,33 @@ export function GlobalQortalNavBar({
       {text}
     </span>
   );
+  // As the Copy, Pin and Go buttons beside it look.
+  const endButtonSx = {
+    alignItems: 'center',
+    borderRadius: '8px',
+    display: 'flex',
+    flexShrink: 0,
+    height: 26,
+    justifyContent: 'center',
+    minWidth: 26,
+    transition:
+      'background-color 140ms ease, color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
+    width: 26,
+    '&:hover': {
+      backgroundColor: buttonHoverBackground,
+      color: theme.palette.text.primary,
+      transform: 'translateY(-1px)',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+    },
+    '&:active': {
+      transform: 'translateY(0)',
+      boxShadow: 'none',
+    },
+    '&:focus-visible': {
+      outline: `1px solid ${theme.palette.primary.main}`,
+      outlineOffset: '2px',
+    },
+  } as const;
   const utilityModuleButtonSx = {
     alignItems: 'center',
     border: `1px solid ${theme.palette.border.subtle}`,
@@ -2089,48 +2128,47 @@ export function GlobalQortalNavBar({
                 </Box>
               </Tooltip>
 
-              <ButtonBase
-                disableRipple
-                onClick={(event) =>
-                  submitSearchInput(inputValue, { newTab: event.altKey })
-                }
-                sx={{
-                  alignItems: 'center',
-                  borderRadius: '8px',
-                  color: theme.palette.text.secondary,
-                  // Nothing to go to in an empty field.
-                  display: inputValue.trim() ? 'flex' : 'none',
-                  flexShrink: 0,
-                  height: 26,
-                  justifyContent: 'center',
-                  minWidth: 26,
-                  transition:
-                    'background-color 140ms ease, color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
-                  width: 26,
-                  '&:hover': {
-                    backgroundColor: buttonHoverBackground,
-                    color: theme.palette.text.primary,
-                    transform: 'translateY(-1px)',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                  },
-                  '&:active': {
-                    transform: 'translateY(0)',
-                    boxShadow: 'none',
-                  },
-                  '&:focus-visible': {
-                    outline: `1px solid ${theme.palette.primary.main}`,
-                    outlineOffset: '2px',
-                  },
-                }}
+              <AppBudgetsButton
+                address={userInfo?.address}
+                buttonSx={endButtonSx}
+                currentApp={budgetApp}
+                currentTabId={selectedTab?.tabId ?? null}
+                tooltipSlotProps={tooltipSlotProps}
+                tooltipTitle={tooltipTitle}
+              />
+
+              <Tooltip
+                title={tooltipTitle(
+                  t('core:navbar.go', { postProcess: 'capitalizeFirstChar' })
+                )}
+                placement="bottom"
+                arrow
+                slotProps={tooltipSlotProps}
               >
-                <ArrowOutwardIcon
+                <ButtonBase
+                  aria-label={t('core:navbar.go', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                  disableRipple
+                  onClick={(event) =>
+                    submitSearchInput(inputValue, { newTab: event.altKey })
+                  }
                   sx={{
-                    display: 'block',
-                    flexShrink: 0,
-                    fontSize: 17,
+                    ...endButtonSx,
+                    color: theme.palette.text.secondary,
+                    // Nothing to go to in an empty field.
+                    display: inputValue.trim() ? 'flex' : 'none',
                   }}
-                />
-              </ButtonBase>
+                >
+                  <ArrowOutwardIcon
+                    sx={{
+                      display: 'block',
+                      flexShrink: 0,
+                      fontSize: 17,
+                    }}
+                  />
+                </ButtonBase>
+              </Tooltip>
             </Box>
           </Box>
           <AppSearchSuggestions
