@@ -121,6 +121,7 @@ import {
 } from '../../../qortinoAgent/promptHistory';
 import {
   getPendingQortinoQuestion,
+  pendingQortinoQuestionSends,
   subscribePendingQortinoQuestion,
   takePendingQortinoQuestion,
 } from '../../../qortinoAgent/pendingQuestion';
@@ -1304,6 +1305,8 @@ export function QortinoAgentChat({
   const draftRef = useRef('');
   /** A question from Home the user edited is in the box, not sent yet. */
   const editedHomeQuestionRef = useRef(false);
+  /** The question an app's menu wrote in the box, as it wrote it. */
+  const writtenQuestionRef = useRef<string | null>(null);
 
   const send = useCallback(() => {
     const sends = input.trim() !== '' && !busy && modelReady;
@@ -1312,6 +1315,7 @@ export function QortinoAgentChat({
     // before it comes back, and the next question from Home can come in.
     if (sends && editedHomeQuestionRef.current) {
       editedHomeQuestionRef.current = false;
+      writtenQuestionRef.current = null;
       setInput(draftRef.current);
       draftRef.current = '';
     }
@@ -1326,21 +1330,34 @@ export function QortinoAgentChat({
   );
   const [queuedQuestion, setQueuedQuestion] = useState<string | null>(null);
   useEffect(() => {
-    // The next one waits until the question before it has been sent.
-    if (
-      !pendingQuestion ||
-      !historyReady ||
-      busy ||
-      queuedQuestion ||
-      editedHomeQuestionRef.current
-    )
-      return;
+    if (!pendingQuestion || !historyReady || busy || queuedQuestion) return;
+    const sendsItself = pendingQortinoQuestionSends();
+    // A question an app's menu wrote, still as written, gives way to the
+    // menu's next one (the user asks about another word first).
+    const replacesWritten =
+      !sendsItself &&
+      writtenQuestionRef.current !== null &&
+      input === writtenQuestionRef.current;
+    // Otherwise the next one waits until the question before it is sent.
+    if (editedHomeQuestionRef.current && !replacesWritten) return;
     const question = takePendingQortinoQuestion();
     if (!question) return;
+    if (replacesWritten) {
+      writtenQuestionRef.current = question;
+      setInput(question);
+      return;
+    }
     if (messages.length > 0) handleNewChat();
     if (input.trim()) draftRef.current = input;
     setInput(question);
-    setQueuedQuestion(question);
+    if (sendsItself) {
+      setQueuedQuestion(question);
+    } else {
+      // Only written for the user (an app's right-click menu): theirs to
+      // change and send, as a question from Home they edited.
+      editedHomeQuestionRef.current = true;
+      writtenQuestionRef.current = question;
+    }
   }, [
     busy,
     handleNewChat,
@@ -1936,6 +1953,7 @@ export function QortinoAgentChat({
                 e.target.value.trim() === ''
               ) {
                 editedHomeQuestionRef.current = false;
+                writtenQuestionRef.current = null;
                 setInput(draftRef.current);
                 draftRef.current = '';
               }

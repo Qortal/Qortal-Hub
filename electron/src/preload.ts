@@ -17,6 +17,12 @@ import {
 import { isMainWindowUrl } from './main-window-policy';
 import { openExternalHttp } from './desktop-shell';
 import { subscribeTabShortcuts, type TabShortcutAction } from './tab-shortcuts';
+import {
+  QAPP_MENU_CHANNELS,
+  type QAppMenuOpen,
+  type QAppMenuSettings,
+  type QAppSaveUpdate,
+} from './qapp-context-menu-types';
 
 // A preload runs again after navigation. Never expose shell capabilities to
 // remote pages, opaque documents, or subframes, even if navigation is forced
@@ -770,6 +776,49 @@ try {
       ipcRenderer.invoke('qappGuest:release', owner),
     qappGuestShot: (owner, request) =>
       ipcRenderer.invoke('qappGuest:shot', owner, request),
+    onQAppMenuOpen: (callback: (menu: QAppMenuOpen) => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        menu: QAppMenuOpen
+      ) => callback(menu);
+      ipcRenderer.on(QAPP_MENU_CHANNELS.open, listener);
+      return () =>
+        ipcRenderer.removeListener(QAPP_MENU_CHANNELS.open, listener);
+    },
+    onQAppSaveUpdate: (callback: (update: QAppSaveUpdate) => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        update: QAppSaveUpdate
+      ) => callback(update);
+      ipcRenderer.on(QAPP_MENU_CHANNELS.save, listener);
+      return () =>
+        ipcRenderer.removeListener(QAPP_MENU_CHANNELS.save, listener);
+    },
+    qappMenuAct: (menuId: string, action: string, index?: number) =>
+      ipcRenderer.invoke(QAPP_MENU_CHANNELS.act, menuId, action, index),
+    qappMenuDismiss: (menuId: string) =>
+      ipcRenderer.invoke(QAPP_MENU_CHANNELS.dismiss, menuId),
+    qappSaveCancel: (saveId: string) =>
+      ipcRenderer.invoke(QAPP_MENU_CHANNELS.cancelSave, saveId),
+    qappSaveShow: (saveId: string) =>
+      ipcRenderer.invoke(QAPP_MENU_CHANNELS.showSaved, saveId),
+    qappMenuHubLocked: (locked: boolean) =>
+      ipcRenderer.invoke(QAPP_MENU_CHANNELS.hubLocked, locked),
+    qappMenuRightClick: (
+      guestId: number,
+      x: number,
+      y: number,
+      shift?: boolean
+    ) =>
+      ipcRenderer.invoke(
+        QAPP_MENU_CHANNELS.rightClick,
+        guestId,
+        x,
+        y,
+        shift === true
+      ),
+    qappMenuSettings: (settings: QAppMenuSettings) =>
+      ipcRenderer.invoke(QAPP_MENU_CHANNELS.settings, settings),
     onQAppReticulumEvent: (callback: (payload: unknown) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: unknown) =>
         callback(payload);
