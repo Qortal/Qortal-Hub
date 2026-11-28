@@ -415,6 +415,7 @@
   "app_private": "プライベート",
   "app_service_type": "アプリサービスタイプ",
   "app_tab": {
+    "asleep": "メモリを節約するためスリープ中です。選択すると再び読み込まれます。",
     "close": "タブを閉じる",
     "close_all": "すべてのタブを閉じる",
     "close_others": "他のタブを閉じる",

@@ -43,6 +43,7 @@ import {
   tabFromSetTabRequest,
 } from '../qortal/qapp-set-tab';
 import { qappRequestTimeoutMs } from '../qortal/qappRequestTimeout';
+import { trackTabRequest } from '../components/Apps/tabActivity';
 
 export const saveFileInChunks = async (
   blob: Blob,
@@ -799,6 +800,10 @@ export const useQortalMessageListener = (
                       }
                     );
 
+        // The tab stays awake until Hub answers (tabSleep.ts): an approval
+        // window, a publish or a payment is never cut short by a sleep.
+        trackTabRequest(tabId, requestPromise);
+
         // Store the promise for deduplication
         if (isDeduplicable) {
           pendingRequests.set(requestKey, requestPromise);
@@ -865,17 +870,20 @@ export const useQortalMessageListener = (
         if (!eventPort) return;
 
         try {
-          await saveFile(
-            event.data,
-            null,
-            true,
-            {
-              openSnackGlobal,
-              setOpenSnackGlobal,
-              infoSnackCustom,
-              setInfoSnackCustom,
-            },
-            { name: appName, service: appService, tabId }
+          await trackTabRequest(
+            tabId,
+            saveFile(
+              event.data,
+              null,
+              true,
+              {
+                openSnackGlobal,
+                setOpenSnackGlobal,
+                infoSnackCustom,
+                setInfoSnackCustom,
+              },
+              { name: appName, service: appService, tabId }
+            )
           );
           eventPort.postMessage({
             result: true,

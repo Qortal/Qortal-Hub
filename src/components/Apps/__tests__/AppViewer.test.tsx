@@ -29,6 +29,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 import { AppViewer } from '../AppViewer';
+import { forgetTabActivity, isTabBusy, noteTabFileSave } from '../tabActivity';
 import { qappGuestUrlAllowed } from '../../../../electron/src/qapp-guest-policy';
 import { executeEvent } from '../../../utils/events';
 
@@ -246,4 +247,55 @@ describe("AppViewer keeps a page's own query and fragment", () => {
       ).toBe(true);
     }
   );
+});
+
+// A file being saved keeps its tab awake (tabSleep.ts). Hub's main process
+// ends a tab's saves with its page, so they stop counting then too.
+describe("AppViewer ends a tab's saves with its page", () => {
+  const renderGuest = async () => {
+    vi.stubGlobal('electronAPI', {
+      qappGuestPrepare: vi.fn().mockResolvedValue({
+        partition: 'test-saves',
+        preload: 'file:///test/qapp-guest-preload.js',
+      }),
+      qappGuestRelease: vi.fn().mockResolvedValue(true),
+    });
+    const view = render(
+      <AppViewer
+        app={{ tabId: 'saver', name: 'Example', service: 'APP' }}
+        isDevMode={false}
+      />
+    );
+    await waitFor(() =>
+      expect(view.container.querySelector('webview')).not.toBeNull()
+    );
+    const webview = view.container.querySelector('webview')!;
+    const fire = (type: string) =>
+      act(() => {
+        webview.dispatchEvent(new Event(type));
+      });
+    noteTabFileSave('saver', 'save-1', 'open');
+    expect(isTabBusy('saver')).toBe(true);
+    return { fire, view };
+  };
+
+  afterEach(() => forgetTabActivity('saver'));
+
+  it('when a new page loads in it', async () => {
+    const { fire } = await renderGuest();
+    fire('did-navigate');
+    expect(isTabBusy('saver')).toBe(false);
+  });
+
+  it('when its app is unloaded', async () => {
+    const { view } = await renderGuest();
+    view.unmount();
+    expect(isTabBusy('saver')).toBe(false);
+  });
+
+  it('when its app stops working', async () => {
+    const { fire } = await renderGuest();
+    fire('render-process-gone');
+    expect(isTabBusy('saver')).toBe(false);
+  });
 });

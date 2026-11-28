@@ -415,6 +415,7 @@
   "app_private": "private",
   "app_service_type": "app service type",
   "app_tab": {
+    "asleep": "asleep to save memory. Select it to load it again.",
     "close": "close tab",
     "close_all": "close all tabs",
     "close_others": "close other tabs",

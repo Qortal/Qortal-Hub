@@ -162,6 +162,7 @@ vi.mock('../Chat/MessageDisplay', () => ({ extractComponents: () => null }));
 
 import { AppsDesktop } from './AppsDesktop';
 import { appKey } from './AppPage/appHidden';
+import { MAX_OPEN_APP_TABS } from './tabSleep';
 
 const Harness = () => {
   const [mode, setMode] = useState('home');
@@ -336,14 +337,14 @@ describe('AppsDesktop launcher tabs: opening', () => {
   it('counts launcher tabs against the tab limit, with its note', async () => {
     const user = userEvent.setup();
     renderApps();
-    for (let i = 1; i <= 9; i++) openApp(`App ${i}`);
+    for (let i = 1; i < MAX_OPEN_APP_TABS; i++) openApp(`App ${i}`);
     await pressPlus(user);
-    expect(stripIds()).toHaveLength(10);
+    expect(stripIds()).toHaveLength(MAX_OPEN_APP_TABS);
 
     await pressPlus(user);
-    openApp('App 11');
+    openApp('One more app');
 
-    expect(stripIds()).toHaveLength(10);
+    expect(stripIds()).toHaveLength(MAX_OPEN_APP_TABS);
     await waitFor(
       () =>
         expect(notes).toEqual([
@@ -352,7 +353,8 @@ describe('AppsDesktop launcher tabs: opening', () => {
         ]),
       SLOW
     );
-  });
+    // Opening every tab the strip holds takes a few seconds on a busy machine.
+  }, 20_000);
 
   it('has no Pin or Duplicate in a launcher tab’s menu', async () => {
     const user = userEvent.setup();

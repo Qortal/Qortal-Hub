@@ -415,6 +415,7 @@
   "app_private": "yksityinen",
   "app_service_type": "sovelluksen palvelutyyppi",
   "app_tab": {
+    "asleep": "lepotilassa muistin säästämiseksi. Valitse se, niin se latautuu uudelleen.",
     "close": "sulje välilehti",
     "close_all": "sulje kaikki välilehdet",
     "close_others": "sulje muut välilehdet",

@@ -415,6 +415,7 @@
   "app_private": "privaatne",
   "app_service_type": "rakenduse teenuse tüüp",
   "app_tab": {
+    "asleep": "magab, et mälu säästa. Vali see, et see uuesti laadida.",
     "close": "sulge vaheleht",
     "close_all": "sulge kõik vahelehed",
     "close_others": "sulge teised vahelehed",

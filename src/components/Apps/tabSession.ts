@@ -195,7 +195,8 @@ export function relativeAppPath(value: unknown): string {
  * `currentLink` useQortalMessageListener keeps in navigationControllerAtom):
  * `qortal://SERVICE/name` until the app reports a page, then that page's path
  * after it, starting with "/" ("/" for its start page). Undefined until the
- * app has reported one.
+ * app has reported one. The tab's identifier, which the link carries after
+ * the page (fragment included), is not part of it.
  */
 export function reportedAppPath(
   tab: unknown,
@@ -210,7 +211,13 @@ export function reportedAppPath(
     name: tab.name,
   });
   if (!currentLink.startsWith(appLink)) return undefined;
-  const rest = currentLink.slice(appLink.length);
+  let rest = currentLink.slice(appLink.length);
+  if (typeof tab.identifier === 'string' && tab.identifier) {
+    const suffix = `identifier=${encodeURIComponent(tab.identifier)}`;
+    if (rest.endsWith(`?${suffix}`) || rest.endsWith(`&${suffix}`)) {
+      rest = rest.slice(0, -suffix.length - 1);
+    }
+  }
   return rest.startsWith('/') ? rest : undefined;
 }
 

@@ -415,6 +415,7 @@
   "app_private": "privata",
   "app_service_type": "tipo di servizio app",
   "app_tab": {
+    "asleep": "in sospensione per risparmiare memoria. Selezionala per ricaricarla.",
     "close": "chiudi scheda",
     "close_all": "chiudi tutte le schede",
     "close_others": "chiudi le altre schede",

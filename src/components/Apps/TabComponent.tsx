@@ -65,6 +65,11 @@ type TabComponentProps = {
   onCloseToTheRight?: () => void;
   onDuplicate: () => void;
   isEntering?: boolean;
+  /**
+   * Its app is not loaded: put to sleep, or restored and not selected yet. It
+   * shows dimmed, and loads when selected.
+   */
+  isAsleep?: boolean;
   isSelected: boolean;
   isVisuallySelected?: boolean;
   onClose: (request?: TabCloseRequest) => void;
@@ -119,6 +124,7 @@ const TabComponent = ({
   onCloseToTheRight,
   onDuplicate,
   isEntering = false,
+  isAsleep = false,
   isSelected,
   isVisuallySelected = isSelected,
   onClose,
@@ -163,6 +169,9 @@ const TabComponent = ({
         '';
   // A narrow or pinned tab shows its icon, with its title in a tooltip.
   const iconOnly = isPinned || !tabShowsLabel(widthPx);
+  const asleepNote = isAsleep
+    ? t('core:app_tab.asleep', { postProcess: 'capitalizeFirstChar' })
+    : '';
   // Next to the icon of a narrow tab there is room only for the × of the
   // selected tab; the others show theirs on hover or keyboard focus.
   const closeWaitsForHover = iconOnly && !isVisuallySelected;
@@ -217,6 +226,7 @@ const TabComponent = ({
       {...attributes}
       {...listeners}
       aria-label={label || undefined}
+      data-asleep={isAsleep ? 'true' : undefined}
       data-pinned={isPinned ? 'true' : undefined}
       data-tab-id={app?.tabId}
       onClick={(event) => {
@@ -279,6 +289,19 @@ const TabComponent = ({
           : theme.palette.text.secondary,
         cursor: 'default',
         opacity: isEntering ? 0 : 1,
+        // Asleep: its picture and title fade until it is pointed at.
+        ...(isAsleep && {
+          '& .MuiAvatar-root, & .app-tab-icon, & .app-tab-label': {
+            filter: 'grayscale(0.6)',
+            opacity: 0.55,
+            transition: 'opacity 180ms ease, filter 180ms ease',
+          },
+          '&:hover .MuiAvatar-root, &:hover .app-tab-icon, &:hover .app-tab-label':
+            {
+              filter: 'none',
+              opacity: 0.85,
+            },
+        }),
         ...dndStyle,
         transform:
           `${dndStyle.transform || ''}${isEntering ? ' scale(0.96)' : ''}`.trim(),
@@ -349,6 +372,7 @@ const TabComponent = ({
         </Box>
       ) : app?.isPrivate && !app?.privateAppProperties?.logo ? (
         <Box
+          className="app-tab-icon"
           sx={{
             alignItems: 'center',
             color: isVisuallySelected
@@ -411,6 +435,7 @@ const TabComponent = ({
 
       {!iconOnly && (
         <AppsHorizontalTabLabel
+          className="app-tab-label"
           sx={{
             color: isVisuallySelected
               ? selectedTabTextColor
@@ -682,13 +707,29 @@ const TabComponent = ({
     </AppsHorizontalTabButton>
   );
 
+  // A narrow tab's tooltip names it; an asleep tab's also says so.
+  const tooltip =
+    isDragging || menuPosition ? (
+      ''
+    ) : isAsleep ? (
+      <>
+        {iconOnly && <Box sx={{ fontWeight: 600 }}>{label}</Box>}
+        <Box>{asleepNote}</Box>
+      </>
+    ) : iconOnly ? (
+      label
+    ) : (
+      ''
+    );
+
   return (
     <Tooltip
+      describeChild={isAsleep}
       disableInteractive
       enterDelay={400}
       enterNextDelay={200}
       placement="bottom"
-      title={iconOnly && !isDragging && !menuPosition ? label : ''}
+      title={tooltip}
     >
       {tabButton}
     </Tooltip>

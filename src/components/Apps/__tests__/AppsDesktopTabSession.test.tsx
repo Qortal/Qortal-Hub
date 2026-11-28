@@ -78,6 +78,7 @@ import { navigationControllerAtom, userInfoAtom } from '../../../atoms/global';
 import { lightTheme } from '../../../styles/theme-light';
 import { buildQortalResourceLink } from '../../../utils/qortalLink';
 import { AppsDesktop } from '../AppsDesktop';
+import { MAX_OPEN_APP_TABS } from '../tabSleep';
 
 const Harness = () => {
   const [mode, setMode] = useState('home');
@@ -338,7 +339,7 @@ describe('AppsDesktop open tabs after a restart', () => {
   });
 
   it('shows the tab that was selected when the Apps button finds the strip full', () => {
-    const tabs = Array.from({ length: 10 }, (_, index) => ({
+    const tabs = Array.from({ length: MAX_OPEN_APP_TABS }, (_, index) => ({
       tabId: `t${index + 1}`,
       service: 'APP',
       name: `App ${index + 1}`,
@@ -351,7 +352,7 @@ describe('AppsDesktop open tabs after a restart', () => {
       document.dispatchEvent(new CustomEvent('showLauncherTab', {}));
     });
 
-    expect(strip()).toHaveLength(10);
+    expect(strip()).toHaveLength(MAX_OPEN_APP_TABS);
     expect(strip().find((tab) => tab.selected)?.tabId).toBe('t3');
     expect(viewers().map((viewer) => viewer.tabId)).toEqual(['t3']);
   });

@@ -415,6 +415,7 @@
   "app_private": "Privat",
   "app_service_type": "App -Service -Typ",
   "app_tab": {
+    "asleep": "schläft, um Speicher zu sparen. Wählen Sie den Tab aus, um ihn neu zu laden.",
     "close": "Tab schließen",
     "close_all": "alle Tabs schließen",
     "close_others": "andere Tabs schließen",
