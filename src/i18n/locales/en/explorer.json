@@ -1,0 +1,711 @@
+{
+  "account": {
+    "failed": "Couldn't load this account.",
+    "invalid": "This isn't a valid Qortal address.",
+    "name_failed": "Couldn't look up this name.",
+    "no_similar_names": "No registered name starts with it either.",
+    "no_such_name": "No one has the name “{{name}}”.",
+    "similar_failed": "Couldn't look for names that start with it.",
+    "similar_names": "Names that start with it:",
+    "unused": "This address has never been used: no transaction has involved it yet."
+  },
+  "at": {
+    "about": "An automated contract (AT): a program on the chain, not a personal account.",
+    "title": "AT address"
+  },
+  "chip": {
+    "dev_admin": "Dev Admin",
+    "dev_admin_explained": "An admin of the dev group (group 1), the group of Qortal's developers.",
+    "minter_admin": "Minter Admin",
+    "minter_admin_explained": "An admin of MINTER, the group whose members mint. Minter Admins decide who joins it.",
+    "minter_member": "MINTER member",
+    "minter_member_explained": "A member of MINTER, the group whose members mint.",
+    "minting_now": "minting now",
+    "minting_now_explained": "It is in a reward share that is online right now, so it takes part in minting blocks.",
+    "minting_penalty": "minting penalty",
+    "minting_penalty_explained": "The node recorded a minting penalty on this account. Its Notes give the number."
+  },
+  "facts": {
+    "adjustment": "adjustment {{blocks}}",
+    "at_block": "at block {{block}}",
+    "balance": "balance",
+    "balance_exact": "exactly {{amount}} QORT",
+    "balance_failed": "Couldn't load its balance.",
+    "blocks_to_level_one": "{{blocks}} block to level {{level}}",
+    "blocks_to_level_other": "{{blocks}} blocks to level {{level}}",
+    "days_to_level_one": "about {{count}} day of minting",
+    "days_to_level_other": "about {{count}} days of minting",
+    "first_seen": "first seen",
+    "first_seen_failed": "Couldn't load when it was first seen.",
+    "first_seen_none": "no record found",
+    "groups": "groups",
+    "in_groups_one": "in {{groups}} group",
+    "in_groups_other": "in {{groups}} groups",
+    "in_no_groups": "in no groups",
+    "level_progress": "progress to level {{level}}: {{percent}}%",
+    "pace_failed": "Couldn't load the node's pace, which the blocks and days to the next level need.",
+    "payments_all_one": "in all {{payments}} of its payments",
+    "payments_all_other": "in all {{payments}} of its payments",
+    "payments_newest_one": "in its newest {{payments}} payments",
+    "payments_newest_other": "in its newest {{payments}} payments",
+    "payments_none": "no payments yet",
+    "payments_single": "in its only payment",
+    "penalty": "penalty {{blocks}}",
+    "received_sent": "QORT received / sent",
+    "received_sent_info": "QORT payments only: multi-payments, trades and minting aren't counted.",
+    "title": "at a glance",
+    "top_level": "top level"
+  },
+  "groups": {
+    "admin": "admin",
+    "closed": "closed group",
+    "failed": "Couldn't load its groups.",
+    "members_one": "{{members}} member",
+    "members_other": "{{members}} members",
+    "none": "It isn't in any group.",
+    "open": "open group",
+    "owner": "owner",
+    "sort": "sort",
+    "sort_az": "name A–Z",
+    "sort_members": "most members",
+    "sort_minter": "MINTER first",
+    "sort_roles": "owner and admin first",
+    "title": "groups",
+    "title_count": "groups ({{n}})",
+    "unnamed": "group #{{id}}"
+  },
+  "header": {
+    "about": "about this account",
+    "blocked": "Account blocked.",
+    "copy_public_key": "copy public key",
+    "name_failed": "Couldn't load its name.",
+    "name_matched": "You looked up “{{typed}}”; the node matched the name “{{matched}}”, ignoring case and look-alike letters.",
+    "no_primary_name": "no primary name",
+    "opened_from_name": "Opened from its name “{{name}}”.",
+    "public_key_copied": "Public key copied to clipboard.",
+    "unblocked": "Account unblocked."
+  },
+  "latest": {
+    "all": "all transactions",
+    "failed": "Couldn't load its latest transactions.",
+    "none": "No confirmed transactions yet.",
+    "title": "latest transactions"
+  },
+  "minter": {
+    "open_app": "open {{app}}",
+    "standing_admin": "Minter Admin and MINTER member.",
+    "standing_member": "MINTER member.",
+    "standing_outside": "Not in MINTER.",
+    "story": "Its MINTER story, from nominations to decisions, is kept in {{app}}.",
+    "title": "MINTER"
+  },
+  "minting": {
+    "last_signed": "Last signed a block on {{date}} (block {{block}}).",
+    "last_signed_block": "Last signed block {{block}}.",
+    "last_signed_failed": "Couldn't load the last block it signed.",
+    "last_signed_none": "It hasn't signed a block.",
+    "not_now": "Not minting right now.",
+    "online_failed": "Couldn't load who is minting now.",
+    "own_key": "Minting now, with its own key.",
+    "own_key_and_shares": "Minting now, with its own key and through reward shares with:",
+    "shares": "Minting now through reward shares with:",
+    "show_all_one": "show all {{count}}",
+    "show_all_other": "show all {{count}}",
+    "show_fewer": "show fewer",
+    "title": "minting"
+  },
+  "notes": {
+    "name_address_like": "Its primary name “{{name}}” is written like an address.",
+    "name_invisible_one": "Its primary name “{{name}}” contains {{count}} invisible or blank characters.",
+    "name_invisible_other": "Its primary name “{{name}}” contains {{count}} invisible or blank characters.",
+    "name_invisible_single": "Its primary name “{{name}}” contains an invisible or blank character.",
+    "name_owner_end": "Its primary name “{{name}}” ends with the same characters as its address (…{{end}}).",
+    "name_owner_start": "Its primary name “{{name}}” starts with the same characters as its address ({{start}}…).",
+    "penalty": "The node recorded a minting penalty of {{blocks}} blocks on this account.",
+    "title": "notes"
+  },
+  "payments": {
+    "failed": "Couldn't load its payments."
+  },
+  "search": {
+    "clear": "clear",
+    "compact_placeholder": "search the Explorer",
+    "helper": "Pick a suggestion, or press Enter to look up exactly what you typed.",
+    "label": "find an account or a transaction",
+    "placeholder": "name, address or transaction signature"
+  },
+  "settings": {
+    "remember": "remember accounts I explore on this device",
+    "remember_hint": "Only their addresses, for this Hub account. Turning it off forgets them.",
+    "title": "Explorer settings"
+  },
+  "start": {
+    "clear": "clear",
+    "clear_recent": "clear recent explorations",
+    "recent": "recent explorations",
+    "your_account": "your account"
+  },
+  "summary": {
+    "first_seen": "first seen {{date}}",
+    "last_sent": "last sent a transaction {{ago}}",
+    "minter_admin": "Minter Admin, in MINTER",
+    "minter_member": "in MINTER",
+    "minter_outside": "not in MINTER",
+    "no_names": "no registered name",
+    "owns_names_more_one": "owns {{shown}}+ names",
+    "owns_names_more_other": "owns {{shown}}+ names",
+    "owns_names_one": "owns {{shown}} name",
+    "owns_names_other": "owns {{shown}} names"
+  },
+  "tabs": {
+    "label": "account sections",
+    "overview": "overview",
+    "transactions": "transactions"
+  },
+  "trail": {
+    "label": "your trail"
+  },
+  "transactions": {
+    "all_kind_one": "All {{shown}} of this kind.",
+    "all_kind_other": "All {{shown}} of this kind.",
+    "all_one": "All {{shown}} of its transactions.",
+    "all_other": "All {{shown}} of its transactions.",
+    "ceiling": "The Explorer reads up to {{max}} transactions of each kind.",
+    "every_type": "every type",
+    "failed": "Couldn't load its transactions.",
+    "kind_label": "show one kind of transaction",
+    "more_failed": "Couldn't load more of its transactions.",
+    "newest_kind_one": "The newest {{shown}} of this kind.",
+    "newest_kind_other": "The newest {{shown}} of this kind.",
+    "newest_one": "Its newest {{shown}} transactions.",
+    "newest_other": "Its newest {{shown}} transactions.",
+    "none": "It has no confirmed transactions yet.",
+    "none_kind": "None of its confirmed transactions are of this kind.",
+    "only": "Its only transaction.",
+    "only_kind": "The only one of this kind.",
+    "refresh_failed": "Couldn't check for newer transactions.",
+    "show_more": "show more",
+    "title_all": "all transactions",
+    "type": "type",
+    "waiting_failed": "Couldn't check what it sent that waits for a block.",
+    "waiting_loading": "Checking what it sent that waits for a block…",
+    "waiting_note": "Your node holds these until a block takes them. Transactions sent to this account show only once they are in a block.",
+    "waiting_title": "sent by this account, waiting to be confirmed ({{n}})",
+    "waiting_title_more": "sent by this account, waiting to be confirmed (at least {{n}})"
+  },
+  "tx": {
+    "approval": {
+      "approved": "approved",
+      "expired": "not approved in time",
+      "invalid": "not valid",
+      "pending": "waiting for approvals",
+      "rejected": "rejected"
+    },
+    "asset_number": "asset #{{id}}",
+    "creator": "creator",
+    "details_of": "{{type}} details",
+    "field": {
+      "account": "account",
+      "admin": "admin",
+      "amount": "amount",
+      "answer": "answer",
+      "asset": "asset",
+      "at": "AT (automated contract)",
+      "at_address": "AT address",
+      "at_kind": "kind",
+      "at_name": "AT name",
+      "change": "change",
+      "data": "data",
+      "description": "description",
+      "divisible": "divisible",
+      "encrypted": "encrypted",
+      "funded_with": "funded with",
+      "group": "group",
+      "group_approval": "group approval",
+      "identifier": "identifier",
+      "invitee": "invitee",
+      "level": "level",
+      "member": "member",
+      "moved_to": "moved to",
+      "name": "name",
+      "new_admin": "new admin",
+      "new_data": "new data",
+      "new_description": "new description",
+      "new_name": "new name",
+      "new_owner": "new owner",
+      "open": "open to anyone",
+      "option": "option",
+      "options": "options",
+      "order": "order",
+      "owner": "owner",
+      "payment": "payment",
+      "poll": "poll",
+      "price": "price",
+      "quantity": "quantity",
+      "reason": "reason",
+      "recipient": "recipient",
+      "seller": "seller",
+      "service": "service",
+      "share": "share",
+      "size": "size",
+      "tags": "tags",
+      "transaction": "transaction"
+    },
+    "incoming": "incoming",
+    "not_shown": "(not shown)",
+    "open": "open transaction",
+    "outcome": {
+      "expired": "(not approved in time)",
+      "invalid": "(not valid)",
+      "pending": "(waiting for group approval)",
+      "rejected": "(rejected in group approval)"
+    },
+    "outgoing": "outgoing",
+    "people": "accounts involved",
+    "privs_failed": "Couldn't read which account received the minting level.",
+    "raw": "raw API answer",
+    "raw_caption": "Your node's answer, as JSON.",
+    "raw_copied": "Raw answer copied to clipboard.",
+    "raw_copy": "copy the raw answer",
+    "say": {
+      "account_flags": {
+        "in": "Its account flags were set in the genesis block",
+        "none": "The account flags of {{target}} were set in the genesis block"
+      },
+      "account_level": {
+        "in": "Its level was set to {{level}} in the genesis block",
+        "none": "The level of {{target}} was set to {{level}} in the genesis block"
+      },
+      "add_group_admin": {
+        "in": "{{actor}} made this account an admin of the group {{group}}",
+        "in_proposed": "{{actor}} proposed to make this account an admin of the group {{group}}",
+        "none": "{{actor}} made {{member}} an admin of the group {{group}}",
+        "none_proposed": "{{actor}} proposed to make {{member}} an admin of the group {{group}}",
+        "out": "Made {{member}} an admin of the group {{group}}",
+        "out_proposed": "Proposed to make {{member}} an admin of the group {{group}}",
+        "self": {
+          "mine": "Became an admin of the group {{group}}",
+          "mine_proposed": "Proposed to become an admin of the group {{group}}",
+          "none": "{{actor}} became an admin of the group {{group}}",
+          "none_proposed": "{{actor}} proposed to become an admin of the group {{group}}"
+        }
+      },
+      "airdrop": {
+        "mine": "Made an airdrop",
+        "none": "{{actor}} made an airdrop"
+      },
+      "arbitrary": {
+        "in": "Received {{amount}} from {{from}} with a QDN publish",
+        "named": {
+          "mine": "Published {{what}} as “{{name}}”",
+          "none": "{{actor}} published {{what}} as “{{name}}”"
+        },
+        "unnamed": {
+          "mine": "Published {{what}}",
+          "none": "{{actor}} published {{what}}"
+        }
+      },
+      "at": {
+        "ran": "{{at}} ran its program",
+        "ran_mine": "Ran its program"
+      },
+      "buy_name": {
+        "in": "Sold the name “{{name}}” to {{buyer}} for {{price}}",
+        "none": "{{actor}} bought the name “{{name}}” from {{seller}} for {{price}}",
+        "out": "Bought the name “{{name}}” from {{seller}} for {{price}}"
+      },
+      "cancel_asset_order": {
+        "mine": "Cancelled an asset order",
+        "none": "{{actor}} cancelled an asset order"
+      },
+      "cancel_group_ban": {
+        "in": "{{actor}} lifted this account's ban in the group {{group}}",
+        "in_proposed": "{{actor}} proposed to lift this account's ban in the group {{group}}",
+        "none": "{{actor}} lifted the ban on {{member}} in the group {{group}}",
+        "none_proposed": "{{actor}} proposed to lift the ban on {{member}} in the group {{group}}",
+        "out": "Lifted the ban on {{member}} in the group {{group}}",
+        "out_proposed": "Proposed to lift the ban on {{member}} in the group {{group}}"
+      },
+      "cancel_group_invite": {
+        "mine": "Cancelled a group invite",
+        "mine_proposed": "Proposed to cancel a group invite",
+        "none": "{{actor}} cancelled a group invite",
+        "none_proposed": "{{actor}} proposed to cancel a group invite"
+      },
+      "cancel_sell_name": {
+        "mine": "Took the name “{{name}}” off sale",
+        "none": "{{actor}} took the name “{{name}}” off sale"
+      },
+      "chat": {
+        "group": {
+          "mine": "Sent a chat message to a group",
+          "none": "{{actor}} sent a chat message to a group"
+        },
+        "in": "Received a chat message from {{from}}",
+        "none": "{{from}} sent a chat message to {{to}}",
+        "out": "Sent a chat message to {{to}}"
+      },
+      "create_asset_order": {
+        "mine": "Placed an order to trade {{have}} for {{want}}",
+        "none": "{{actor}} placed an order to trade {{have}} for {{want}}"
+      },
+      "create_group": {
+        "mine": "Created the group {{group}}",
+        "none": "{{actor}} created the group {{group}}"
+      },
+      "create_poll": {
+        "for_me": "{{actor}} created the poll “{{poll}}” owned by this account",
+        "mine": "Created the poll “{{poll}}”",
+        "none": "{{actor}} created the poll “{{poll}}”",
+        "owned_by": "{{actor}} created the poll “{{poll}}” owned by {{owner}}",
+        "owned_by_mine": "Created the poll “{{poll}}” owned by {{owner}}"
+      },
+      "deploy_at": {
+        "in": "{{actor}} created this AT (automated contract)",
+        "mine": "Created an AT (automated contract)",
+        "none": "{{actor}} created an AT (automated contract)"
+      },
+      "enable_forging": {
+        "for": {
+          "in": "{{actor}} enabled forging for this account",
+          "none": "{{actor}} enabled forging for {{target}}",
+          "out": "Enabled forging for {{target}}"
+        },
+        "mine": "Enabled forging",
+        "none": "{{actor}} enabled forging"
+      },
+      "generic": {
+        "mine": "Made a transaction: {{type}}",
+        "nobody": "A transaction: {{type}}",
+        "none": "{{actor}} made a transaction: {{type}}"
+      },
+      "genesis": {
+        "in": "Received {{amount}} in the genesis block",
+        "none": "{{to}} received {{amount}} in the genesis block"
+      },
+      "group_approval": {
+        "approved": {
+          "mine": "Approved the transaction {{tx}}",
+          "none": "{{actor}} approved the transaction {{tx}}"
+        },
+        "rejected": {
+          "mine": "Rejected the transaction {{tx}}",
+          "none": "{{actor}} rejected the transaction {{tx}}"
+        }
+      },
+      "group_ban": {
+        "in": "{{actor}} banned this account from the group {{group}}",
+        "in_proposed": "{{actor}} proposed to ban this account from the group {{group}}",
+        "none": "{{actor}} banned {{member}} from the group {{group}}",
+        "none_proposed": "{{actor}} proposed to ban {{member}} from the group {{group}}",
+        "out": "Banned {{member}} from the group {{group}}",
+        "out_proposed": "Proposed to ban {{member}} from the group {{group}}"
+      },
+      "group_invite": {
+        "in": "{{actor}} invited this account to the group {{group}}",
+        "in_proposed": "{{actor}} proposed to invite this account to the group {{group}}",
+        "none": "{{actor}} invited {{invitee}} to the group {{group}}",
+        "none_proposed": "{{actor}} proposed to invite {{invitee}} to the group {{group}}",
+        "out": "Invited {{invitee}} to the group {{group}}",
+        "out_proposed": "Proposed to invite {{invitee}} to the group {{group}}"
+      },
+      "group_kick": {
+        "in": "{{actor}} removed this account from the group {{group}}",
+        "in_proposed": "{{actor}} proposed to remove this account from the group {{group}}",
+        "none": "{{actor}} removed {{member}} from the group {{group}}",
+        "none_proposed": "{{actor}} proposed to remove {{member}} from the group {{group}}",
+        "out": "Removed {{member}} from the group {{group}}",
+        "out_proposed": "Proposed to remove {{member}} from the group {{group}}"
+      },
+      "issue_asset": {
+        "mine": "Issued the asset “{{asset}}”",
+        "nobody": "The asset “{{asset}}” was issued",
+        "none": "{{actor}} issued the asset “{{asset}}”"
+      },
+      "join_group": {
+        "mine": "Joined or asked to join the group {{group}}",
+        "none": "{{actor}} joined or asked to join the group {{group}}"
+      },
+      "leave_group": {
+        "mine": "Left the group {{group}}",
+        "none": "{{actor}} left the group {{group}}"
+      },
+      "message": {
+        "in": "Received a message from {{from}}",
+        "in_amount": "Received a message with {{amount}} from {{from}}",
+        "none": "{{from}} sent a message to {{to}}",
+        "none_amount": "{{from}} sent a message with {{amount}} to {{to}}",
+        "none_nobody": "{{from}} sent a message",
+        "out": "Sent a message to {{to}}",
+        "out_amount": "Sent a message with {{amount}} to {{to}}",
+        "out_nobody": "Sent a message"
+      },
+      "multi": {
+        "in_one": "Received {{amount}} from {{from}} in a payment to {{accounts}} account",
+        "in_other": "Received {{amount}} from {{from}} in a payment to {{accounts}} accounts",
+        "none_one": "{{actor}} paid {{accounts}} account {{amount}} in one payment",
+        "none_other": "{{actor}} paid {{accounts}} accounts {{amount}} in one payment",
+        "out_one": "Paid {{accounts}} account {{amount}} in one payment",
+        "out_other": "Paid {{accounts}} accounts {{amount}} in one payment"
+      },
+      "payment_line": "{{amount}} to {{to}}",
+      "presence": {
+        "minting": {
+          "mine": "Showed it is online (minting)",
+          "none": "{{actor}} showed it is online (minting)"
+        },
+        "trade_bot": {
+          "mine": "Showed it is online (trade bot)",
+          "none": "{{actor}} showed it is online (trade bot)"
+        }
+      },
+      "publicize": {
+        "mine": "Published its public key",
+        "none": "{{actor}} published its public key"
+      },
+      "register_name": {
+        "mine": "Registered the name “{{name}}”",
+        "none": "{{actor}} registered the name “{{name}}”"
+      },
+      "remove_group_admin": {
+        "in": "{{actor}} removed this account as an admin of the group {{group}}",
+        "in_proposed": "{{actor}} proposed to remove this account as an admin of the group {{group}}",
+        "none": "{{actor}} removed {{member}} as an admin of the group {{group}}",
+        "none_proposed": "{{actor}} proposed to remove {{member}} as an admin of the group {{group}}",
+        "out": "Removed {{member}} as an admin of the group {{group}}",
+        "out_proposed": "Proposed to remove {{member}} as an admin of the group {{group}}",
+        "self": {
+          "mine": "Stepped down as an admin of the group {{group}}",
+          "mine_proposed": "Proposed to step down as an admin of the group {{group}}",
+          "none": "{{actor}} stepped down as an admin of the group {{group}}",
+          "none_proposed": "{{actor}} proposed to step down as an admin of the group {{group}}"
+        }
+      },
+      "reward_share": {
+        "removed": {
+          "in": "{{actor}} removed its reward share with this account",
+          "none": "{{actor}} removed the reward share with {{other}}",
+          "out": "Removed the reward share with {{other}}"
+        },
+        "self_start": "{{actor}} started minting (a self-share)",
+        "self_start_mine": "Started minting (a self-share)",
+        "self_stop": "{{actor}} stopped minting (removed its self-share)",
+        "self_stop_mine": "Stopped minting (removed its self-share)",
+        "started": {
+          "in": "{{actor}} started a reward share with this account at {{percent}}",
+          "none": "{{actor}} started a reward share with {{other}} at {{percent}}",
+          "out": "Started a reward share with {{other}} at {{percent}}"
+        }
+      },
+      "sell_name": {
+        "mine": "Listed the name “{{name}}” for sale at {{price}}",
+        "none": "{{actor}} listed the name “{{name}}” for sale at {{price}}"
+      },
+      "set_group": {
+        "cleared": {
+          "mine": "Cleared its default group",
+          "none": "{{actor}} cleared its default group"
+        },
+        "set": {
+          "mine": "Set its default group to {{group}}",
+          "none": "{{actor}} set its default group to {{group}}"
+        }
+      },
+      "transfer": {
+        "in": "Received {{amount}} from {{from}}",
+        "none": "{{from}} sent {{amount}} to {{to}}",
+        "out": "Sent {{amount}} to {{to}}",
+        "self": "{{actor}} sent {{amount}} to itself",
+        "self_mine": "Sent {{amount}} to itself"
+      },
+      "transfer_privs": {
+        "in": "Got its minting level from {{from}}",
+        "none": "{{actor}} moved its minting level to {{to}}",
+        "none_unknown": "{{actor}} moved its minting level to another account",
+        "out": "Moved its minting level to {{to}}",
+        "out_unknown": "Moved its minting level to another account"
+      },
+      "update_asset": {
+        "details": {
+          "mine": "Updated the asset {{asset}}",
+          "none": "{{actor}} updated the asset {{asset}}"
+        },
+        "owner": {
+          "in": "{{actor}} gave the asset {{asset}} to this account",
+          "none": "{{actor}} gave the asset {{asset}} to {{new_owner}}",
+          "out": "Gave the asset {{asset}} to {{new_owner}}"
+        }
+      },
+      "update_group": {
+        "owner": {
+          "in": "{{actor}} made this account the owner of the group {{group}}",
+          "in_proposed": "{{actor}} proposed to make this account the owner of the group {{group}}",
+          "none": "{{actor}} made {{new_owner}} the owner of the group {{group}}",
+          "none_proposed": "{{actor}} proposed to make {{new_owner}} the owner of the group {{group}}",
+          "out": "Made {{new_owner}} the owner of the group {{group}}",
+          "out_proposed": "Proposed to make {{new_owner}} the owner of the group {{group}}"
+        },
+        "settings": {
+          "mine": "Updated the settings of the group {{group}}",
+          "mine_proposed": "Proposed to update the settings of the group {{group}}",
+          "none": "{{actor}} updated the settings of the group {{group}}",
+          "none_proposed": "{{actor}} proposed to update the settings of the group {{group}}"
+        }
+      },
+      "update_name": {
+        "details": {
+          "mine": "Updated the details of the name “{{name}}”",
+          "none": "{{actor}} updated the details of the name “{{name}}”"
+        },
+        "renamed": {
+          "mine": "Renamed “{{name}}” to “{{new_name}}”",
+          "none": "{{actor}} renamed “{{name}}” to “{{new_name}}”"
+        }
+      },
+      "vote_on_poll": {
+        "mine": "Voted on the poll “{{poll}}”",
+        "none": "{{actor}} voted on the poll “{{poll}}”"
+      }
+    },
+    "service": {
+      "app": "an app",
+      "arbitrary_data": "data",
+      "attachment": "an attachment",
+      "audio": "audio",
+      "auto_update": "a Core update",
+      "blog": "a blog",
+      "blog_comment": "a blog comment",
+      "blog_post": "a blog post",
+      "chain_comment": "a chain comment",
+      "chain_data": "chain data",
+      "code": "code",
+      "comment": "a comment",
+      "coupon": "a coupon",
+      "database": "a database",
+      "document": "a document",
+      "encrypted": "an encrypted resource",
+      "extension": "an extension",
+      "file": "a file",
+      "files": "files",
+      "game": "a game",
+      "gif_repository": "a GIF collection",
+      "git_repository": "a Git repository",
+      "image": "an image",
+      "item": "an item",
+      "json": "JSON data",
+      "list": "a list",
+      "message": "a message",
+      "metadata": "metadata",
+      "nft": "an NFT",
+      "offer": "an offer",
+      "playlist": "a playlist",
+      "plugin": "a plugin",
+      "podcast": "a podcast",
+      "product": "a product",
+      "qchat_attachment": "a Q-Chat attachment",
+      "qchat_audio": "Q-Chat audio",
+      "qchat_image": "a Q-Chat image",
+      "qchat_voice": "a Q-Chat voice message",
+      "snapshot": "a snapshot",
+      "store": "a store",
+      "thumbnail": "a thumbnail",
+      "unknown": "a QDN resource",
+      "video": "a video",
+      "voice": "a voice recording",
+      "website": "a website"
+    },
+    "show_all_one": "show all {{count}}",
+    "show_all_other": "show all {{count}}",
+    "unknown_account": "an unknown account",
+    "value": {
+      "approve": "approve",
+      "flags": "AND {{and}}, OR {{or}}, XOR {{xor}}",
+      "no": "no",
+      "option": "option {{n}}",
+      "reject": "reject",
+      "removed": "removed",
+      "yes": "yes"
+    },
+    "when_block": "{{time}} · block {{block}}",
+    "when_waiting": "waiting to be confirmed · sent {{ago}}"
+  },
+  "tx_family": {
+    "all": "all",
+    "groups": "groups",
+    "messages": "messages",
+    "minting": "minting",
+    "names": "names",
+    "other": "other",
+    "payments": "payments",
+    "qdn": "QDN data",
+    "trading": "trading"
+  },
+  "tx_page": {
+    "about": "about this transaction",
+    "answers": "the transaction it answers",
+    "answers_failed": "Couldn't load the transaction it answers.",
+    "answers_unknown": "Your node doesn't have the transaction it answers.",
+    "block": "block",
+    "copy_signature": "copy signature",
+    "details": "details",
+    "failed": "Couldn't load this transaction.",
+    "fee": "fee",
+    "open_answered": "open that transaction",
+    "sent": "sent",
+    "signature": "signature",
+    "signature_copied": "Signature copied to clipboard.",
+    "time": "time",
+    "unknown": "No transaction has this signature on your node.",
+    "unknown_hint": "It may not have reached your node yet, or a character may be wrong.",
+    "waiting": "waiting to be confirmed"
+  },
+  "tx_type": {
+    "account_flags": "account flags",
+    "account_level": "account level",
+    "add_group_admin": "group admin added",
+    "airdrop": "airdrop",
+    "arbitrary": "QDN publish",
+    "at": "AT transaction",
+    "buy_name": "name purchase",
+    "cancel_asset_order": "asset order cancelled",
+    "cancel_group_ban": "group ban lifted",
+    "cancel_group_invite": "group invite cancelled",
+    "cancel_sell_name": "name sale cancelled",
+    "chat": "chat message",
+    "create_asset_order": "asset order",
+    "create_group": "group created",
+    "create_poll": "poll created",
+    "deploy_at": "AT created",
+    "enable_forging": "forging enabled",
+    "genesis": "genesis allocation",
+    "group_approval": "group approval",
+    "group_ban": "group ban",
+    "group_invite": "group invite",
+    "group_kick": "removal from a group",
+    "issue_asset": "asset issued",
+    "join_group": "joining a group",
+    "leave_group": "leaving a group",
+    "message": "message",
+    "multi_payment": "multi-payment",
+    "payment": "payment",
+    "presence": "presence",
+    "publicize": "public key published",
+    "register_name": "name registration",
+    "remove_group_admin": "group admin removed",
+    "reward_share": "reward share",
+    "sell_name": "name listed for sale",
+    "set_group": "default group set",
+    "transfer_asset": "asset transfer",
+    "transfer_privs": "minting level move",
+    "update_asset": "asset update",
+    "update_group": "group update",
+    "update_name": "name update",
+    "vote_on_poll": "poll vote"
+  },
+  "window": {
+    "forward": "forward",
+    "full": "full window",
+    "leave_full": "leave full window",
+    "subtitle": "Look up any Qortal account or transaction"
+  }
+}
