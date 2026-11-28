@@ -1,0 +1,818 @@
+{
+  "account": {
+    "failed": "このアカウントを読み込めませんでした。",
+    "invalid": "有効な Qortal アドレスではありません。",
+    "name_failed": "この名前を照会できませんでした。",
+    "no_similar_names": "これで始まる登録名もありません。",
+    "no_such_name": "「{{name}}」という名前を持つアカウントはありません。",
+    "similar_failed": "これで始まる名前を検索できませんでした。",
+    "similar_names": "これで始まる名前:",
+    "unused": "このアドレスは一度も使われていません。まだどのトランザクションにも関わっていません。"
+  },
+  "at": {
+    "about": "自動実行コントラクト（AT）です。個人のアカウントではなく、チェーン上のプログラムです。",
+    "title": "AT アドレス"
+  },
+  "chip": {
+    "dev_admin": "Dev Admin",
+    "dev_admin_explained": "Qortal の開発者のグループである dev グループ（グループ 1）の管理者です。",
+    "minter_admin": "Minter Admin",
+    "minter_admin_explained": "メンバーがミンティングを行うグループ MINTER の管理者です。MINTER の管理者が参加できる人を決めます。",
+    "minter_member": "MINTER メンバー",
+    "minter_member_explained": "メンバーがミンティングを行うグループ MINTER のメンバーです。",
+    "minting_now": "ミンティング中",
+    "minting_now_explained": "現在オンラインのリワードシェアに含まれているため、ブロックのミンティングに参加しています。",
+    "minting_penalty": "ミンティングペナルティ",
+    "minting_penalty_explained": "ノードがこのアカウントにミンティングペナルティを記録しています。その数は「注記」に表示されます。"
+  },
+  "facts": {
+    "adjustment": "調整 {{blocks}}",
+    "at_block": "ブロック {{block}}",
+    "balance": "残高",
+    "balance_exact": "正確には {{amount}} QORT",
+    "balance_failed": "残高を読み込めませんでした。",
+    "blocks_to_level_one": "レベル {{level}} まであと {{blocks}} ブロック",
+    "blocks_to_level_other": "レベル {{level}} まであと {{blocks}} ブロック",
+    "days_to_level_one": "約 {{count}} 日のミンティング",
+    "days_to_level_other": "約 {{count}} 日のミンティング",
+    "first_seen": "初回確認",
+    "first_seen_failed": "初回確認の日時を読み込めませんでした。",
+    "first_seen_none": "記録が見つかりません",
+    "groups": "グループ",
+    "in_groups_one": "{{groups}} グループに所属",
+    "in_groups_other": "{{groups}} グループに所属",
+    "in_no_groups": "どのグループにも所属していません",
+    "level_progress": "レベル {{level}} への進捗: {{percent}}%",
+    "pace_failed": "次のレベルまでのブロック数と日数に必要な、ノードのペースを読み込めませんでした。",
+    "payments_all_one": "全 {{payments}} 件の支払い",
+    "payments_all_other": "全 {{payments}} 件の支払い",
+    "payments_newest_one": "最新 {{payments}} 件の支払い",
+    "payments_newest_other": "最新 {{payments}} 件の支払い",
+    "payments_none": "まだ支払いはありません",
+    "payments_single": "唯一の支払い",
+    "penalty": "ペナルティ {{blocks}}",
+    "received_sent": "QORT 受取 / 送金",
+    "received_sent_info": "QORT の支払いのみ：一括支払い、取引、ミンティングは含まれません。",
+    "title": "ひと目で",
+    "top_level": "最高レベル"
+  },
+  "groups": {
+    "admin": "管理者",
+    "closed": "非公開グループ",
+    "failed": "グループを読み込めませんでした。",
+    "members_one": "メンバー {{members}} 人",
+    "members_other": "メンバー {{members}} 人",
+    "none": "どのグループにも所属していません。",
+    "open": "公開グループ",
+    "owner": "オーナー",
+    "sort": "並び替え",
+    "sort_az": "名前順（A–Z）",
+    "sort_members": "メンバーが多い順",
+    "sort_minter": "MINTER を先頭に",
+    "sort_roles": "オーナーと管理者を先頭に",
+    "title": "グループ",
+    "title_count": "グループ（{{n}}）",
+    "unnamed": "グループ #{{id}}"
+  },
+  "header": {
+    "about": "このアカウントについて",
+    "blocked": "アカウントをブロックしました。",
+    "copy_public_key": "公開鍵をコピー",
+    "name_failed": "名前を読み込めませんでした。",
+    "name_matched": "「{{typed}}」を検索しました。ノードは大文字と小文字や似た文字の違いを無視して、名前「{{matched}}」と一致させました。",
+    "no_primary_name": "プライマリ名なし",
+    "opened_from_name": "名前「{{name}}」から開きました。",
+    "public_key_copied": "公開鍵をクリップボードにコピーしました。",
+    "unblocked": "アカウントのブロックを解除しました。"
+  },
+  "latest": {
+    "all": "すべてのトランザクション",
+    "failed": "最新のトランザクションを読み込めませんでした。",
+    "none": "確認済みのトランザクションはまだありません。",
+    "title": "最新のトランザクション"
+  },
+  "minter": {
+    "open_app": "{{app}} を開く",
+    "standing_admin": "Minter Admin で、MINTER メンバーです。",
+    "standing_member": "MINTER メンバーです。",
+    "standing_outside": "MINTER には所属していません。",
+    "story": "推薦から決定までの MINTER での経緯は {{app}} に記録されています。",
+    "title": "MINTER"
+  },
+  "minting": {
+    "last_signed": "最後にブロックに署名したのは {{date}} です（ブロック {{block}}）。",
+    "last_signed_block": "最後に署名したブロック: {{block}}。",
+    "last_signed_failed": "最後に署名したブロックを読み込めませんでした。",
+    "last_signed_none": "ブロックに署名したことはありません。",
+    "not_now": "現在はミンティングしていません。",
+    "online_failed": "現在ミンティング中のアカウントを読み込めませんでした。",
+    "own_key": "現在、自身のキーでミンティング中です。",
+    "own_key_and_shares": "現在、自身のキーと、次のアカウントとのリワードシェアでミンティング中です:",
+    "shares": "現在、次のアカウントとのリワードシェアでミンティング中です:",
+    "show_all_one": "すべて表示（{{count}}）",
+    "show_all_other": "すべて表示（{{count}}）",
+    "show_fewer": "表示を減らす",
+    "title": "ミンティング"
+  },
+  "name_page": {
+    "changes_found_one": "{{shown}} 件の変更が見つかりました",
+    "changes_found_other": "{{shown}} 件の変更が見つかりました",
+    "changes_since_one": "その後 {{shown}} 件の変更",
+    "changes_since_other": "その後 {{shown}} 件の変更",
+    "cut_capped": "{{account}} の名前のトランザクションは、エクスプローラーが読み込む {{max}} 件よりさらに前にさかのぼります。それ以前は表示されません。",
+    "cut_hops": "{{n}} を超える所有者と名前を経ています。最も古いものは表示されません。",
+    "cut_not_found": "{{account}} がこの名前を得た経緯は名前のトランザクションにないため、それ以前は表示されません。",
+    "failed": "この名前を照会できませんでした。",
+    "history": "全履歴",
+    "kind": "登録名",
+    "life_failed": "全履歴を読み込めませんでした。",
+    "matched": "「{{asked}}」として開きました。ノードは大文字と小文字や似た文字の違いを無視して、名前「{{matched}}」と一致させました。",
+    "no_changes_since": "その後の変更なし",
+    "nobody": "現在「{{name}}」という名前を持つアカウントはありません。",
+    "nobody_hint": "ノードは、誰かが持っている間だけ名前の記録を保持します。その後に名前が変更された場合は、新しい名前で引き継がれます。",
+    "other_registration": "記録には別の登録（{{date}}）があります。ここでは履歴の一部が欠けています。",
+    "owner": "所有者",
+    "owners_one": "所有者 {{shown}} 件",
+    "owners_other": "所有者 {{shown}} 件",
+    "reading": "これまでの所有アカウントをさかのぼって読み込んでいます…",
+    "steps_label": "「{{name}}」のすべての変更",
+    "summary_registered": "{{date}} に登録"
+  },
+  "names": {
+    "coverage_ceiling": "エクスプローラーが読み込むのは、名前のトランザクション最大 {{max}} 件までです。",
+    "coverage_older": "それより古いものはまだ読み込んでいません。",
+    "coverage_one": "各名前の履歴は、最新 {{shown}} 件の名前のトランザクションによるものです。",
+    "coverage_other": "各名前の履歴は、最新 {{shown}} 件の名前のトランザクションによるものです。",
+    "coverage_without_one": "名前のうち {{shown}} 件は、その中に含まれていません。",
+    "coverage_without_other": "名前のうち {{shown}} 件は、その中に含まれていません。",
+    "failed": "名前を読み込めませんでした。",
+    "for_sale": "売り出し中",
+    "for_sale_at": "{{price}} QORT で売り出し中",
+    "had_label": "過去に持っていた名前",
+    "had_note": "売却した名前、または別の名前に変更した名前です。",
+    "had_note_partial_one": "最新 {{shown}} 件の名前のトランザクションのうち、売却した名前、または別の名前に変更した名前です。",
+    "had_note_partial_other": "最新 {{shown}} 件の名前のトランザクションのうち、売却した名前、または別の名前に変更した名前です。",
+    "had_title": "過去に持っていた名前（{{n}}）",
+    "history": "履歴",
+    "history_count": "履歴 · {{n}}",
+    "history_failed": "名前の履歴を読み込めませんでした。",
+    "history_loading": "名前の履歴を読み込んでいます…",
+    "history_more_failed": "古い名前のトランザクションを読み込めませんでした。",
+    "history_none": "名前のトランザクションには見つかりませんでした。",
+    "history_of": "「{{name}}」の履歴",
+    "history_refresh_failed": "新しい名前のトランザクションを確認できませんでした。",
+    "list_label": "所有する名前",
+    "loading": "名前を読み込んでいます",
+    "no_primary": "プライマリ名はありません。ノードは、プライマリ名を持たないアカウントが名前を登録、購入、または変更したときに、その名前をプライマリ名にします。",
+    "no_record": "ノードには現在この名前の記録がありません。",
+    "nobody_now": "現在この名前を持つアカウントはありません。",
+    "none": "登録名はありません。",
+    "note": {
+      "address_like": "この名前はアドレスのような書き方です。",
+      "invisible_one": "この名前に見えない文字または空白文字が {{count}} 個含まれています。",
+      "invisible_other": "この名前に見えない文字または空白文字が {{count}} 個含まれています。",
+      "invisible_single": "この名前に見えない文字または空白文字が含まれています。",
+      "owner_end": "この名前の末尾が、所有者のアドレスの末尾（…{{end}}）と同じ文字です。",
+      "owner_start": "この名前の先頭が、所有者のアドレスの先頭（{{start}}…）と同じ文字です。"
+    },
+    "notes_label": "「{{name}}」についての注記",
+    "now_owned_by": "現在の所有者: {{owner}}",
+    "now_spelled_own": "現在の表記は「{{matched}}」で、このアカウントのものです。",
+    "now_spelled_owned_by": "現在の表記は「{{matched}}」で、所有者は {{owner}} です。",
+    "own_again": "再びこのアカウントのものです。",
+    "owner_failed": "現在この名前を持つアカウントを読み込めませんでした。",
+    "owner_loading": "現在の所有者を読み込んでいます",
+    "primary": "プライマリ",
+    "primary_failed": "プライマリ名を読み込めませんでした。",
+    "read_older": "古い名前のトランザクションを読み込む",
+    "record_failed": "この名前の記録を読み込めませんでした。",
+    "record_loading": "この名前の記録を読み込んでいます",
+    "registered": "{{date}} に登録",
+    "registered_again": "その後、{{owner}} によって「{{matched}}」として再登録されました。",
+    "show_all_of_one": "「{{name}}」の履歴をすべて表示（{{count}}）",
+    "show_all_of_other": "「{{name}}」の履歴をすべて表示（{{count}}）",
+    "show_more_one": "さらに {{shown}} 件表示",
+    "show_more_other": "さらに {{shown}} 件表示",
+    "sort": "並び替え",
+    "sort_activity": "最近のアクティビティ順",
+    "sort_az": "A–Z 順",
+    "sort_newest": "登録が新しい順",
+    "sort_oldest": "登録が古い順",
+    "sort_primary": "プライマリ名を先頭に",
+    "sort_za": "Z–A 順",
+    "title": "名前",
+    "title_count": "名前（{{n}}）",
+    "title_more": "名前（{{n}}+）",
+    "truncated_one": "名前は {{shown}} 件以上あります。最初の {{shown}} 件を表示しています。",
+    "truncated_other": "名前は {{shown}} 件以上あります。最初の {{shown}} 件を表示しています。",
+    "updated": "{{date}} に更新",
+    "view_label": "名前の表示形式",
+    "whole_history": "全履歴",
+    "whole_history_of": "「{{name}}」の全履歴"
+  },
+  "notes": {
+    "name_address_like": "プライマリ名「{{name}}」はアドレスのような書き方です。",
+    "name_invisible_one": "プライマリ名「{{name}}」に見えない文字または空白文字が {{count}} 個含まれています。",
+    "name_invisible_other": "プライマリ名「{{name}}」に見えない文字または空白文字が {{count}} 個含まれています。",
+    "name_invisible_single": "プライマリ名「{{name}}」に見えない文字または空白文字が含まれています。",
+    "name_owner_end": "プライマリ名「{{name}}」の末尾が、アドレスの末尾（…{{end}}）と同じ文字です。",
+    "name_owner_start": "プライマリ名「{{name}}」の先頭が、アドレスの先頭（{{start}}…）と同じ文字です。",
+    "names_listed_one": "表示されている {{total}} 件の名前のうち {{shown}} 件に注記があります。",
+    "names_listed_other": "表示されている {{total}} 件の名前のうち {{shown}} 件に注記があります。",
+    "names_one": "{{total}} 件の名前のうち {{shown}} 件に注記があります。",
+    "names_other": "{{total}} 件の名前のうち {{shown}} 件に注記があります。",
+    "only_name": "その名前に注記があります。",
+    "other_name_only": "もう一つの名前に注記があります。",
+    "other_names_listed_one": "表示されている他の名前 {{total}} 件のうち {{shown}} 件に注記があります。",
+    "other_names_listed_other": "表示されている他の名前 {{total}} 件のうち {{shown}} 件に注記があります。",
+    "other_names_one": "他の名前 {{total}} 件のうち {{shown}} 件に注記があります。",
+    "other_names_other": "他の名前 {{total}} 件のうち {{shown}} 件に注記があります。",
+    "penalty": "ノードはこのアカウントに {{blocks}} ブロックのミンティングペナルティを記録しています。",
+    "title": "注記"
+  },
+  "payments": {
+    "failed": "支払いを読み込めませんでした。"
+  },
+  "search": {
+    "clear": "クリア",
+    "compact_placeholder": "エクスプローラーで検索",
+    "helper": "候補を選ぶか、Enter キーを押して入力したとおりに検索します。",
+    "label": "アカウントまたはトランザクションを探す",
+    "placeholder": "名前、アドレス、またはトランザクション署名"
+  },
+  "settings": {
+    "remember": "このデバイスで閲覧したアカウントを記憶する",
+    "remember_hint": "この Hub アカウント用に、アドレスのみを保存します。オフにすると消去されます。",
+    "title": "エクスプローラーの設定"
+  },
+  "start": {
+    "clear": "クリア",
+    "clear_recent": "最近の閲覧をクリア",
+    "recent": "最近の閲覧",
+    "your_account": "あなたのアカウント"
+  },
+  "summary": {
+    "first_seen": "{{date}}に初めて確認",
+    "last_sent": "最終トランザクション送信: {{ago}}",
+    "minter_admin": "Minter Admin、MINTER 所属",
+    "minter_member": "MINTER 所属",
+    "minter_outside": "MINTER 非所属",
+    "no_names": "登録名なし",
+    "owns_names_more_one": "名前を {{shown}} 件以上所有",
+    "owns_names_more_other": "名前を {{shown}} 件以上所有",
+    "owns_names_one": "名前を {{shown}} 件所有",
+    "owns_names_other": "名前を {{shown}} 件所有"
+  },
+  "tabs": {
+    "label": "アカウントのセクション",
+    "names": "名前",
+    "overview": "概要",
+    "transactions": "トランザクション"
+  },
+  "trail": {
+    "label": "たどった経路"
+  },
+  "transactions": {
+    "all_kind_one": "この種類の {{shown}} 件をすべて表示しています。",
+    "all_kind_other": "この種類の {{shown}} 件をすべて表示しています。",
+    "all_one": "トランザクション {{shown}} 件をすべて表示しています。",
+    "all_other": "トランザクション {{shown}} 件をすべて表示しています。",
+    "ceiling": "エクスプローラーが読み込むのは、種類ごとに最大 {{max}} 件のトランザクションです。",
+    "every_type": "すべての種類",
+    "failed": "トランザクションを読み込めませんでした。",
+    "kind_label": "トランザクションの種類で絞り込む",
+    "more_failed": "続きのトランザクションを読み込めませんでした。",
+    "newest_kind_one": "この種類の最新 {{shown}} 件を表示しています。",
+    "newest_kind_other": "この種類の最新 {{shown}} 件を表示しています。",
+    "newest_one": "最新のトランザクション {{shown}} 件を表示しています。",
+    "newest_other": "最新のトランザクション {{shown}} 件を表示しています。",
+    "none": "確認済みのトランザクションはまだありません。",
+    "none_kind": "確認済みのトランザクションに、この種類のものはありません。",
+    "only": "トランザクションはこの 1 件だけです。",
+    "only_kind": "この種類のトランザクションはこの 1 件だけです。",
+    "refresh_failed": "新しいトランザクションを確認できませんでした。",
+    "show_more": "さらに表示",
+    "title_all": "すべてのトランザクション",
+    "type": "種類",
+    "waiting_failed": "送信済みでブロック待ちのトランザクションを確認できませんでした。",
+    "waiting_loading": "送信済みでブロック待ちのトランザクションを確認しています…",
+    "waiting_note": "これらはブロックに取り込まれるまで、ノードが保持しています。このアカウント宛てのトランザクションは、ブロックに取り込まれてから表示されます。",
+    "waiting_title": "このアカウントが送信した確認待ちのトランザクション（{{n}}）",
+    "waiting_title_more": "このアカウントが送信した確認待ちのトランザクション（{{n}}件以上）"
+  },
+  "tx": {
+    "approval": {
+      "approved": "承認済み",
+      "expired": "期限切れ",
+      "invalid": "無効",
+      "pending": "承認待ち",
+      "rejected": "却下"
+    },
+    "asset_number": "アセット #{{id}}",
+    "creator": "作成者",
+    "details_of": "{{type}}の詳細",
+    "field": {
+      "account": "アカウント",
+      "admin": "管理者",
+      "amount": "金額",
+      "answer": "回答",
+      "asset": "アセット",
+      "at": "AT（自動実行コントラクト）",
+      "at_address": "AT アドレス",
+      "at_kind": "種類",
+      "at_name": "AT 名",
+      "change": "変更内容",
+      "data": "データ",
+      "description": "説明",
+      "divisible": "分割可能",
+      "encrypted": "暗号化",
+      "funded_with": "投入資金",
+      "group": "グループ",
+      "group_approval": "グループの承認",
+      "identifier": "識別子",
+      "invitee": "招待相手",
+      "level": "レベル",
+      "member": "メンバー",
+      "moved_to": "移転先",
+      "name": "名前",
+      "new_admin": "新しい管理者",
+      "new_data": "新しいデータ",
+      "new_description": "新しい説明",
+      "new_name": "新しい名前",
+      "new_owner": "新しいオーナー",
+      "open": "誰でも参加可能",
+      "option": "選択肢",
+      "options": "選択肢",
+      "order": "注文",
+      "owner": "オーナー",
+      "payment": "支払い",
+      "poll": "投票",
+      "price": "価格",
+      "quantity": "数量",
+      "reason": "理由",
+      "recipient": "受取人",
+      "seller": "販売者",
+      "service": "サービス",
+      "share": "シェア率",
+      "size": "サイズ",
+      "tags": "タグ",
+      "transaction": "トランザクション"
+    },
+    "incoming": "受信",
+    "not_shown": "（非表示）",
+    "open": "トランザクションを開く",
+    "outcome": {
+      "expired": "（期限内に承認されませんでした）",
+      "invalid": "（無効）",
+      "pending": "（グループの承認待ち）",
+      "rejected": "（グループの承認で却下されました）"
+    },
+    "outgoing": "送信",
+    "people": "関係するアカウント",
+    "privs_failed": "ミンティングレベルを受け取ったアカウントを読み取れませんでした。",
+    "raw": "API の生の応答",
+    "raw_caption": "ノードからの応答を JSON で表示しています。",
+    "raw_copied": "生の応答をクリップボードにコピーしました。",
+    "raw_copy": "生の応答をコピー",
+    "say": {
+      "account_flags": {
+        "in": "ジェネシスブロックでアカウントフラグが設定されました",
+        "none": "ジェネシスブロックで {{target}} のアカウントフラグが設定されました"
+      },
+      "account_level": {
+        "in": "ジェネシスブロックでレベルが {{level}} に設定されました",
+        "none": "ジェネシスブロックで {{target}} のレベルが {{level}} に設定されました"
+      },
+      "add_group_admin": {
+        "in": "{{actor}} がこのアカウントをグループ {{group}} の管理者にしました",
+        "in_proposed": "{{actor}} がこのアカウントをグループ {{group}} の管理者にすることを提案しました",
+        "none": "{{actor}} が {{member}} をグループ {{group}} の管理者にしました",
+        "none_proposed": "{{actor}} が {{member}} をグループ {{group}} の管理者にすることを提案しました",
+        "out": "{{member}} をグループ {{group}} の管理者にしました",
+        "out_proposed": "{{member}} をグループ {{group}} の管理者にすることを提案しました",
+        "self": {
+          "mine": "グループ {{group}} の管理者になりました",
+          "mine_proposed": "グループ {{group}} の管理者になることを提案しました",
+          "none": "{{actor}} がグループ {{group}} の管理者になりました",
+          "none_proposed": "{{actor}} がグループ {{group}} の管理者になることを提案しました"
+        }
+      },
+      "airdrop": {
+        "mine": "エアドロップを実行しました",
+        "none": "{{actor}} がエアドロップを実行しました"
+      },
+      "arbitrary": {
+        "in": "QDN 公開とともに {{from}} から {{amount}} を受け取りました",
+        "named": {
+          "mine": "「{{name}}」の名前で{{what}}を公開しました",
+          "none": "{{actor}} が「{{name}}」の名前で{{what}}を公開しました"
+        },
+        "unnamed": {
+          "mine": "{{what}}を公開しました",
+          "none": "{{actor}} が{{what}}を公開しました"
+        }
+      },
+      "at": {
+        "ran": "{{at}} がプログラムを実行しました",
+        "ran_mine": "プログラムを実行しました"
+      },
+      "buy_name": {
+        "in": "名前「{{name}}」を {{price}} で {{buyer}} に売却しました",
+        "none": "{{actor}} が名前「{{name}}」を {{price}} で {{seller}} から購入しました",
+        "out": "名前「{{name}}」を {{price}} で {{seller}} から購入しました"
+      },
+      "cancel_asset_order": {
+        "mine": "アセットの注文をキャンセルしました",
+        "none": "{{actor}} がアセットの注文をキャンセルしました"
+      },
+      "cancel_group_ban": {
+        "in": "{{actor}} がグループ {{group}} でのこのアカウントの追放を解除しました",
+        "in_proposed": "{{actor}} がグループ {{group}} でのこのアカウントの追放を解除することを提案しました",
+        "none": "{{actor}} がグループ {{group}} での {{member}} の追放を解除しました",
+        "none_proposed": "{{actor}} がグループ {{group}} での {{member}} の追放を解除することを提案しました",
+        "out": "グループ {{group}} での {{member}} の追放を解除しました",
+        "out_proposed": "グループ {{group}} での {{member}} の追放を解除することを提案しました"
+      },
+      "cancel_group_invite": {
+        "mine": "グループへの招待を取り消しました",
+        "mine_proposed": "グループへの招待を取り消すことを提案しました",
+        "none": "{{actor}} がグループへの招待を取り消しました",
+        "none_proposed": "{{actor}} がグループへの招待を取り消すことを提案しました"
+      },
+      "cancel_sell_name": {
+        "mine": "名前「{{name}}」の販売を取りやめました",
+        "none": "{{actor}} が名前「{{name}}」の販売を取りやめました"
+      },
+      "chat": {
+        "group": {
+          "mine": "グループにチャットメッセージを送信しました",
+          "none": "{{actor}} がグループにチャットメッセージを送信しました"
+        },
+        "in": "{{from}} からチャットメッセージを受信しました",
+        "none": "{{from}} が {{to}} にチャットメッセージを送信しました",
+        "out": "{{to}} にチャットメッセージを送信しました"
+      },
+      "create_asset_order": {
+        "mine": "{{have}} を {{want}} と交換する注文を出しました",
+        "none": "{{actor}} が {{have}} を {{want}} と交換する注文を出しました"
+      },
+      "create_group": {
+        "mine": "グループ {{group}} を作成しました",
+        "none": "{{actor}} がグループ {{group}} を作成しました"
+      },
+      "create_poll": {
+        "for_me": "{{actor}} がこのアカウントを所有者とする投票「{{poll}}」を作成しました",
+        "mine": "投票「{{poll}}」を作成しました",
+        "none": "{{actor}} が投票「{{poll}}」を作成しました",
+        "owned_by": "{{actor}} が {{owner}} を所有者とする投票「{{poll}}」を作成しました",
+        "owned_by_mine": "{{owner}} を所有者とする投票「{{poll}}」を作成しました"
+      },
+      "deploy_at": {
+        "in": "{{actor}} がこの AT（自動実行コントラクト）を作成しました",
+        "mine": "AT（自動実行コントラクト）を作成しました",
+        "none": "{{actor}} が AT（自動実行コントラクト）を作成しました"
+      },
+      "enable_forging": {
+        "for": {
+          "in": "{{actor}} がこのアカウントのフォージングを有効にしました",
+          "none": "{{actor}} が {{target}} のフォージングを有効にしました",
+          "out": "{{target}} のフォージングを有効にしました"
+        },
+        "mine": "フォージングを有効にしました",
+        "none": "{{actor}} がフォージングを有効にしました"
+      },
+      "generic": {
+        "mine": "トランザクションを実行しました: {{type}}",
+        "nobody": "トランザクション: {{type}}",
+        "none": "{{actor}} がトランザクションを実行しました: {{type}}"
+      },
+      "genesis": {
+        "in": "ジェネシスブロックで {{amount}} を受け取りました",
+        "none": "{{to}} がジェネシスブロックで {{amount}} を受け取りました"
+      },
+      "group_approval": {
+        "approved": {
+          "mine": "トランザクション {{tx}} を承認しました",
+          "none": "{{actor}} がトランザクション {{tx}} を承認しました"
+        },
+        "rejected": {
+          "mine": "トランザクション {{tx}} を却下しました",
+          "none": "{{actor}} がトランザクション {{tx}} を却下しました"
+        }
+      },
+      "group_ban": {
+        "in": "{{actor}} がこのアカウントをグループ {{group}} から追放しました",
+        "in_proposed": "{{actor}} がこのアカウントをグループ {{group}} から追放することを提案しました",
+        "none": "{{actor}} が {{member}} をグループ {{group}} から追放しました",
+        "none_proposed": "{{actor}} が {{member}} をグループ {{group}} から追放することを提案しました",
+        "out": "{{member}} をグループ {{group}} から追放しました",
+        "out_proposed": "{{member}} をグループ {{group}} から追放することを提案しました"
+      },
+      "group_invite": {
+        "in": "{{actor}} がこのアカウントをグループ {{group}} に招待しました",
+        "in_proposed": "{{actor}} がこのアカウントをグループ {{group}} に招待することを提案しました",
+        "none": "{{actor}} が {{invitee}} をグループ {{group}} に招待しました",
+        "none_proposed": "{{actor}} が {{invitee}} をグループ {{group}} に招待することを提案しました",
+        "out": "{{invitee}} をグループ {{group}} に招待しました",
+        "out_proposed": "{{invitee}} をグループ {{group}} に招待することを提案しました"
+      },
+      "group_kick": {
+        "in": "{{actor}} がこのアカウントをグループ {{group}} から削除しました",
+        "in_proposed": "{{actor}} がこのアカウントをグループ {{group}} から削除することを提案しました",
+        "none": "{{actor}} が {{member}} をグループ {{group}} から削除しました",
+        "none_proposed": "{{actor}} が {{member}} をグループ {{group}} から削除することを提案しました",
+        "out": "{{member}} をグループ {{group}} から削除しました",
+        "out_proposed": "{{member}} をグループ {{group}} から削除することを提案しました"
+      },
+      "issue_asset": {
+        "mine": "アセット「{{asset}}」を発行しました",
+        "nobody": "アセット「{{asset}}」が発行されました",
+        "none": "{{actor}} がアセット「{{asset}}」を発行しました"
+      },
+      "join_group": {
+        "mine": "グループ {{group}} に参加、または参加を申請しました",
+        "none": "{{actor}} がグループ {{group}} に参加、または参加を申請しました"
+      },
+      "leave_group": {
+        "mine": "グループ {{group}} から退出しました",
+        "none": "{{actor}} がグループ {{group}} から退出しました"
+      },
+      "message": {
+        "in": "{{from}} からメッセージを受信しました",
+        "in_amount": "{{from}} から {{amount}} 付きのメッセージを受信しました",
+        "none": "{{from}} が {{to}} にメッセージを送信しました",
+        "none_amount": "{{from}} が {{to}} に {{amount}} 付きのメッセージを送信しました",
+        "none_nobody": "{{from}} がメッセージを送信しました",
+        "out": "{{to}} にメッセージを送信しました",
+        "out_amount": "{{to}} に {{amount}} 付きのメッセージを送信しました",
+        "out_nobody": "メッセージを送信しました"
+      },
+      "multi": {
+        "in_one": "{{from}} が {{accounts}} アカウントに送った一括支払いで {{amount}} を受け取りました",
+        "in_other": "{{from}} が {{accounts}} アカウントに送った一括支払いで {{amount}} を受け取りました",
+        "none_one": "{{actor}} が 1 回の支払いで {{accounts}} アカウントに合計 {{amount}} を支払いました",
+        "none_other": "{{actor}} が 1 回の支払いで {{accounts}} アカウントに合計 {{amount}} を支払いました",
+        "out_one": "1 回の支払いで {{accounts}} アカウントに合計 {{amount}} を支払いました",
+        "out_other": "1 回の支払いで {{accounts}} アカウントに合計 {{amount}} を支払いました"
+      },
+      "payment_line": "{{to}} へ {{amount}}",
+      "presence": {
+        "minting": {
+          "mine": "オンラインであることを通知しました（ミンティング）",
+          "none": "{{actor}} がオンラインであることを通知しました（ミンティング）"
+        },
+        "trade_bot": {
+          "mine": "オンラインであることを通知しました（トレードボット）",
+          "none": "{{actor}} がオンラインであることを通知しました（トレードボット）"
+        }
+      },
+      "publicize": {
+        "mine": "公開鍵を公開しました",
+        "none": "{{actor}} が公開鍵を公開しました"
+      },
+      "register_name": {
+        "mine": "名前「{{name}}」を登録しました",
+        "none": "{{actor}} が名前「{{name}}」を登録しました"
+      },
+      "remove_group_admin": {
+        "in": "{{actor}} がこのアカウントをグループ {{group}} の管理者から外しました",
+        "in_proposed": "{{actor}} がこのアカウントをグループ {{group}} の管理者から外すことを提案しました",
+        "none": "{{actor}} が {{member}} をグループ {{group}} の管理者から外しました",
+        "none_proposed": "{{actor}} が {{member}} をグループ {{group}} の管理者から外すことを提案しました",
+        "out": "{{member}} をグループ {{group}} の管理者から外しました",
+        "out_proposed": "{{member}} をグループ {{group}} の管理者から外すことを提案しました",
+        "self": {
+          "mine": "グループ {{group}} の管理者を辞任しました",
+          "mine_proposed": "グループ {{group}} の管理者を辞任することを提案しました",
+          "none": "{{actor}} がグループ {{group}} の管理者を辞任しました",
+          "none_proposed": "{{actor}} がグループ {{group}} の管理者を辞任することを提案しました"
+        }
+      },
+      "reward_share": {
+        "removed": {
+          "in": "{{actor}} がこのアカウントとのリワードシェアを削除しました",
+          "none": "{{actor}} が {{other}} とのリワードシェアを削除しました",
+          "out": "{{other}} とのリワードシェアを削除しました"
+        },
+        "self_start": "{{actor}} がミンティングを開始しました（セルフシェア）",
+        "self_start_mine": "ミンティングを開始しました（セルフシェア）",
+        "self_stop": "{{actor}} がミンティングを停止しました（セルフシェアを削除）",
+        "self_stop_mine": "ミンティングを停止しました（セルフシェアを削除）",
+        "started": {
+          "in": "{{actor}} がこのアカウントとのリワードシェアを {{percent}} で開始しました",
+          "none": "{{actor}} が {{other}} とのリワードシェアを {{percent}} で開始しました",
+          "out": "{{other}} とのリワードシェアを {{percent}} で開始しました"
+        }
+      },
+      "sell_name": {
+        "mine": "名前「{{name}}」を {{price}} で売りに出しました",
+        "none": "{{actor}} が名前「{{name}}」を {{price}} で売りに出しました"
+      },
+      "set_group": {
+        "cleared": {
+          "mine": "デフォルトグループを解除しました",
+          "none": "{{actor}} がデフォルトグループを解除しました"
+        },
+        "set": {
+          "mine": "デフォルトグループを {{group}} に設定しました",
+          "none": "{{actor}} がデフォルトグループを {{group}} に設定しました"
+        }
+      },
+      "transfer": {
+        "in": "{{from}} から {{amount}} を受け取りました",
+        "none": "{{from}} が {{to}} に {{amount}} を送金しました",
+        "out": "{{to}} に {{amount}} を送金しました",
+        "self": "{{actor}} が自分自身に {{amount}} を送金しました",
+        "self_mine": "自分自身に {{amount}} を送金しました"
+      },
+      "transfer_privs": {
+        "in": "{{from}} からミンティングレベルを受け取りました",
+        "none": "{{actor}} がミンティングレベルを {{to}} に移しました",
+        "none_unknown": "{{actor}} がミンティングレベルを別のアカウントに移しました",
+        "out": "ミンティングレベルを {{to}} に移しました",
+        "out_unknown": "ミンティングレベルを別のアカウントに移しました"
+      },
+      "update_asset": {
+        "details": {
+          "mine": "アセット {{asset}} を更新しました",
+          "none": "{{actor}} がアセット {{asset}} を更新しました"
+        },
+        "owner": {
+          "in": "{{actor}} がアセット {{asset}} をこのアカウントに譲渡しました",
+          "none": "{{actor}} がアセット {{asset}} を {{new_owner}} に譲渡しました",
+          "out": "アセット {{asset}} を {{new_owner}} に譲渡しました"
+        }
+      },
+      "update_group": {
+        "owner": {
+          "in": "{{actor}} がこのアカウントをグループ {{group}} のオーナーにしました",
+          "in_proposed": "{{actor}} がこのアカウントをグループ {{group}} のオーナーにすることを提案しました",
+          "none": "{{actor}} が {{new_owner}} をグループ {{group}} のオーナーにしました",
+          "none_proposed": "{{actor}} が {{new_owner}} をグループ {{group}} のオーナーにすることを提案しました",
+          "out": "{{new_owner}} をグループ {{group}} のオーナーにしました",
+          "out_proposed": "{{new_owner}} をグループ {{group}} のオーナーにすることを提案しました"
+        },
+        "settings": {
+          "mine": "グループ {{group}} の設定を更新しました",
+          "mine_proposed": "グループ {{group}} の設定を更新することを提案しました",
+          "none": "{{actor}} がグループ {{group}} の設定を更新しました",
+          "none_proposed": "{{actor}} がグループ {{group}} の設定を更新することを提案しました"
+        }
+      },
+      "update_name": {
+        "details": {
+          "mine": "名前「{{name}}」の詳細を更新しました",
+          "none": "{{actor}} が名前「{{name}}」の詳細を更新しました"
+        },
+        "renamed": {
+          "mine": "名前「{{name}}」を「{{new_name}}」に変更しました",
+          "none": "{{actor}} が名前「{{name}}」を「{{new_name}}」に変更しました"
+        }
+      },
+      "vote_on_poll": {
+        "mine": "投票「{{poll}}」に票を投じました",
+        "none": "{{actor}} が投票「{{poll}}」に票を投じました"
+      }
+    },
+    "service": {
+      "app": "アプリ",
+      "arbitrary_data": "データ",
+      "attachment": "添付ファイル",
+      "audio": "オーディオ",
+      "auto_update": "Core のアップデート",
+      "blog": "ブログ",
+      "blog_comment": "ブログのコメント",
+      "blog_post": "ブログ記事",
+      "chain_comment": "チェーン上のコメント",
+      "chain_data": "チェーン上のデータ",
+      "code": "コード",
+      "comment": "コメント",
+      "coupon": "クーポン",
+      "database": "データベース",
+      "document": "ドキュメント",
+      "encrypted": "暗号化されたリソース",
+      "extension": "拡張機能",
+      "file": "ファイル",
+      "files": "複数のファイル",
+      "game": "ゲーム",
+      "gif_repository": "GIF コレクション",
+      "git_repository": "Git リポジトリ",
+      "image": "画像",
+      "item": "アイテム",
+      "json": "JSON データ",
+      "list": "リスト",
+      "message": "メッセージ",
+      "metadata": "メタデータ",
+      "nft": "NFT",
+      "offer": "オファー",
+      "playlist": "プレイリスト",
+      "plugin": "プラグイン",
+      "podcast": "ポッドキャスト",
+      "product": "商品",
+      "qchat_attachment": "Q-Chat の添付ファイル",
+      "qchat_audio": "Q-Chat のオーディオ",
+      "qchat_image": "Q-Chat の画像",
+      "qchat_voice": "Q-Chat のボイスメッセージ",
+      "snapshot": "スナップショット",
+      "store": "ストア",
+      "thumbnail": "サムネイル",
+      "unknown": "QDN リソース",
+      "video": "動画",
+      "voice": "音声録音",
+      "website": "ウェブサイト"
+    },
+    "show_all_one": "すべて表示（{{count}}）",
+    "show_all_other": "すべて表示（{{count}}）",
+    "unknown_account": "不明なアカウント",
+    "value": {
+      "approve": "承認",
+      "flags": "AND {{and}}、OR {{or}}、XOR {{xor}}",
+      "no": "いいえ",
+      "option": "選択肢 {{n}}",
+      "reject": "却下",
+      "removed": "削除済み",
+      "yes": "はい"
+    },
+    "when_block": "{{time}} · ブロック {{block}}",
+    "when_waiting": "確認待ち · {{ago}}に送信"
+  },
+  "tx_family": {
+    "all": "すべて",
+    "groups": "グループ",
+    "messages": "メッセージ",
+    "minting": "ミンティング",
+    "names": "名前",
+    "other": "その他",
+    "payments": "支払い",
+    "qdn": "QDN データ",
+    "trading": "取引"
+  },
+  "tx_page": {
+    "about": "このトランザクションについて",
+    "answers": "対象のトランザクション",
+    "answers_failed": "対象のトランザクションを読み込めませんでした。",
+    "answers_unknown": "対象のトランザクションはノードにありません。",
+    "block": "ブロック",
+    "copy_signature": "署名をコピー",
+    "details": "詳細",
+    "failed": "このトランザクションを読み込めませんでした。",
+    "fee": "手数料",
+    "open_answered": "そのトランザクションを開く",
+    "sent": "送信日時",
+    "signature": "署名",
+    "signature_copied": "署名をクリップボードにコピーしました。",
+    "time": "日時",
+    "unknown": "この署名のトランザクションはノードにありません。",
+    "unknown_hint": "まだノードに届いていないか、文字が間違っている可能性があります。",
+    "waiting": "確認待ち"
+  },
+  "tx_type": {
+    "account_flags": "アカウントフラグ",
+    "account_level": "アカウントレベル",
+    "add_group_admin": "グループ管理者の追加",
+    "airdrop": "エアドロップ",
+    "arbitrary": "QDN 公開",
+    "at": "AT トランザクション",
+    "buy_name": "名前の購入",
+    "cancel_asset_order": "アセット注文のキャンセル",
+    "cancel_group_ban": "グループ追放の解除",
+    "cancel_group_invite": "グループ招待の取り消し",
+    "cancel_sell_name": "名前の販売取り消し",
+    "chat": "チャットメッセージ",
+    "create_asset_order": "アセット注文",
+    "create_group": "グループの作成",
+    "create_poll": "投票の作成",
+    "deploy_at": "AT の作成",
+    "enable_forging": "フォージングの有効化",
+    "genesis": "ジェネシス配分",
+    "group_approval": "グループ承認",
+    "group_ban": "グループ追放",
+    "group_invite": "グループ招待",
+    "group_kick": "グループからの削除",
+    "issue_asset": "アセットの発行",
+    "join_group": "グループへの参加",
+    "leave_group": "グループからの退出",
+    "message": "メッセージ",
+    "multi_payment": "一括支払い",
+    "payment": "支払い",
+    "presence": "オンライン状態",
+    "publicize": "公開鍵の公開",
+    "register_name": "名前の登録",
+    "remove_group_admin": "グループ管理者の解任",
+    "reward_share": "リワードシェア",
+    "sell_name": "名前の売り出し",
+    "set_group": "デフォルトグループの設定",
+    "transfer_asset": "アセットの転送",
+    "transfer_privs": "ミンティングレベルの移転",
+    "update_asset": "アセットの更新",
+    "update_group": "グループの更新",
+    "update_name": "名前の更新",
+    "vote_on_poll": "投票への参加"
+  },
+  "window": {
+    "forward": "進む",
+    "full": "ウィンドウ全体に広げる",
+    "leave_full": "通常のサイズに戻す",
+    "subtitle": "任意の Qortal アカウントまたはトランザクションを照会"
+  }
+}

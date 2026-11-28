@@ -1,0 +1,818 @@
+{
+  "account": {
+    "failed": "Tätä tiliä ei voitu ladata.",
+    "invalid": "Tämä ei ole kelvollinen Qortal-osoite.",
+    "name_failed": "Tätä nimeä ei voitu hakea.",
+    "no_similar_names": "Mikään rekisteröity nimi ei myöskään ala sillä.",
+    "no_such_name": "Kenelläkään ei ole nimeä ”{{name}}”.",
+    "similar_failed": "Näin alkavia nimiä ei voitu hakea.",
+    "similar_names": "Nimet, jotka alkavat sillä:",
+    "unused": "Tätä osoitetta ei ole koskaan käytetty: se ei ole vielä ollut osallisena yhdessäkään tapahtumassa."
+  },
+  "at": {
+    "about": "Automaattinen sopimus (AT): ohjelma lohkoketjussa, ei henkilökohtainen tili.",
+    "title": "AT-osoite"
+  },
+  "chip": {
+    "dev_admin": "Dev Admin",
+    "dev_admin_explained": "Dev-ryhmän (ryhmä 1) eli Qortalin kehittäjien ryhmän ylläpitäjä.",
+    "minter_admin": "Minter Admin",
+    "minter_admin_explained": "MINTERin ylläpitäjä. MINTER on ryhmä, jonka jäsenet minttaavat; sen ylläpitäjät päättävät, kuka siihen liittyy.",
+    "minter_member": "MINTER-jäsen",
+    "minter_member_explained": "MINTERin jäsen. MINTER on ryhmä, jonka jäsenet minttaavat.",
+    "minting_now": "minttaa nyt",
+    "minting_now_explained": "Se kuuluu palkkionjakoon, joka on juuri nyt verkossa, joten se osallistuu lohkojen minttaukseen.",
+    "minting_penalty": "minttausrangaistus",
+    "minting_penalty_explained": "Solmu on kirjannut tälle tilille minttausrangaistuksen. Määrä näkyy kohdassa ”Huomiot”."
+  },
+  "facts": {
+    "adjustment": "korjaus {{blocks}}",
+    "at_block": "lohkossa {{block}}",
+    "balance": "saldo",
+    "balance_exact": "tarkalleen {{amount}} QORT",
+    "balance_failed": "Saldoa ei voitu ladata.",
+    "blocks_to_level_one": "{{blocks}} lohko tasolle {{level}}",
+    "blocks_to_level_other": "{{blocks}} lohkoa tasolle {{level}}",
+    "days_to_level_one": "noin {{count}} päivä minttausta",
+    "days_to_level_other": "noin {{count}} päivää minttausta",
+    "first_seen": "nähty ensi kerran",
+    "first_seen_failed": "Ensimmäisen havainnon aikaa ei voitu ladata.",
+    "first_seen_none": "merkintää ei löytynyt",
+    "groups": "ryhmät",
+    "in_groups_one": "{{groups}} ryhmässä",
+    "in_groups_other": "{{groups}} ryhmässä",
+    "in_no_groups": "ei missään ryhmässä",
+    "level_progress": "edistyminen tasolle {{level}}: {{percent}} %",
+    "pace_failed": "Solmun tahtia, jota tarvitaan lohkoihin ja päiviin seuraavalle tasolle, ei voitu ladata.",
+    "payments_all_one": "kaikissa sen {{payments}} maksussa",
+    "payments_all_other": "kaikissa sen {{payments}} maksussa",
+    "payments_newest_one": "sen {{payments}} uusimmassa maksussa",
+    "payments_newest_other": "sen {{payments}} uusimmassa maksussa",
+    "payments_none": "ei vielä maksuja",
+    "payments_single": "sen ainoassa maksussa",
+    "penalty": "rangaistus {{blocks}}",
+    "received_sent": "QORT vastaanotettu / lähetetty",
+    "received_sent_info": "Vain QORT-maksut: monimaksuja, kauppoja ja minttausta ei lasketa.",
+    "title": "yhdellä silmäyksellä",
+    "top_level": "korkein taso"
+  },
+  "groups": {
+    "admin": "ylläpitäjä",
+    "closed": "suljettu ryhmä",
+    "failed": "Ryhmiä ei voitu ladata.",
+    "members_one": "{{members}} jäsen",
+    "members_other": "{{members}} jäsentä",
+    "none": "Se ei kuulu mihinkään ryhmään.",
+    "open": "avoin ryhmä",
+    "owner": "omistaja",
+    "sort": "lajittele",
+    "sort_az": "nimi A–Ö",
+    "sort_members": "eniten jäseniä",
+    "sort_minter": "MINTER ensin",
+    "sort_roles": "omistaja ja ylläpitäjä ensin",
+    "title": "ryhmät",
+    "title_count": "ryhmät ({{n}})",
+    "unnamed": "ryhmä #{{id}}"
+  },
+  "header": {
+    "about": "tietoja tästä tilistä",
+    "blocked": "Tili estetty.",
+    "copy_public_key": "kopioi julkinen avain",
+    "name_failed": "Nimeä ei voitu ladata.",
+    "name_matched": "Hait nimeä ”{{typed}}”; solmu löysi nimen ”{{matched}}” kirjainkoosta ja samannäköisistä kirjaimista välittämättä.",
+    "no_primary_name": "ei ensisijaista nimeä",
+    "opened_from_name": "Avattu nimen ”{{name}}” kautta.",
+    "public_key_copied": "Julkinen avain kopioitu leikepöydälle.",
+    "unblocked": "Tilin esto poistettu."
+  },
+  "latest": {
+    "all": "kaikki tapahtumat",
+    "failed": "Viimeisimpiä tapahtumia ei voitu ladata.",
+    "none": "Ei vielä vahvistettuja tapahtumia.",
+    "title": "viimeisimmät tapahtumat"
+  },
+  "minter": {
+    "open_app": "avaa {{app}}",
+    "standing_admin": "Minter Admin ja MINTER-jäsen.",
+    "standing_member": "MINTER-jäsen.",
+    "standing_outside": "Ei MINTERissä.",
+    "story": "Sen MINTER-historia nimityksistä päätöksiin säilyy sovelluksessa {{app}}.",
+    "title": "MINTER"
+  },
+  "minting": {
+    "last_signed": "Allekirjoitti viimeksi lohkon {{date}} (lohko {{block}}).",
+    "last_signed_block": "Viimeksi allekirjoitettu lohko: {{block}}.",
+    "last_signed_failed": "Viimeksi allekirjoitettua lohkoa ei voitu ladata.",
+    "last_signed_none": "Se ei ole allekirjoittanut yhtään lohkoa.",
+    "not_now": "Ei minttaa juuri nyt.",
+    "online_failed": "Juuri nyt minttaavia ei voitu ladata.",
+    "own_key": "Minttaa nyt omalla avaimellaan.",
+    "own_key_and_shares": "Minttaa nyt omalla avaimellaan ja palkkionjakojen kautta näiden kanssa:",
+    "shares": "Minttaa nyt palkkionjakojen kautta näiden kanssa:",
+    "show_all_one": "näytä kaikki {{count}}",
+    "show_all_other": "näytä kaikki {{count}}",
+    "show_fewer": "näytä vähemmän",
+    "title": "minttaus"
+  },
+  "name_page": {
+    "changes_found_one": "{{shown}} muutos löytyi",
+    "changes_found_other": "{{shown}} muutosta löytyi",
+    "changes_since_one": "{{shown}} muutos sen jälkeen",
+    "changes_since_other": "{{shown}} muutosta sen jälkeen",
+    "cut_capped": "Tilin {{account}} nimitapahtumat ulottuvat kauemmas kuin ne {{max}}, jotka lohkoketjuselain lukee: aiempaa ei näytetä.",
+    "cut_hops": "Se on kulkenut yli {{n}} omistajan ja nimen kautta: varhaisimpia ei näytetä.",
+    "cut_not_found": "Se, miten tili {{account}} sai sen, ei näy sen nimitapahtumissa, joten aiempaa ei näytetä.",
+    "failed": "Tätä nimeä ei voitu hakea.",
+    "history": "koko historia",
+    "kind": "rekisteröity nimi",
+    "life_failed": "Sen koko historiaa ei voitu lukea.",
+    "matched": "Avattu nimellä ”{{asked}}”; solmu löysi nimen ”{{matched}}” kirjainkoosta ja samannäköisistä kirjaimista välittämättä.",
+    "no_changes_since": "ei muutoksia sen jälkeen",
+    "nobody": "Nimeä ”{{name}}” ei nyt ole kenelläkään.",
+    "nobody_hint": "Solmu säilyttää nimen tietueen vain niin kauan kuin jollakulla on se. Sen jälkeen uudelleen nimetty nimi jatkaa uudella nimellään.",
+    "other_registration": "Sen tietue kertoo toisesta rekisteröinnistä, {{date}}: osa sen historiasta puuttuu tästä.",
+    "owner": "omistaja",
+    "owners_one": "{{shown}} omistaja",
+    "owners_other": "{{shown}} omistajaa",
+    "reading": "Käydään taaksepäin läpi tilejä, joilla se on ollut…",
+    "steps_label": "kaikki nimen ”{{name}}” muutokset",
+    "summary_registered": "rekisteröity {{date}}"
+  },
+  "names": {
+    "coverage_ceiling": "Lohkoketjuselain lukee enintään {{max}} sen nimitapahtumaa.",
+    "coverage_older": "Vanhempia ei ole vielä luettu.",
+    "coverage_one": "Kunkin nimen historia perustuu tilin {{shown}} uusimpaan nimitapahtumaan.",
+    "coverage_other": "Kunkin nimen historia perustuu tilin {{shown}} uusimpaan nimitapahtumaan.",
+    "coverage_without_one": "{{shown}} sen nimistä ei esiinny niissä.",
+    "coverage_without_other": "{{shown}} sen nimistä ei esiinny niissä.",
+    "failed": "Sen nimiä ei voitu ladata.",
+    "for_sale": "myynnissä",
+    "for_sale_at": "myynnissä hintaan {{price}} QORT",
+    "had_label": "nimet, jotka sillä oli",
+    "had_note": "Nimet, jotka se myi tai nimesi joksikin muuksi.",
+    "had_note_partial_one": "Nimet, jotka se myi tai nimesi joksikin muuksi, sen {{shown}} uusimmassa nimitapahtumassa.",
+    "had_note_partial_other": "Nimet, jotka se myi tai nimesi joksikin muuksi, sen {{shown}} uusimmassa nimitapahtumassa.",
+    "had_title": "nimet, jotka sillä oli ({{n}})",
+    "history": "historia",
+    "history_count": "historia · {{n}}",
+    "history_failed": "Sen nimihistoriaa ei voitu ladata.",
+    "history_loading": "Luetaan sen nimihistoriaa…",
+    "history_more_failed": "Sen vanhempia nimitapahtumia ei voitu lukea.",
+    "history_none": "Ei löytynyt sen nimitapahtumista.",
+    "history_of": "nimen ”{{name}}” historia",
+    "history_refresh_failed": "Uudempia nimitapahtumia ei voitu tarkistaa.",
+    "list_label": "sen nimet",
+    "loading": "ladataan sen nimiä",
+    "no_primary": "Ei ensisijaista nimeä. Solmu antaa tilille ensisijaisen nimen, kun se rekisteröi, ostaa tai nimeää uudelleen nimen eikä sillä ole sellaista.",
+    "no_record": "Solmulla ei ole nyt tietuetta tästä nimestä.",
+    "nobody_now": "Tätä nimeä ei nyt ole kenelläkään.",
+    "none": "Ei rekisteröityä nimeä.",
+    "note": {
+      "address_like": "Tämä nimi on kirjoitettu kuin osoite.",
+      "invisible_one": "Tämä nimi sisältää {{count}} näkymätöntä tai tyhjää merkkiä.",
+      "invisible_other": "Tämä nimi sisältää {{count}} näkymätöntä tai tyhjää merkkiä.",
+      "invisible_single": "Tämä nimi sisältää näkymättömän tai tyhjän merkin.",
+      "owner_end": "Tämä nimi päättyy samoihin merkkeihin kuin sen omistajan osoite (…{{end}}).",
+      "owner_start": "Tämä nimi alkaa samoilla merkeillä kuin sen omistajan osoite ({{start}}…)."
+    },
+    "notes_label": "huomiot nimestä ”{{name}}”",
+    "now_owned_by": "nyt tilin {{owner}} omistama",
+    "now_spelled_own": "Nyt kirjoitettuna ”{{matched}}”, sen oma.",
+    "now_spelled_owned_by": "Nyt kirjoitettuna ”{{matched}}”, tilin {{owner}} omistama.",
+    "own_again": "Taas sen oma.",
+    "owner_failed": "Ei voitu lukea, kenellä tämä nimi nyt on.",
+    "owner_loading": "luetaan, kenellä tämä nimi nyt on",
+    "primary": "ensisijainen",
+    "primary_failed": "Sen ensisijaista nimeä ei voitu lukea.",
+    "read_older": "lue vanhempia nimitapahtumia",
+    "record_failed": "Tämän nimen tietuetta ei voitu ladata.",
+    "record_loading": "ladataan tämän nimen tietuetta",
+    "registered": "rekisteröity {{date}}",
+    "registered_again": "Tili {{owner}} rekisteröi sen sittemmin uudelleen nimellä ”{{matched}}”.",
+    "show_all_of_one": "näytä kaikki {{count}} nimen ”{{name}}” historiasta",
+    "show_all_of_other": "näytä kaikki {{count}} nimen ”{{name}}” historiasta",
+    "show_more_one": "näytä {{shown}} lisää",
+    "show_more_other": "näytä {{shown}} lisää",
+    "sort": "lajittele",
+    "sort_activity": "viimeisin toiminta",
+    "sort_az": "A–Ö",
+    "sort_newest": "viimeksi rekisteröidyt",
+    "sort_oldest": "ensin rekisteröidyt",
+    "sort_primary": "ensisijainen ensin",
+    "sort_za": "Ö–A",
+    "title": "nimet",
+    "title_count": "nimet ({{n}})",
+    "title_more": "nimet ({{n}}+)",
+    "truncated_one": "{{shown}}+ nimeä; ensimmäiset {{shown}} näytetään.",
+    "truncated_other": "{{shown}}+ nimeä; ensimmäiset {{shown}} näytetään.",
+    "updated": "päivitetty {{date}}",
+    "view_label": "näytä nimet muodossa",
+    "whole_history": "koko historia",
+    "whole_history_of": "nimen ”{{name}}” koko historia"
+  },
+  "notes": {
+    "name_address_like": "Sen ensisijainen nimi ”{{name}}” on kirjoitettu kuin osoite.",
+    "name_invisible_one": "Sen ensisijainen nimi ”{{name}}” sisältää {{count}} näkymätöntä tai tyhjää merkkiä.",
+    "name_invisible_other": "Sen ensisijainen nimi ”{{name}}” sisältää {{count}} näkymätöntä tai tyhjää merkkiä.",
+    "name_invisible_single": "Sen ensisijainen nimi ”{{name}}” sisältää näkymättömän tai tyhjän merkin.",
+    "name_owner_end": "Sen ensisijainen nimi ”{{name}}” päättyy samoihin merkkeihin kuin sen osoite (…{{end}}).",
+    "name_owner_start": "Sen ensisijainen nimi ”{{name}}” alkaa samoilla merkeillä kuin sen osoite ({{start}}…).",
+    "names_listed_one": "Huomioita on {{shown}} nimessä {{total}} luetellusta.",
+    "names_listed_other": "Huomioita on {{shown}} nimessä {{total}} luetellusta.",
+    "names_one": "Huomioita on {{shown}} nimessä sen {{total}} nimestä.",
+    "names_other": "Huomioita on {{shown}} nimessä sen {{total}} nimestä.",
+    "only_name": "Sen nimessä on huomioita.",
+    "other_name_only": "Sen toisessa nimessä on huomioita.",
+    "other_names_listed_one": "Huomioita on {{shown}} nimessä {{total}} luetellusta muusta nimestä.",
+    "other_names_listed_other": "Huomioita on {{shown}} nimessä {{total}} luetellusta muusta nimestä.",
+    "other_names_one": "Huomioita on {{shown}} nimessä sen {{total}} muusta nimestä.",
+    "other_names_other": "Huomioita on {{shown}} nimessä sen {{total}} muusta nimestä.",
+    "penalty": "Solmu on kirjannut tälle tilille {{blocks}} lohkon minttausrangaistuksen.",
+    "title": "huomiot"
+  },
+  "payments": {
+    "failed": "Maksuja ei voitu ladata."
+  },
+  "search": {
+    "clear": "tyhjennä",
+    "compact_placeholder": "hae lohkoketjuselaimesta",
+    "helper": "Valitse ehdotus tai paina Enter hakeaksesi täsmälleen kirjoittamasi.",
+    "label": "etsi tili tai tapahtuma",
+    "placeholder": "nimi, osoite tai tapahtuman allekirjoitus"
+  },
+  "settings": {
+    "remember": "muista selaamani tilit tällä laitteella",
+    "remember_hint": "Vain niiden osoitteet, tälle Hub-tilille. Kun poistat tämän käytöstä, ne unohdetaan.",
+    "title": "lohkoketjuselaimen asetukset"
+  },
+  "start": {
+    "clear": "tyhjennä",
+    "clear_recent": "tyhjennä viimeksi selatut",
+    "recent": "viimeksi selatut",
+    "your_account": "oma tilisi"
+  },
+  "summary": {
+    "first_seen": "nähty ensi kerran: {{date}}",
+    "last_sent": "lähetti viimeksi tapahtuman {{ago}}",
+    "minter_admin": "Minter Admin, MINTERissä",
+    "minter_member": "MINTERissä",
+    "minter_outside": "ei MINTERissä",
+    "no_names": "ei rekisteröityä nimeä",
+    "owns_names_more_one": "omistaa {{shown}}+ nimeä",
+    "owns_names_more_other": "omistaa {{shown}}+ nimeä",
+    "owns_names_one": "omistaa {{shown}} nimen",
+    "owns_names_other": "omistaa {{shown}} nimeä"
+  },
+  "tabs": {
+    "label": "tilin osiot",
+    "names": "nimet",
+    "overview": "yleiskatsaus",
+    "transactions": "tapahtumat"
+  },
+  "trail": {
+    "label": "polkusi"
+  },
+  "transactions": {
+    "all_kind_one": "Kaikki tämän lajin tapahtumat: {{shown}}.",
+    "all_kind_other": "Kaikki tämän lajin {{shown}} tapahtumaa.",
+    "all_one": "Kaikki sen tapahtumat: {{shown}}.",
+    "all_other": "Kaikki sen {{shown}} tapahtumaa.",
+    "ceiling": "Lohkoketjuselain lukee kustakin lajista enintään {{max}} tapahtumaa.",
+    "every_type": "kaikki tyypit",
+    "failed": "Tapahtumia ei voitu ladata.",
+    "kind_label": "näytä yhden lajin tapahtumat",
+    "more_failed": "Enempää tapahtumia ei voitu ladata.",
+    "newest_kind_one": "Tämän lajin {{shown}} uusin tapahtuma.",
+    "newest_kind_other": "Tämän lajin {{shown}} uusinta tapahtumaa.",
+    "newest_one": "Sen {{shown}} uusin tapahtuma.",
+    "newest_other": "Sen {{shown}} uusinta tapahtumaa.",
+    "none": "Sillä ei ole vielä vahvistettuja tapahtumia.",
+    "none_kind": "Yksikään sen vahvistetuista tapahtumista ei ole tätä lajia.",
+    "only": "Sen ainoa tapahtuma.",
+    "only_kind": "Ainoa tämän lajin tapahtuma.",
+    "refresh_failed": "Uudempia tapahtumia ei voitu tarkistaa.",
+    "show_more": "näytä lisää",
+    "title_all": "kaikki tapahtumat",
+    "type": "tyyppi",
+    "waiting_failed": "Tämän tilin lähettämiä, lohkoa odottavia tapahtumia ei voitu tarkistaa.",
+    "waiting_loading": "Tarkistetaan tämän tilin lähettämiä, lohkoa odottavia tapahtumia…",
+    "waiting_note": "Solmusi säilyttää nämä, kunnes ne otetaan lohkoon. Tälle tilille lähetetyt tapahtumat näkyvät vasta, kun ne ovat lohkossa.",
+    "waiting_title": "tämän tilin lähettämät, vahvistusta odottavat ({{n}})",
+    "waiting_title_more": "tämän tilin lähettämät, vahvistusta odottavat (vähintään {{n}})"
+  },
+  "tx": {
+    "approval": {
+      "approved": "hyväksytty",
+      "expired": "ei hyväksytty ajoissa",
+      "invalid": "ei kelvollinen",
+      "pending": "odottaa hyväksyntöjä",
+      "rejected": "hylätty"
+    },
+    "asset_number": "omaisuuserää #{{id}}",
+    "creator": "tekijä",
+    "details_of": "tiedot: {{type}}",
+    "field": {
+      "account": "tili",
+      "admin": "ylläpitäjä",
+      "amount": "määrä",
+      "answer": "vastaus",
+      "asset": "omaisuuserä",
+      "at": "AT (automaattinen sopimus)",
+      "at_address": "AT-osoite",
+      "at_kind": "tyyppi",
+      "at_name": "AT:n nimi",
+      "change": "muutos",
+      "data": "tiedot",
+      "description": "kuvaus",
+      "divisible": "jaettava",
+      "encrypted": "salattu",
+      "funded_with": "rahoitus",
+      "group": "ryhmä",
+      "group_approval": "ryhmän hyväksyntä",
+      "identifier": "tunniste",
+      "invitee": "kutsuttu",
+      "level": "taso",
+      "member": "jäsen",
+      "moved_to": "siirretty tilille",
+      "name": "nimi",
+      "new_admin": "uusi ylläpitäjä",
+      "new_data": "uudet tiedot",
+      "new_description": "uusi kuvaus",
+      "new_name": "uusi nimi",
+      "new_owner": "uusi omistaja",
+      "open": "avoin kaikille",
+      "option": "vaihtoehto",
+      "options": "vaihtoehdot",
+      "order": "toimeksianto",
+      "owner": "omistaja",
+      "payment": "maksu",
+      "poll": "kysely",
+      "price": "hinta",
+      "quantity": "kappalemäärä",
+      "reason": "syy",
+      "recipient": "vastaanottaja",
+      "seller": "myyjä",
+      "service": "palvelu",
+      "share": "osuus",
+      "size": "koko",
+      "tags": "tagit",
+      "transaction": "tapahtuma"
+    },
+    "incoming": "saapuva",
+    "not_shown": "(ei näytetä)",
+    "open": "avaa tapahtuma",
+    "outcome": {
+      "expired": "(ei hyväksytty ajoissa)",
+      "invalid": "(ei kelvollinen)",
+      "pending": "(odottaa ryhmän hyväksyntää)",
+      "rejected": "(hylätty ryhmän hyväksynnässä)"
+    },
+    "outgoing": "lähtevä",
+    "people": "osalliset tilit",
+    "privs_failed": "Minttaustason saanutta tiliä ei voitu lukea.",
+    "raw": "API:n raakavastaus",
+    "raw_caption": "Solmusi vastaus JSON-muodossa.",
+    "raw_copied": "Raakavastaus kopioitu leikepöydälle.",
+    "raw_copy": "kopioi raakavastaus",
+    "say": {
+      "account_flags": {
+        "in": "Sen tililiput asetettiin genesis-lohkossa",
+        "none": "Tilin {{target}} liput asetettiin genesis-lohkossa"
+      },
+      "account_level": {
+        "in": "Sen tasoksi asetettiin {{level}} genesis-lohkossa",
+        "none": "Tilin {{target}} tasoksi asetettiin {{level}} genesis-lohkossa"
+      },
+      "add_group_admin": {
+        "in": "Tili {{actor}} nimitti tämän tilin ryhmän {{group}} ylläpitäjäksi",
+        "in_proposed": "Tili {{actor}} ehdotti tämän tilin nimittämistä ryhmän {{group}} ylläpitäjäksi",
+        "none": "Tili {{actor}} nimitti tilin {{member}} ryhmän {{group}} ylläpitäjäksi",
+        "none_proposed": "Tili {{actor}} ehdotti tilin {{member}} nimittämistä ryhmän {{group}} ylläpitäjäksi",
+        "out": "Nimitti tilin {{member}} ryhmän {{group}} ylläpitäjäksi",
+        "out_proposed": "Ehdotti tilin {{member}} nimittämistä ryhmän {{group}} ylläpitäjäksi",
+        "self": {
+          "mine": "Tuli ryhmän {{group}} ylläpitäjäksi",
+          "mine_proposed": "Ehdotti itseään ryhmän {{group}} ylläpitäjäksi",
+          "none": "Tili {{actor}} tuli ryhmän {{group}} ylläpitäjäksi",
+          "none_proposed": "Tili {{actor}} ehdotti itseään ryhmän {{group}} ylläpitäjäksi"
+        }
+      },
+      "airdrop": {
+        "mine": "Teki airdropin",
+        "none": "Tili {{actor}} teki airdropin"
+      },
+      "arbitrary": {
+        "in": "Vastaanotti {{amount}} tililtä {{from}} QDN-julkaisun yhteydessä",
+        "named": {
+          "mine": "Julkaisi {{what}} nimellä ”{{name}}”",
+          "none": "Tili {{actor}} julkaisi {{what}} nimellä ”{{name}}”"
+        },
+        "unnamed": {
+          "mine": "Julkaisi {{what}}",
+          "none": "Tili {{actor}} julkaisi {{what}}"
+        }
+      },
+      "at": {
+        "ran": "AT {{at}} suoritti ohjelmansa",
+        "ran_mine": "Suoritti ohjelmansa"
+      },
+      "buy_name": {
+        "in": "Myi nimen ”{{name}}” tilille {{buyer}} hintaan {{price}}",
+        "none": "Tili {{actor}} osti nimen ”{{name}}” tililtä {{seller}} hintaan {{price}}",
+        "out": "Osti nimen ”{{name}}” tililtä {{seller}} hintaan {{price}}"
+      },
+      "cancel_asset_order": {
+        "mine": "Perui omaisuuserätoimeksiannon",
+        "none": "Tili {{actor}} perui omaisuuserätoimeksiannon"
+      },
+      "cancel_group_ban": {
+        "in": "Tili {{actor}} kumosi tämän tilin porttikiellon ryhmässä {{group}}",
+        "in_proposed": "Tili {{actor}} ehdotti tämän tilin porttikiellon kumoamista ryhmässä {{group}}",
+        "none": "Tili {{actor}} kumosi tilin {{member}} porttikiellon ryhmässä {{group}}",
+        "none_proposed": "Tili {{actor}} ehdotti tilin {{member}} porttikiellon kumoamista ryhmässä {{group}}",
+        "out": "Kumosi tilin {{member}} porttikiellon ryhmässä {{group}}",
+        "out_proposed": "Ehdotti tilin {{member}} porttikiellon kumoamista ryhmässä {{group}}"
+      },
+      "cancel_group_invite": {
+        "mine": "Perui ryhmäkutsun",
+        "mine_proposed": "Ehdotti ryhmäkutsun perumista",
+        "none": "Tili {{actor}} perui ryhmäkutsun",
+        "none_proposed": "Tili {{actor}} ehdotti ryhmäkutsun perumista"
+      },
+      "cancel_sell_name": {
+        "mine": "Poisti nimen ”{{name}}” myynnistä",
+        "none": "Tili {{actor}} poisti nimen ”{{name}}” myynnistä"
+      },
+      "chat": {
+        "group": {
+          "mine": "Lähetti chat-viestin ryhmään",
+          "none": "Tili {{actor}} lähetti chat-viestin ryhmään"
+        },
+        "in": "Sai chat-viestin tililtä {{from}}",
+        "none": "Tili {{from}} lähetti chat-viestin tilille {{to}}",
+        "out": "Lähetti chat-viestin tilille {{to}}"
+      },
+      "create_asset_order": {
+        "mine": "Jätti toimeksiannon vaihtaa omaisuuserä {{have}} omaisuuserään {{want}}",
+        "none": "Tili {{actor}} jätti toimeksiannon vaihtaa omaisuuserä {{have}} omaisuuserään {{want}}"
+      },
+      "create_group": {
+        "mine": "Loi ryhmän {{group}}",
+        "none": "Tili {{actor}} loi ryhmän {{group}}"
+      },
+      "create_poll": {
+        "for_me": "Tili {{actor}} loi kyselyn ”{{poll}}”, jonka omistaja on tämä tili",
+        "mine": "Loi kyselyn ”{{poll}}”",
+        "none": "Tili {{actor}} loi kyselyn ”{{poll}}”",
+        "owned_by": "Tili {{actor}} loi kyselyn ”{{poll}}”, jonka omistaja on tili {{owner}}",
+        "owned_by_mine": "Loi kyselyn ”{{poll}}”, jonka omistaja on tili {{owner}}"
+      },
+      "deploy_at": {
+        "in": "Tili {{actor}} loi tämän AT:n (automaattisen sopimuksen)",
+        "mine": "Loi AT:n (automaattisen sopimuksen)",
+        "none": "Tili {{actor}} loi AT:n (automaattisen sopimuksen)"
+      },
+      "enable_forging": {
+        "for": {
+          "in": "Tili {{actor}} otti takomisen käyttöön tälle tilille",
+          "none": "Tili {{actor}} otti takomisen käyttöön tilille {{target}}",
+          "out": "Otti takomisen käyttöön tilille {{target}}"
+        },
+        "mine": "Otti takomisen käyttöön",
+        "none": "Tili {{actor}} otti takomisen käyttöön"
+      },
+      "generic": {
+        "mine": "Teki tapahtuman: {{type}}",
+        "nobody": "Tapahtuma: {{type}}",
+        "none": "Tili {{actor}} teki tapahtuman: {{type}}"
+      },
+      "genesis": {
+        "in": "Vastaanotti {{amount}} genesis-lohkossa",
+        "none": "Tili {{to}} vastaanotti {{amount}} genesis-lohkossa"
+      },
+      "group_approval": {
+        "approved": {
+          "mine": "Hyväksyi tapahtuman {{tx}}",
+          "none": "Tili {{actor}} hyväksyi tapahtuman {{tx}}"
+        },
+        "rejected": {
+          "mine": "Hylkäsi tapahtuman {{tx}}",
+          "none": "Tili {{actor}} hylkäsi tapahtuman {{tx}}"
+        }
+      },
+      "group_ban": {
+        "in": "Tili {{actor}} antoi tälle tilille porttikiellon ryhmään {{group}}",
+        "in_proposed": "Tili {{actor}} ehdotti porttikiellon antamista tälle tilille ryhmään {{group}}",
+        "none": "Tili {{actor}} antoi tilille {{member}} porttikiellon ryhmään {{group}}",
+        "none_proposed": "Tili {{actor}} ehdotti porttikiellon antamista tilille {{member}} ryhmään {{group}}",
+        "out": "Antoi tilille {{member}} porttikiellon ryhmään {{group}}",
+        "out_proposed": "Ehdotti porttikiellon antamista tilille {{member}} ryhmään {{group}}"
+      },
+      "group_invite": {
+        "in": "Tili {{actor}} kutsui tämän tilin ryhmään {{group}}",
+        "in_proposed": "Tili {{actor}} ehdotti tämän tilin kutsumista ryhmään {{group}}",
+        "none": "Tili {{actor}} kutsui tilin {{invitee}} ryhmään {{group}}",
+        "none_proposed": "Tili {{actor}} ehdotti tilin {{invitee}} kutsumista ryhmään {{group}}",
+        "out": "Kutsui tilin {{invitee}} ryhmään {{group}}",
+        "out_proposed": "Ehdotti tilin {{invitee}} kutsumista ryhmään {{group}}"
+      },
+      "group_kick": {
+        "in": "Tili {{actor}} poisti tämän tilin ryhmästä {{group}}",
+        "in_proposed": "Tili {{actor}} ehdotti tämän tilin poistamista ryhmästä {{group}}",
+        "none": "Tili {{actor}} poisti tilin {{member}} ryhmästä {{group}}",
+        "none_proposed": "Tili {{actor}} ehdotti tilin {{member}} poistamista ryhmästä {{group}}",
+        "out": "Poisti tilin {{member}} ryhmästä {{group}}",
+        "out_proposed": "Ehdotti tilin {{member}} poistamista ryhmästä {{group}}"
+      },
+      "issue_asset": {
+        "mine": "Laski liikkeeseen omaisuuserän ”{{asset}}”",
+        "nobody": "Omaisuuserä ”{{asset}}” laskettiin liikkeeseen",
+        "none": "Tili {{actor}} laski liikkeeseen omaisuuserän ”{{asset}}”"
+      },
+      "join_group": {
+        "mine": "Liittyi ryhmään {{group}} tai pyysi pääsyä siihen",
+        "none": "Tili {{actor}} liittyi ryhmään {{group}} tai pyysi pääsyä siihen"
+      },
+      "leave_group": {
+        "mine": "Erosi ryhmästä {{group}}",
+        "none": "Tili {{actor}} erosi ryhmästä {{group}}"
+      },
+      "message": {
+        "in": "Sai viestin tililtä {{from}}",
+        "in_amount": "Sai viestin ja {{amount}} tililtä {{from}}",
+        "none": "Tili {{from}} lähetti viestin tilille {{to}}",
+        "none_amount": "Tili {{from}} lähetti viestin ja {{amount}} tilille {{to}}",
+        "none_nobody": "Tili {{from}} lähetti viestin",
+        "out": "Lähetti viestin tilille {{to}}",
+        "out_amount": "Lähetti viestin ja {{amount}} tilille {{to}}",
+        "out_nobody": "Lähetti viestin"
+      },
+      "multi": {
+        "in_one": "Vastaanotti {{amount}} tililtä {{from}} osana maksua {{accounts}} tilille",
+        "in_other": "Vastaanotti {{amount}} tililtä {{from}} osana maksua {{accounts}} tilille",
+        "none_one": "Tili {{actor}} maksoi {{accounts}} tilille yhteensä {{amount}} yhdellä kertaa",
+        "none_other": "Tili {{actor}} maksoi {{accounts}} tilille yhteensä {{amount}} yhdellä kertaa",
+        "out_one": "Maksoi {{accounts}} tilille yhteensä {{amount}} yhdellä kertaa",
+        "out_other": "Maksoi {{accounts}} tilille yhteensä {{amount}} yhdellä kertaa"
+      },
+      "payment_line": "{{amount}} tilille {{to}}",
+      "presence": {
+        "minting": {
+          "mine": "Ilmoitti olevansa verkossa (minttaus)",
+          "none": "Tili {{actor}} ilmoitti olevansa verkossa (minttaus)"
+        },
+        "trade_bot": {
+          "mine": "Ilmoitti olevansa verkossa (kauppabotti)",
+          "none": "Tili {{actor}} ilmoitti olevansa verkossa (kauppabotti)"
+        }
+      },
+      "publicize": {
+        "mine": "Julkaisi julkisen avaimensa",
+        "none": "Tili {{actor}} julkaisi julkisen avaimensa"
+      },
+      "register_name": {
+        "mine": "Rekisteröi nimen ”{{name}}”",
+        "none": "Tili {{actor}} rekisteröi nimen ”{{name}}”"
+      },
+      "remove_group_admin": {
+        "in": "Tili {{actor}} poisti tämän tilin ryhmän {{group}} ylläpitäjistä",
+        "in_proposed": "Tili {{actor}} ehdotti tämän tilin poistamista ryhmän {{group}} ylläpitäjistä",
+        "none": "Tili {{actor}} poisti tilin {{member}} ryhmän {{group}} ylläpitäjistä",
+        "none_proposed": "Tili {{actor}} ehdotti tilin {{member}} poistamista ryhmän {{group}} ylläpitäjistä",
+        "out": "Poisti tilin {{member}} ryhmän {{group}} ylläpitäjistä",
+        "out_proposed": "Ehdotti tilin {{member}} poistamista ryhmän {{group}} ylläpitäjistä",
+        "self": {
+          "mine": "Luopui ryhmän {{group}} ylläpitäjän tehtävästä",
+          "mine_proposed": "Ehdotti luopumistaan ryhmän {{group}} ylläpitäjän tehtävästä",
+          "none": "Tili {{actor}} luopui ryhmän {{group}} ylläpitäjän tehtävästä",
+          "none_proposed": "Tili {{actor}} ehdotti luopumistaan ryhmän {{group}} ylläpitäjän tehtävästä"
+        }
+      },
+      "reward_share": {
+        "removed": {
+          "in": "Tili {{actor}} poisti palkkionjakonsa tämän tilin kanssa",
+          "none": "Tili {{actor}} poisti palkkionjaon tilin {{other}} kanssa",
+          "out": "Poisti palkkionjaon tilin {{other}} kanssa"
+        },
+        "self_start": "Tili {{actor}} aloitti minttauksen (palkkionjako itsensä kanssa)",
+        "self_start_mine": "Aloitti minttauksen (palkkionjako itsensä kanssa)",
+        "self_stop": "Tili {{actor}} lopetti minttauksen (poisti palkkionjaon itsensä kanssa)",
+        "self_stop_mine": "Lopetti minttauksen (poisti palkkionjaon itsensä kanssa)",
+        "started": {
+          "in": "Tili {{actor}} aloitti palkkionjaon tämän tilin kanssa, osuus {{percent}}",
+          "none": "Tili {{actor}} aloitti palkkionjaon tilin {{other}} kanssa, osuus {{percent}}",
+          "out": "Aloitti palkkionjaon tilin {{other}} kanssa, osuus {{percent}}"
+        }
+      },
+      "sell_name": {
+        "mine": "Asetti nimen ”{{name}}” myyntiin hintaan {{price}}",
+        "none": "Tili {{actor}} asetti nimen ”{{name}}” myyntiin hintaan {{price}}"
+      },
+      "set_group": {
+        "cleared": {
+          "mine": "Poisti oletusryhmänsä",
+          "none": "Tili {{actor}} poisti oletusryhmänsä"
+        },
+        "set": {
+          "mine": "Asetti ryhmän {{group}} oletusryhmäkseen",
+          "none": "Tili {{actor}} asetti ryhmän {{group}} oletusryhmäkseen"
+        }
+      },
+      "transfer": {
+        "in": "Vastaanotti {{amount}} tililtä {{from}}",
+        "none": "Tili {{from}} lähetti {{amount}} tilille {{to}}",
+        "out": "Lähetti {{amount}} tilille {{to}}",
+        "self": "Tili {{actor}} lähetti {{amount}} itselleen",
+        "self_mine": "Lähetti {{amount}} itselleen"
+      },
+      "transfer_privs": {
+        "in": "Sai minttaustasonsa tililtä {{from}}",
+        "none": "Tili {{actor}} siirsi minttaustasonsa tilille {{to}}",
+        "none_unknown": "Tili {{actor}} siirsi minttaustasonsa toiselle tilille",
+        "out": "Siirsi minttaustasonsa tilille {{to}}",
+        "out_unknown": "Siirsi minttaustasonsa toiselle tilille"
+      },
+      "update_asset": {
+        "details": {
+          "mine": "Päivitti omaisuuserän {{asset}} tiedot",
+          "none": "Tili {{actor}} päivitti omaisuuserän {{asset}} tiedot"
+        },
+        "owner": {
+          "in": "Tili {{actor}} siirsi omaisuuserän {{asset}} omistajuuden tälle tilille",
+          "none": "Tili {{actor}} siirsi omaisuuserän {{asset}} omistajuuden tilille {{new_owner}}",
+          "out": "Siirsi omaisuuserän {{asset}} omistajuuden tilille {{new_owner}}"
+        }
+      },
+      "update_group": {
+        "owner": {
+          "in": "Tili {{actor}} siirsi ryhmän {{group}} omistajuuden tälle tilille",
+          "in_proposed": "Tili {{actor}} ehdotti ryhmän {{group}} omistajuuden siirtämistä tälle tilille",
+          "none": "Tili {{actor}} siirsi ryhmän {{group}} omistajuuden tilille {{new_owner}}",
+          "none_proposed": "Tili {{actor}} ehdotti ryhmän {{group}} omistajuuden siirtämistä tilille {{new_owner}}",
+          "out": "Siirsi ryhmän {{group}} omistajuuden tilille {{new_owner}}",
+          "out_proposed": "Ehdotti ryhmän {{group}} omistajuuden siirtämistä tilille {{new_owner}}"
+        },
+        "settings": {
+          "mine": "Päivitti ryhmän {{group}} asetukset",
+          "mine_proposed": "Ehdotti ryhmän {{group}} asetusten päivittämistä",
+          "none": "Tili {{actor}} päivitti ryhmän {{group}} asetukset",
+          "none_proposed": "Tili {{actor}} ehdotti ryhmän {{group}} asetusten päivittämistä"
+        }
+      },
+      "update_name": {
+        "details": {
+          "mine": "Päivitti nimen ”{{name}}” tiedot",
+          "none": "Tili {{actor}} päivitti nimen ”{{name}}” tiedot"
+        },
+        "renamed": {
+          "mine": "Muutti nimen ”{{name}}” nimeksi ”{{new_name}}”",
+          "none": "Tili {{actor}} muutti nimen ”{{name}}” nimeksi ”{{new_name}}”"
+        }
+      },
+      "vote_on_poll": {
+        "mine": "Äänesti kyselyssä ”{{poll}}”",
+        "none": "Tili {{actor}} äänesti kyselyssä ”{{poll}}”"
+      }
+    },
+    "service": {
+      "app": "sovelluksen",
+      "arbitrary_data": "dataa",
+      "attachment": "liitteen",
+      "audio": "äänitiedoston",
+      "auto_update": "Core-päivityksen",
+      "blog": "blogin",
+      "blog_comment": "blogikommentin",
+      "blog_post": "blogikirjoituksen",
+      "chain_comment": "ketjukommentin",
+      "chain_data": "ketjudataa",
+      "code": "koodia",
+      "comment": "kommentin",
+      "coupon": "kupongin",
+      "database": "tietokannan",
+      "document": "asiakirjan",
+      "encrypted": "salatun resurssin",
+      "extension": "laajennuksen",
+      "file": "tiedoston",
+      "files": "tiedostoja",
+      "game": "pelin",
+      "gif_repository": "GIF-kokoelman",
+      "git_repository": "Git-repositorion",
+      "image": "kuvan",
+      "item": "esineen",
+      "json": "JSON-dataa",
+      "list": "listan",
+      "message": "viestin",
+      "metadata": "metatietoja",
+      "nft": "NFT:n",
+      "offer": "tarjouksen",
+      "playlist": "soittolistan",
+      "plugin": "lisäosan",
+      "podcast": "podcastin",
+      "product": "tuotteen",
+      "qchat_attachment": "Q-Chat-liitteen",
+      "qchat_audio": "Q-Chat-äänitiedoston",
+      "qchat_image": "Q-Chat-kuvan",
+      "qchat_voice": "Q-Chat-ääniviestin",
+      "snapshot": "tilannevedoksen",
+      "store": "verkkokaupan",
+      "thumbnail": "pikkukuvan",
+      "unknown": "QDN-resurssin",
+      "video": "videon",
+      "voice": "äänitallenteen",
+      "website": "verkkosivuston"
+    },
+    "show_all_one": "näytä kaikki {{count}}",
+    "show_all_other": "näytä kaikki {{count}}",
+    "unknown_account": "(tuntematon)",
+    "value": {
+      "approve": "hyväksyntä",
+      "flags": "AND {{and}}, OR {{or}}, XOR {{xor}}",
+      "no": "ei",
+      "option": "vaihtoehto {{n}}",
+      "reject": "hylkäys",
+      "removed": "poistettu",
+      "yes": "kyllä"
+    },
+    "when_block": "{{time}} · lohko {{block}}",
+    "when_waiting": "odottaa vahvistusta · lähetetty {{ago}}"
+  },
+  "tx_family": {
+    "all": "kaikki",
+    "groups": "ryhmät",
+    "messages": "viestit",
+    "minting": "minttaus",
+    "names": "nimet",
+    "other": "muut",
+    "payments": "maksut",
+    "qdn": "QDN-data",
+    "trading": "kaupankäynti"
+  },
+  "tx_page": {
+    "about": "tietoja tästä tapahtumasta",
+    "answers": "tapahtuma, johon se vastaa",
+    "answers_failed": "Tapahtumaa, johon se vastaa, ei voitu ladata.",
+    "answers_unknown": "Solmussasi ei ole tapahtumaa, johon se vastaa.",
+    "block": "lohko",
+    "copy_signature": "kopioi allekirjoitus",
+    "details": "tiedot",
+    "failed": "Tätä tapahtumaa ei voitu ladata.",
+    "fee": "tapahtumamaksu",
+    "open_answered": "avaa kyseinen tapahtuma",
+    "sent": "lähetetty",
+    "signature": "allekirjoitus",
+    "signature_copied": "Allekirjoitus kopioitu leikepöydälle.",
+    "time": "aika",
+    "unknown": "Solmussasi ei ole tapahtumaa tällä allekirjoituksella.",
+    "unknown_hint": "Se ei ehkä ole vielä saapunut solmuusi, tai jokin merkki voi olla väärin.",
+    "waiting": "odottaa vahvistusta"
+  },
+  "tx_type": {
+    "account_flags": "tililiput",
+    "account_level": "tilin taso",
+    "add_group_admin": "ryhmän ylläpitäjä lisätty",
+    "airdrop": "airdrop",
+    "arbitrary": "QDN-julkaisu",
+    "at": "AT-tapahtuma",
+    "buy_name": "nimen osto",
+    "cancel_asset_order": "omaisuuserätoimeksianto peruttu",
+    "cancel_group_ban": "ryhmän porttikielto kumottu",
+    "cancel_group_invite": "ryhmäkutsu peruttu",
+    "cancel_sell_name": "nimen myynti peruttu",
+    "chat": "chat-viesti",
+    "create_asset_order": "omaisuuserätoimeksianto",
+    "create_group": "ryhmä luotu",
+    "create_poll": "kysely luotu",
+    "deploy_at": "AT luotu",
+    "enable_forging": "takominen otettu käyttöön",
+    "genesis": "genesis-jako",
+    "group_approval": "ryhmän hyväksyntä",
+    "group_ban": "ryhmän porttikielto",
+    "group_invite": "ryhmäkutsu",
+    "group_kick": "poisto ryhmästä",
+    "issue_asset": "omaisuuserä laskettu liikkeeseen",
+    "join_group": "ryhmään liittyminen",
+    "leave_group": "ryhmästä eroaminen",
+    "message": "viesti",
+    "multi_payment": "monimaksu",
+    "payment": "maksu",
+    "presence": "läsnäolo",
+    "publicize": "julkinen avain julkaistu",
+    "register_name": "nimen rekisteröinti",
+    "remove_group_admin": "ryhmän ylläpitäjä poistettu",
+    "reward_share": "palkkionjako",
+    "sell_name": "nimi myyntiin",
+    "set_group": "oletusryhmä asetettu",
+    "transfer_asset": "omaisuuserän siirto",
+    "transfer_privs": "minttaustason siirto",
+    "update_asset": "omaisuuserän päivitys",
+    "update_group": "ryhmän päivitys",
+    "update_name": "nimen päivitys",
+    "vote_on_poll": "ääni kyselyssä"
+  },
+  "window": {
+    "forward": "eteenpäin",
+    "full": "laajenna koko ikkunaan",
+    "leave_full": "palauta normaali koko",
+    "subtitle": "Hae mitä tahansa Qortal-tiliä tai -tapahtumaa"
+  }
+}

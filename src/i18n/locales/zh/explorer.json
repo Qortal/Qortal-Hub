@@ -1,0 +1,818 @@
+{
+  "account": {
+    "failed": "无法加载此账户。",
+    "invalid": "这不是有效的 Qortal 地址。",
+    "name_failed": "无法查询此名称。",
+    "no_similar_names": "也没有以此开头的注册名称。",
+    "no_such_name": "没有账户拥有名称“{{name}}”。",
+    "similar_failed": "无法搜索以此开头的名称。",
+    "similar_names": "以此开头的名称：",
+    "unused": "此地址从未被使用过：还没有任何交易涉及它。"
+  },
+  "at": {
+    "about": "自动化合约（AT）：链上的程序，而不是个人账户。",
+    "title": "AT 地址"
+  },
+  "chip": {
+    "dev_admin": "Dev Admin",
+    "dev_admin_explained": "dev 群组（群组 1）的管理员，该群组由 Qortal 的开发者组成。",
+    "minter_admin": "Minter Admin",
+    "minter_admin_explained": "MINTER 的管理员；MINTER 是其成员进行铸币的群组。MINTER 的管理员决定谁可以加入。",
+    "minter_member": "MINTER 成员",
+    "minter_member_explained": "MINTER 的成员；MINTER 是其成员进行铸币的群组。",
+    "minting_now": "正在铸币",
+    "minting_now_explained": "它属于当前在线的奖励分享，因此正在参与区块铸币。",
+    "minting_penalty": "铸币惩罚",
+    "minting_penalty_explained": "节点在此账户上记录了铸币惩罚。具体数值见“备注”。"
+  },
+  "facts": {
+    "adjustment": "调整 {{blocks}}",
+    "at_block": "于区块 {{block}}",
+    "balance": "余额",
+    "balance_exact": "精确为 {{amount}} QORT",
+    "balance_failed": "无法加载其余额。",
+    "blocks_to_level_one": "距离等级 {{level}} 还需 {{blocks}} 个区块",
+    "blocks_to_level_other": "距离等级 {{level}} 还需 {{blocks}} 个区块",
+    "days_to_level_one": "约 {{count}} 天的铸币",
+    "days_to_level_other": "约 {{count}} 天的铸币",
+    "first_seen": "首次出现",
+    "first_seen_failed": "无法加载其首次出现时间。",
+    "first_seen_none": "未找到记录",
+    "groups": "群组",
+    "in_groups_one": "加入了 {{groups}} 个群组",
+    "in_groups_other": "加入了 {{groups}} 个群组",
+    "in_no_groups": "未加入任何群组",
+    "level_progress": "等级 {{level}} 的进度：{{percent}}%",
+    "pace_failed": "无法加载节点的出块节奏，计算到下一等级的区块数和天数需要它。",
+    "payments_all_one": "基于其全部 {{payments}} 笔付款",
+    "payments_all_other": "基于其全部 {{payments}} 笔付款",
+    "payments_newest_one": "基于其最新 {{payments}} 笔付款",
+    "payments_newest_other": "基于其最新 {{payments}} 笔付款",
+    "payments_none": "暂无付款",
+    "payments_single": "基于其唯一一笔付款",
+    "penalty": "惩罚 {{blocks}}",
+    "received_sent": "QORT 收到 / 发出",
+    "received_sent_info": "仅限 QORT 付款：不计入多笔付款、交易和铸币。",
+    "title": "概览",
+    "top_level": "最高等级"
+  },
+  "groups": {
+    "admin": "管理员",
+    "closed": "封闭群组",
+    "failed": "无法加载其群组。",
+    "members_one": "{{members}} 名成员",
+    "members_other": "{{members}} 名成员",
+    "none": "它不在任何群组中。",
+    "open": "公开群组",
+    "owner": "所有者",
+    "sort": "排序",
+    "sort_az": "名称 A–Z",
+    "sort_members": "成员最多",
+    "sort_minter": "MINTER 优先",
+    "sort_roles": "所有者和管理员优先",
+    "title": "群组",
+    "title_count": "群组（{{n}}）",
+    "unnamed": "群组 #{{id}}"
+  },
+  "header": {
+    "about": "关于此账户",
+    "blocked": "已屏蔽该账户。",
+    "copy_public_key": "复制公钥",
+    "name_failed": "无法加载其名称。",
+    "name_matched": "您搜索的是“{{typed}}”；节点在忽略大小写和形似字母后匹配到名称“{{matched}}”。",
+    "no_primary_name": "无主名称",
+    "opened_from_name": "通过其名称“{{name}}”打开。",
+    "public_key_copied": "公钥已复制到剪贴板。",
+    "unblocked": "已取消屏蔽该账户。"
+  },
+  "latest": {
+    "all": "所有交易",
+    "failed": "无法加载其最新交易。",
+    "none": "尚无已确认的交易。",
+    "title": "最新交易"
+  },
+  "minter": {
+    "open_app": "打开 {{app}}",
+    "standing_admin": "Minter Admin，也是 MINTER 成员。",
+    "standing_member": "MINTER 成员。",
+    "standing_outside": "不在 MINTER 中。",
+    "story": "它在 MINTER 的经历，从提名到决定，都记录在 {{app}} 中。",
+    "title": "MINTER"
+  },
+  "minting": {
+    "last_signed": "最近一次于 {{date}} 签署区块（区块 {{block}}）。",
+    "last_signed_block": "最近签署的区块：{{block}}。",
+    "last_signed_failed": "无法加载其最近签署的区块。",
+    "last_signed_none": "它尚未签署过区块。",
+    "not_now": "当前未在铸币。",
+    "online_failed": "无法加载当前正在铸币的账户。",
+    "own_key": "正在使用自己的密钥铸币。",
+    "own_key_and_shares": "正在使用自己的密钥铸币，并通过奖励分享与以下账户一起铸币：",
+    "shares": "正在通过奖励分享与以下账户一起铸币：",
+    "show_all_one": "显示全部 {{count}} 个",
+    "show_all_other": "显示全部 {{count}} 个",
+    "show_fewer": "收起",
+    "title": "铸币"
+  },
+  "name_page": {
+    "changes_found_one": "找到 {{shown}} 次更改",
+    "changes_found_other": "找到 {{shown}} 次更改",
+    "changes_since_one": "此后 {{shown}} 次更改",
+    "changes_since_other": "此后 {{shown}} 次更改",
+    "cut_capped": "{{account}} 的名称交易比区块浏览器读取的 {{max}} 笔更早：之前的内容未显示。",
+    "cut_hops": "它经过了超过 {{n}} 个所有者和名称：最早的未显示。",
+    "cut_not_found": "{{account}} 如何获得它不在其名称交易中，因此之前的内容未显示。",
+    "failed": "无法查询此名称。",
+    "history": "完整历史",
+    "kind": "注册名称",
+    "life_failed": "无法读取其完整历史。",
+    "matched": "以“{{asked}}”打开；节点在忽略大小写和形似字母后匹配到名称“{{matched}}”。",
+    "no_changes_since": "此后无更改",
+    "nobody": "目前没有账户拥有名称“{{name}}”。",
+    "nobody_hint": "只有在有人拥有某个名称时，节点才保留其记录。此后改名的名称会以新名称继续存在。",
+    "other_registration": "其记录显示的是另一次注册（{{date}}）：此处缺少部分历史。",
+    "owner": "所有者",
+    "owners_one": "{{shown}} 个所有者",
+    "owners_other": "{{shown}} 个所有者",
+    "reading": "正在回溯曾拥有它的账户…",
+    "steps_label": "“{{name}}”的每次更改",
+    "summary_registered": "{{date}} 注册"
+  },
+  "names": {
+    "coverage_ceiling": "区块浏览器最多读取其 {{max}} 笔名称交易。",
+    "coverage_older": "更早的交易尚未读取。",
+    "coverage_one": "每个名称的历史来自其最新的 {{shown}} 笔名称交易。",
+    "coverage_other": "每个名称的历史来自其最新的 {{shown}} 笔名称交易。",
+    "coverage_without_one": "其名称中有 {{shown}} 个不在其中。",
+    "coverage_without_other": "其名称中有 {{shown}} 个不在其中。",
+    "failed": "无法加载其名称。",
+    "for_sale": "出售中",
+    "for_sale_at": "以 {{price}} QORT 出售中",
+    "had_label": "曾拥有的名称",
+    "had_note": "已出售或已改名的名称。",
+    "had_note_partial_one": "在其最新的 {{shown}} 笔名称交易中，已出售或已改名的名称。",
+    "had_note_partial_other": "在其最新的 {{shown}} 笔名称交易中，已出售或已改名的名称。",
+    "had_title": "曾拥有的名称（{{n}}）",
+    "history": "历史",
+    "history_count": "历史 · {{n}}",
+    "history_failed": "无法加载其名称历史。",
+    "history_loading": "正在读取其名称历史…",
+    "history_more_failed": "无法读取更早的名称交易。",
+    "history_none": "在其名称交易中未找到。",
+    "history_of": "“{{name}}”的历史",
+    "history_refresh_failed": "无法检查是否有更新的名称交易。",
+    "list_label": "其名称",
+    "loading": "正在加载其名称",
+    "no_primary": "无主名称。账户在没有主名称时注册、购买或更改名称，节点会将其设为主名称。",
+    "no_record": "节点目前没有此名称的记录。",
+    "nobody_now": "目前没有账户拥有此名称。",
+    "none": "无注册名称。",
+    "note": {
+      "address_like": "此名称写得像一个地址。",
+      "invisible_one": "此名称包含 {{count}} 个不可见或空白字符。",
+      "invisible_other": "此名称包含 {{count}} 个不可见或空白字符。",
+      "invisible_single": "此名称包含一个不可见或空白字符。",
+      "owner_end": "此名称结尾与其所有者地址的结尾（…{{end}}）字符相同。",
+      "owner_start": "此名称开头与其所有者地址的开头（{{start}}…）字符相同。"
+    },
+    "notes_label": "关于“{{name}}”的备注",
+    "now_owned_by": "现由 {{owner}} 拥有",
+    "now_spelled_own": "现写作“{{matched}}”，仍归其所有。",
+    "now_spelled_owned_by": "现写作“{{matched}}”，由 {{owner}} 拥有。",
+    "own_again": "又归其所有。",
+    "owner_failed": "无法读取目前谁拥有此名称。",
+    "owner_loading": "正在读取目前谁拥有此名称",
+    "primary": "主名称",
+    "primary_failed": "无法读取其主名称。",
+    "read_older": "读取更早的名称交易",
+    "record_failed": "无法加载此名称的记录。",
+    "record_loading": "正在加载此名称的记录",
+    "registered": "{{date}} 注册",
+    "registered_again": "此后由 {{owner}} 重新注册为“{{matched}}”。",
+    "show_all_of_one": "显示“{{name}}”的全部 {{count}} 条历史",
+    "show_all_of_other": "显示“{{name}}”的全部 {{count}} 条历史",
+    "show_more_one": "再显示 {{shown}} 个",
+    "show_more_other": "再显示 {{shown}} 个",
+    "sort": "排序",
+    "sort_activity": "最近活动",
+    "sort_az": "A–Z",
+    "sort_newest": "最新注册",
+    "sort_oldest": "最早注册",
+    "sort_primary": "主名称优先",
+    "sort_za": "Z–A",
+    "title": "名称",
+    "title_count": "名称（{{n}}）",
+    "title_more": "名称（{{n}}+）",
+    "truncated_one": "名称超过 {{shown}} 个；仅列出前 {{shown}} 个。",
+    "truncated_other": "名称超过 {{shown}} 个；仅列出前 {{shown}} 个。",
+    "updated": "{{date}} 更新",
+    "view_label": "名称显示方式",
+    "whole_history": "完整历史",
+    "whole_history_of": "“{{name}}”的完整历史"
+  },
+  "notes": {
+    "name_address_like": "其主名称“{{name}}”的写法像一个地址。",
+    "name_invisible_one": "其主名称“{{name}}”包含 {{count}} 个不可见字符或空白字符。",
+    "name_invisible_other": "其主名称“{{name}}”包含 {{count}} 个不可见字符或空白字符。",
+    "name_invisible_single": "其主名称“{{name}}”包含不可见字符或空白字符。",
+    "name_owner_end": "其主名称“{{name}}”的结尾字符与其地址相同（…{{end}}）。",
+    "name_owner_start": "其主名称“{{name}}”的开头字符与其地址相同（{{start}}…）。",
+    "names_listed_one": "列出的 {{total}} 个名称中有 {{shown}} 个有备注。",
+    "names_listed_other": "列出的 {{total}} 个名称中有 {{shown}} 个有备注。",
+    "names_one": "其 {{total}} 个名称中有 {{shown}} 个有备注。",
+    "names_other": "其 {{total}} 个名称中有 {{shown}} 个有备注。",
+    "only_name": "其名称有备注。",
+    "other_name_only": "其另一个名称有备注。",
+    "other_names_listed_one": "列出的其他 {{total}} 个名称中有 {{shown}} 个有备注。",
+    "other_names_listed_other": "列出的其他 {{total}} 个名称中有 {{shown}} 个有备注。",
+    "other_names_one": "在其另外 {{total}} 个名称中，有 {{shown}} 个有备注。",
+    "other_names_other": "在其另外 {{total}} 个名称中，有 {{shown}} 个有备注。",
+    "penalty": "节点在此账户上记录了 {{blocks}} 个区块的铸币惩罚。",
+    "title": "备注"
+  },
+  "payments": {
+    "failed": "无法加载其付款。"
+  },
+  "search": {
+    "clear": "清除",
+    "compact_placeholder": "在区块浏览器中搜索",
+    "helper": "选择一个建议，或按 Enter 精确查找您输入的内容。",
+    "label": "查找账户或交易",
+    "placeholder": "名称、地址或交易签名"
+  },
+  "settings": {
+    "remember": "在此设备上记住我浏览过的账户",
+    "remember_hint": "仅保存其地址，仅限此 Hub 账户。关闭后会清除它们。",
+    "title": "区块浏览器设置"
+  },
+  "start": {
+    "clear": "清除",
+    "clear_recent": "清除最近浏览",
+    "recent": "最近浏览",
+    "your_account": "您的账户"
+  },
+  "summary": {
+    "first_seen": "首次出现于 {{date}}",
+    "last_sent": "上次发送交易：{{ago}}",
+    "minter_admin": "Minter Admin，MINTER 成员",
+    "minter_member": "MINTER 成员",
+    "minter_outside": "非 MINTER 成员",
+    "no_names": "无注册名称",
+    "owns_names_more_one": "拥有至少 {{shown}} 个名称",
+    "owns_names_more_other": "拥有至少 {{shown}} 个名称",
+    "owns_names_one": "拥有 {{shown}} 个名称",
+    "owns_names_other": "拥有 {{shown}} 个名称"
+  },
+  "tabs": {
+    "label": "账户版块",
+    "names": "名称",
+    "overview": "总览",
+    "transactions": "交易"
+  },
+  "trail": {
+    "label": "您的浏览路径"
+  },
+  "transactions": {
+    "all_kind_one": "已显示此类型的全部 {{shown}} 笔交易。",
+    "all_kind_other": "已显示此类型的全部 {{shown}} 笔交易。",
+    "all_one": "已显示其全部 {{shown}} 笔交易。",
+    "all_other": "已显示其全部 {{shown}} 笔交易。",
+    "ceiling": "区块浏览器每种类型最多读取 {{max}} 笔交易。",
+    "every_type": "所有类型",
+    "failed": "无法加载其交易。",
+    "kind_label": "按类型筛选交易",
+    "more_failed": "无法加载更多交易。",
+    "newest_kind_one": "已显示此类型最新的 {{shown}} 笔交易。",
+    "newest_kind_other": "已显示此类型最新的 {{shown}} 笔交易。",
+    "newest_one": "已显示其最新的 {{shown}} 笔交易。",
+    "newest_other": "已显示其最新的 {{shown}} 笔交易。",
+    "none": "尚无已确认的交易。",
+    "none_kind": "其已确认的交易中没有此类型的交易。",
+    "only": "这是其唯一的一笔交易。",
+    "only_kind": "这是此类型唯一的一笔交易。",
+    "refresh_failed": "无法检查是否有更新的交易。",
+    "show_more": "显示更多",
+    "title_all": "所有交易",
+    "type": "类型",
+    "waiting_failed": "无法检查其已发送但仍在等待区块的交易。",
+    "waiting_loading": "正在检查其已发送但仍在等待区块的交易…",
+    "waiting_note": "在被区块收录之前，这些交易由您的节点保存。发送给此账户的交易要进入区块后才会显示。",
+    "waiting_title": "此账户发送的待确认交易（{{n}}）",
+    "waiting_title_more": "此账户发送的待确认交易（至少 {{n}} 笔）"
+  },
+  "tx": {
+    "approval": {
+      "approved": "已批准",
+      "expired": "未在期限内批准",
+      "invalid": "无效",
+      "pending": "等待批准",
+      "rejected": "已拒绝"
+    },
+    "asset_number": "资产 #{{id}}",
+    "creator": "发起者",
+    "details_of": "{{type}}详情",
+    "field": {
+      "account": "账户",
+      "admin": "管理员",
+      "amount": "金额",
+      "answer": "答复",
+      "asset": "资产",
+      "at": "AT（自动化合约）",
+      "at_address": "AT 地址",
+      "at_kind": "类型",
+      "at_name": "AT 名称",
+      "change": "变更",
+      "data": "数据",
+      "description": "描述",
+      "divisible": "可分割",
+      "encrypted": "加密",
+      "funded_with": "注入资金",
+      "group": "群组",
+      "group_approval": "群组审批",
+      "identifier": "标识符",
+      "invitee": "受邀者",
+      "level": "等级",
+      "member": "成员",
+      "moved_to": "转移至",
+      "name": "名称",
+      "new_admin": "新管理员",
+      "new_data": "新数据",
+      "new_description": "新描述",
+      "new_name": "新名称",
+      "new_owner": "新所有者",
+      "open": "对所有人开放",
+      "option": "选项",
+      "options": "选项",
+      "order": "订单",
+      "owner": "所有者",
+      "payment": "付款",
+      "poll": "投票",
+      "price": "价格",
+      "quantity": "数量",
+      "reason": "理由",
+      "recipient": "接收方",
+      "seller": "卖家",
+      "service": "服务",
+      "share": "分享比例",
+      "size": "大小",
+      "tags": "标签",
+      "transaction": "交易"
+    },
+    "incoming": "收到",
+    "not_shown": "（未显示）",
+    "open": "打开交易",
+    "outcome": {
+      "expired": "（未在期限内获得批准）",
+      "invalid": "（无效）",
+      "pending": "（等待群组批准）",
+      "rejected": "（在群组审批中被拒绝）"
+    },
+    "outgoing": "发出",
+    "people": "涉及的账户",
+    "privs_failed": "无法读取获得铸币等级的账户。",
+    "raw": "原始 API 响应",
+    "raw_caption": "您的节点返回的响应（JSON 格式）。",
+    "raw_copied": "原始响应已复制到剪贴板。",
+    "raw_copy": "复制原始响应",
+    "say": {
+      "account_flags": {
+        "in": "其账户标志在创世区块中被设置",
+        "none": "{{target}} 的账户标志在创世区块中被设置"
+      },
+      "account_level": {
+        "in": "其等级在创世区块中被设为 {{level}}",
+        "none": "{{target}} 的等级在创世区块中被设为 {{level}}"
+      },
+      "add_group_admin": {
+        "in": "{{actor}} 将此账户设为群组 {{group}} 的管理员",
+        "in_proposed": "{{actor}} 提议将此账户设为群组 {{group}} 的管理员",
+        "none": "{{actor}} 将 {{member}} 设为群组 {{group}} 的管理员",
+        "none_proposed": "{{actor}} 提议将 {{member}} 设为群组 {{group}} 的管理员",
+        "out": "将 {{member}} 设为群组 {{group}} 的管理员",
+        "out_proposed": "提议将 {{member}} 设为群组 {{group}} 的管理员",
+        "self": {
+          "mine": "成为了群组 {{group}} 的管理员",
+          "mine_proposed": "提议成为群组 {{group}} 的管理员",
+          "none": "{{actor}} 成为了群组 {{group}} 的管理员",
+          "none_proposed": "{{actor}} 提议成为群组 {{group}} 的管理员"
+        }
+      },
+      "airdrop": {
+        "mine": "进行了一次空投",
+        "none": "{{actor}} 进行了一次空投"
+      },
+      "arbitrary": {
+        "in": "通过一次 QDN 发布从 {{from}} 收到了 {{amount}}",
+        "named": {
+          "mine": "以名称“{{name}}”发布了{{what}}",
+          "none": "{{actor}} 以名称“{{name}}”发布了{{what}}"
+        },
+        "unnamed": {
+          "mine": "发布了{{what}}",
+          "none": "{{actor}} 发布了{{what}}"
+        }
+      },
+      "at": {
+        "ran": "{{at}} 运行了其程序",
+        "ran_mine": "运行了其程序"
+      },
+      "buy_name": {
+        "in": "以 {{price}} 将名称“{{name}}”卖给了 {{buyer}}",
+        "none": "{{actor}} 以 {{price}} 从 {{seller}} 购买了名称“{{name}}”",
+        "out": "以 {{price}} 从 {{seller}} 购买了名称“{{name}}”"
+      },
+      "cancel_asset_order": {
+        "mine": "取消了一个资产订单",
+        "none": "{{actor}} 取消了一个资产订单"
+      },
+      "cancel_group_ban": {
+        "in": "{{actor}} 解除了此账户在群组 {{group}} 中的封禁",
+        "in_proposed": "{{actor}} 提议解除此账户在群组 {{group}} 中的封禁",
+        "none": "{{actor}} 解除了 {{member}} 在群组 {{group}} 中的封禁",
+        "none_proposed": "{{actor}} 提议解除 {{member}} 在群组 {{group}} 中的封禁",
+        "out": "解除了 {{member}} 在群组 {{group}} 中的封禁",
+        "out_proposed": "提议解除 {{member}} 在群组 {{group}} 中的封禁"
+      },
+      "cancel_group_invite": {
+        "mine": "取消了一个群组邀请",
+        "mine_proposed": "提议取消一个群组邀请",
+        "none": "{{actor}} 取消了一个群组邀请",
+        "none_proposed": "{{actor}} 提议取消一个群组邀请"
+      },
+      "cancel_sell_name": {
+        "mine": "取消了名称“{{name}}”的出售",
+        "none": "{{actor}} 取消了名称“{{name}}”的出售"
+      },
+      "chat": {
+        "group": {
+          "mine": "向一个群组发送了一条聊天消息",
+          "none": "{{actor}} 向一个群组发送了一条聊天消息"
+        },
+        "in": "收到了 {{from}} 发来的一条聊天消息",
+        "none": "{{from}} 向 {{to}} 发送了一条聊天消息",
+        "out": "向 {{to}} 发送了一条聊天消息"
+      },
+      "create_asset_order": {
+        "mine": "下了一个用 {{have}} 换取 {{want}} 的订单",
+        "none": "{{actor}} 下了一个用 {{have}} 换取 {{want}} 的订单"
+      },
+      "create_group": {
+        "mine": "创建了群组 {{group}}",
+        "none": "{{actor}} 创建了群组 {{group}}"
+      },
+      "create_poll": {
+        "for_me": "{{actor}} 创建了归此账户所有的投票“{{poll}}”",
+        "mine": "创建了投票“{{poll}}”",
+        "none": "{{actor}} 创建了投票“{{poll}}”",
+        "owned_by": "{{actor}} 创建了归 {{owner}} 所有的投票“{{poll}}”",
+        "owned_by_mine": "创建了归 {{owner}} 所有的投票“{{poll}}”"
+      },
+      "deploy_at": {
+        "in": "{{actor}} 创建了此 AT（自动化合约）",
+        "mine": "创建了一个 AT（自动化合约）",
+        "none": "{{actor}} 创建了一个 AT（自动化合约）"
+      },
+      "enable_forging": {
+        "for": {
+          "in": "{{actor}} 为此账户启用了锻造",
+          "none": "{{actor}} 为 {{target}} 启用了锻造",
+          "out": "为 {{target}} 启用了锻造"
+        },
+        "mine": "启用了锻造",
+        "none": "{{actor}} 启用了锻造"
+      },
+      "generic": {
+        "mine": "进行了一笔交易：{{type}}",
+        "nobody": "一笔交易：{{type}}",
+        "none": "{{actor}} 进行了一笔交易：{{type}}"
+      },
+      "genesis": {
+        "in": "在创世区块中收到了 {{amount}}",
+        "none": "{{to}} 在创世区块中收到了 {{amount}}"
+      },
+      "group_approval": {
+        "approved": {
+          "mine": "批准了交易 {{tx}}",
+          "none": "{{actor}} 批准了交易 {{tx}}"
+        },
+        "rejected": {
+          "mine": "拒绝了交易 {{tx}}",
+          "none": "{{actor}} 拒绝了交易 {{tx}}"
+        }
+      },
+      "group_ban": {
+        "in": "{{actor}} 在群组 {{group}} 中封禁了此账户",
+        "in_proposed": "{{actor}} 提议在群组 {{group}} 中封禁此账户",
+        "none": "{{actor}} 在群组 {{group}} 中封禁了 {{member}}",
+        "none_proposed": "{{actor}} 提议在群组 {{group}} 中封禁 {{member}}",
+        "out": "在群组 {{group}} 中封禁了 {{member}}",
+        "out_proposed": "提议在群组 {{group}} 中封禁 {{member}}"
+      },
+      "group_invite": {
+        "in": "{{actor}} 邀请此账户加入群组 {{group}}",
+        "in_proposed": "{{actor}} 提议邀请此账户加入群组 {{group}}",
+        "none": "{{actor}} 邀请 {{invitee}} 加入群组 {{group}}",
+        "none_proposed": "{{actor}} 提议邀请 {{invitee}} 加入群组 {{group}}",
+        "out": "邀请 {{invitee}} 加入群组 {{group}}",
+        "out_proposed": "提议邀请 {{invitee}} 加入群组 {{group}}"
+      },
+      "group_kick": {
+        "in": "{{actor}} 将此账户移出了群组 {{group}}",
+        "in_proposed": "{{actor}} 提议将此账户移出群组 {{group}}",
+        "none": "{{actor}} 将 {{member}} 移出了群组 {{group}}",
+        "none_proposed": "{{actor}} 提议将 {{member}} 移出群组 {{group}}",
+        "out": "将 {{member}} 移出了群组 {{group}}",
+        "out_proposed": "提议将 {{member}} 移出群组 {{group}}"
+      },
+      "issue_asset": {
+        "mine": "发行了资产“{{asset}}”",
+        "nobody": "资产“{{asset}}”已发行",
+        "none": "{{actor}} 发行了资产“{{asset}}”"
+      },
+      "join_group": {
+        "mine": "加入或申请加入了群组 {{group}}",
+        "none": "{{actor}} 加入或申请加入了群组 {{group}}"
+      },
+      "leave_group": {
+        "mine": "退出了群组 {{group}}",
+        "none": "{{actor}} 退出了群组 {{group}}"
+      },
+      "message": {
+        "in": "收到了 {{from}} 发来的一条消息",
+        "in_amount": "收到了 {{from}} 发来的一条附带 {{amount}} 的消息",
+        "none": "{{from}} 向 {{to}} 发送了一条消息",
+        "none_amount": "{{from}} 向 {{to}} 发送了一条附带 {{amount}} 的消息",
+        "none_nobody": "{{from}} 发送了一条消息",
+        "out": "向 {{to}} 发送了一条消息",
+        "out_amount": "向 {{to}} 发送了一条附带 {{amount}} 的消息",
+        "out_nobody": "发送了一条消息"
+      },
+      "multi": {
+        "in_one": "在 {{from}} 向 {{accounts}} 个账户发起的一笔付款中收到了 {{amount}}",
+        "in_other": "在 {{from}} 向 {{accounts}} 个账户发起的一笔付款中收到了 {{amount}}",
+        "none_one": "{{actor}} 在一笔付款中向 {{accounts}} 个账户共支付了 {{amount}}",
+        "none_other": "{{actor}} 在一笔付款中向 {{accounts}} 个账户共支付了 {{amount}}",
+        "out_one": "在一笔付款中向 {{accounts}} 个账户共支付了 {{amount}}",
+        "out_other": "在一笔付款中向 {{accounts}} 个账户共支付了 {{amount}}"
+      },
+      "payment_line": "向 {{to}} 支付 {{amount}}",
+      "presence": {
+        "minting": {
+          "mine": "表明其在线（铸币）",
+          "none": "{{actor}} 表明其在线（铸币）"
+        },
+        "trade_bot": {
+          "mine": "表明其在线（交易机器人）",
+          "none": "{{actor}} 表明其在线（交易机器人）"
+        }
+      },
+      "publicize": {
+        "mine": "公开了其公钥",
+        "none": "{{actor}} 公开了其公钥"
+      },
+      "register_name": {
+        "mine": "注册了名称“{{name}}”",
+        "none": "{{actor}} 注册了名称“{{name}}”"
+      },
+      "remove_group_admin": {
+        "in": "{{actor}} 取消了此账户在群组 {{group}} 中的管理员身份",
+        "in_proposed": "{{actor}} 提议取消此账户在群组 {{group}} 中的管理员身份",
+        "none": "{{actor}} 取消了 {{member}} 在群组 {{group}} 中的管理员身份",
+        "none_proposed": "{{actor}} 提议取消 {{member}} 在群组 {{group}} 中的管理员身份",
+        "out": "取消了 {{member}} 在群组 {{group}} 中的管理员身份",
+        "out_proposed": "提议取消 {{member}} 在群组 {{group}} 中的管理员身份",
+        "self": {
+          "mine": "辞去了群组 {{group}} 的管理员职务",
+          "mine_proposed": "提议辞去群组 {{group}} 的管理员职务",
+          "none": "{{actor}} 辞去了群组 {{group}} 的管理员职务",
+          "none_proposed": "{{actor}} 提议辞去群组 {{group}} 的管理员职务"
+        }
+      },
+      "reward_share": {
+        "removed": {
+          "in": "{{actor}} 移除了与此账户的奖励分享",
+          "none": "{{actor}} 移除了与 {{other}} 的奖励分享",
+          "out": "移除了与 {{other}} 的奖励分享"
+        },
+        "self_start": "{{actor}} 开始铸币（与自身的奖励分享）",
+        "self_start_mine": "开始铸币（与自身的奖励分享）",
+        "self_stop": "{{actor}} 停止铸币（移除了与自身的奖励分享）",
+        "self_stop_mine": "停止铸币（移除了与自身的奖励分享）",
+        "started": {
+          "in": "{{actor}} 以 {{percent}} 的比例与此账户开始了奖励分享",
+          "none": "{{actor}} 以 {{percent}} 的比例与 {{other}} 开始了奖励分享",
+          "out": "以 {{percent}} 的比例与 {{other}} 开始了奖励分享"
+        }
+      },
+      "sell_name": {
+        "mine": "以 {{price}} 的价格挂牌出售名称“{{name}}”",
+        "none": "{{actor}} 以 {{price}} 的价格挂牌出售名称“{{name}}”"
+      },
+      "set_group": {
+        "cleared": {
+          "mine": "清除了其默认群组",
+          "none": "{{actor}} 清除了其默认群组"
+        },
+        "set": {
+          "mine": "将其默认群组设为 {{group}}",
+          "none": "{{actor}} 将其默认群组设为 {{group}}"
+        }
+      },
+      "transfer": {
+        "in": "从 {{from}} 收到了 {{amount}}",
+        "none": "{{from}} 向 {{to}} 发送了 {{amount}}",
+        "out": "向 {{to}} 发送了 {{amount}}",
+        "self": "{{actor}} 向自己发送了 {{amount}}",
+        "self_mine": "向自己发送了 {{amount}}"
+      },
+      "transfer_privs": {
+        "in": "从 {{from}} 获得了铸币等级",
+        "none": "{{actor}} 将其铸币等级转移给了 {{to}}",
+        "none_unknown": "{{actor}} 将其铸币等级转移给了另一个账户",
+        "out": "将其铸币等级转移给了 {{to}}",
+        "out_unknown": "将其铸币等级转移给了另一个账户"
+      },
+      "update_asset": {
+        "details": {
+          "mine": "更新了资产 {{asset}}",
+          "none": "{{actor}} 更新了资产 {{asset}}"
+        },
+        "owner": {
+          "in": "{{actor}} 将资产 {{asset}} 转让给了此账户",
+          "none": "{{actor}} 将资产 {{asset}} 转让给了 {{new_owner}}",
+          "out": "将资产 {{asset}} 转让给了 {{new_owner}}"
+        }
+      },
+      "update_group": {
+        "owner": {
+          "in": "{{actor}} 将此账户设为群组 {{group}} 的所有者",
+          "in_proposed": "{{actor}} 提议将此账户设为群组 {{group}} 的所有者",
+          "none": "{{actor}} 将 {{new_owner}} 设为群组 {{group}} 的所有者",
+          "none_proposed": "{{actor}} 提议将 {{new_owner}} 设为群组 {{group}} 的所有者",
+          "out": "将 {{new_owner}} 设为群组 {{group}} 的所有者",
+          "out_proposed": "提议将 {{new_owner}} 设为群组 {{group}} 的所有者"
+        },
+        "settings": {
+          "mine": "更新了群组 {{group}} 的设置",
+          "mine_proposed": "提议更新群组 {{group}} 的设置",
+          "none": "{{actor}} 更新了群组 {{group}} 的设置",
+          "none_proposed": "{{actor}} 提议更新群组 {{group}} 的设置"
+        }
+      },
+      "update_name": {
+        "details": {
+          "mine": "更新了名称“{{name}}”的详细信息",
+          "none": "{{actor}} 更新了名称“{{name}}”的详细信息"
+        },
+        "renamed": {
+          "mine": "将名称“{{name}}”更改为“{{new_name}}”",
+          "none": "{{actor}} 将名称“{{name}}”更改为“{{new_name}}”"
+        }
+      },
+      "vote_on_poll": {
+        "mine": "在投票“{{poll}}”中投了票",
+        "none": "{{actor}} 在投票“{{poll}}”中投了票"
+      }
+    },
+    "service": {
+      "app": "一个应用",
+      "arbitrary_data": "数据",
+      "attachment": "一个附件",
+      "audio": "一段音频",
+      "auto_update": "一个 Core 更新",
+      "blog": "一个博客",
+      "blog_comment": "一条博客评论",
+      "blog_post": "一篇博客文章",
+      "chain_comment": "一条链上评论",
+      "chain_data": "链上数据",
+      "code": "一段代码",
+      "comment": "一条评论",
+      "coupon": "一张优惠券",
+      "database": "一个数据库",
+      "document": "一份文档",
+      "encrypted": "一个加密资源",
+      "extension": "一个扩展",
+      "file": "一个文件",
+      "files": "一组文件",
+      "game": "一款游戏",
+      "gif_repository": "一个 GIF 合集",
+      "git_repository": "一个 Git 仓库",
+      "image": "一张图片",
+      "item": "一个物品",
+      "json": "一份 JSON 数据",
+      "list": "一个列表",
+      "message": "一条消息",
+      "metadata": "元数据",
+      "nft": "一个 NFT",
+      "offer": "一项优惠",
+      "playlist": "一个播放列表",
+      "plugin": "一个插件",
+      "podcast": "一个播客",
+      "product": "一件商品",
+      "qchat_attachment": "一个 Q-Chat 附件",
+      "qchat_audio": "一段 Q-Chat 音频",
+      "qchat_image": "一张 Q-Chat 图片",
+      "qchat_voice": "一条 Q-Chat 语音消息",
+      "snapshot": "一个快照",
+      "store": "一个商店",
+      "thumbnail": "一张缩略图",
+      "unknown": "一个 QDN 资源",
+      "video": "一个视频",
+      "voice": "一段录音",
+      "website": "一个网站"
+    },
+    "show_all_one": "显示全部 {{count}} 个",
+    "show_all_other": "显示全部 {{count}} 个",
+    "unknown_account": "未知账户",
+    "value": {
+      "approve": "批准",
+      "flags": "AND {{and}}，OR {{or}}，XOR {{xor}}",
+      "no": "否",
+      "option": "选项 {{n}}",
+      "reject": "拒绝",
+      "removed": "已移除",
+      "yes": "是"
+    },
+    "when_block": "{{time}} · 区块 {{block}}",
+    "when_waiting": "等待确认 · {{ago}}发送"
+  },
+  "tx_family": {
+    "all": "全部",
+    "groups": "群组",
+    "messages": "消息",
+    "minting": "铸币",
+    "names": "名称",
+    "other": "其他",
+    "payments": "付款",
+    "qdn": "QDN 数据",
+    "trading": "资产交易"
+  },
+  "tx_page": {
+    "about": "关于此交易",
+    "answers": "所审批的交易",
+    "answers_failed": "无法加载所审批的交易。",
+    "answers_unknown": "您的节点上没有所审批的交易。",
+    "block": "区块",
+    "copy_signature": "复制签名",
+    "details": "详情",
+    "failed": "无法加载此交易。",
+    "fee": "手续费",
+    "open_answered": "打开该交易",
+    "sent": "发送时间",
+    "signature": "签名",
+    "signature_copied": "签名已复制到剪贴板。",
+    "time": "时间",
+    "unknown": "您的节点上没有使用此签名的交易。",
+    "unknown_hint": "它可能尚未到达您的节点，也可能有字符输入错误。",
+    "waiting": "等待确认"
+  },
+  "tx_type": {
+    "account_flags": "账户标志",
+    "account_level": "账户等级",
+    "add_group_admin": "添加群组管理员",
+    "airdrop": "空投",
+    "arbitrary": "QDN 发布",
+    "at": "AT 交易",
+    "buy_name": "购买名称",
+    "cancel_asset_order": "取消资产订单",
+    "cancel_group_ban": "解除群组封禁",
+    "cancel_group_invite": "取消群组邀请",
+    "cancel_sell_name": "取消出售名称",
+    "chat": "聊天消息",
+    "create_asset_order": "资产订单",
+    "create_group": "创建群组",
+    "create_poll": "创建投票",
+    "deploy_at": "创建 AT",
+    "enable_forging": "启用锻造",
+    "genesis": "创世分配",
+    "group_approval": "群组审批",
+    "group_ban": "群组封禁",
+    "group_invite": "群组邀请",
+    "group_kick": "移出群组",
+    "issue_asset": "发行资产",
+    "join_group": "加入群组",
+    "leave_group": "退出群组",
+    "message": "消息",
+    "multi_payment": "多笔付款",
+    "payment": "付款",
+    "presence": "在线状态",
+    "publicize": "公开公钥",
+    "register_name": "注册名称",
+    "remove_group_admin": "移除群组管理员",
+    "reward_share": "奖励分享",
+    "sell_name": "挂牌出售名称",
+    "set_group": "设置默认群组",
+    "transfer_asset": "资产转移",
+    "transfer_privs": "铸币等级转移",
+    "update_asset": "更新资产",
+    "update_group": "更新群组",
+    "update_name": "更新名称",
+    "vote_on_poll": "参与投票"
+  },
+  "window": {
+    "forward": "前进",
+    "full": "扩展到整个窗口",
+    "leave_full": "恢复正常大小",
+    "subtitle": "查询任意 Qortal 账户或交易"
+  }
+}
