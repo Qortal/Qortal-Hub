@@ -69,18 +69,22 @@ async function until(check: () => boolean, ms = 2_000): Promise<void> {
   while (!check() && Date.now() < end) await settle(5);
 }
 
-describe('Qortino link downloads in the main process', () => {
+describe('Downloads of other models in the main process', () => {
   let event: unknown;
   const call = (channel: string, args?: unknown) =>
     fake.handlers.get(channel)!(event, args);
+  const NODE_PART =
+    'http://127.0.0.1:12391/arbitrary/FILE/Qortino%20AI/qshare_file_part';
 
   beforeAll(() => {
-    registerQortinoLlmIpcHandlers();
+    registerQortinoLlmIpcHandlers({
+      isNodeUrl: (url) => url.startsWith('http://127.0.0.1:12391/'),
+    });
   });
 
   beforeEach(async () => {
     fake.userData = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), 'qortino-links-')
+      path.join(os.tmpdir(), 'qortino-other-models-')
     );
     const contents = Object.assign(new EventEmitter(), {
       isDestroyed: () => false,
@@ -101,109 +105,58 @@ describe('Qortino link downloads in the main process', () => {
     await fs.promises.rm(fake.userData, { recursive: true, force: true });
   });
 
-  it('does not save a web page as the model when the link is not to the file itself', async () => {
-    // The address of a model's page on Hugging Face ("blob"), not the file.
-    fake.fetch = async () =>
-      new Response(
-        '<!doctype html><html><head><title>model.gguf</title></head><body>…</body></html>',
-        { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } }
-      );
-    const relativePath = 'other-models/abc123/model.gguf';
-
-    const outcome = await call('qortino:downloadUrl', {
-      url: 'https://huggingface.co/someone/model-GGUF/blob/main/model.gguf',
-      relativePath,
-    }).then(
-      () => 'saved',
-      (error: Error) => error.message
-    );
-
-    expect(outcome).not.toBe('saved');
-    expect(
-      fs.existsSync(path.join(fake.userData, 'Qortino AI', relativePath))
-    ).toBe(false);
-  });
-
-  it('saves the file when the link brings a GGUF model', async () => {
-    const model = new Uint8Array([0x47, 0x47, 0x55, 0x46, 3, 0, 0, 0]);
-    fake.fetch = async () =>
-      new Response(model, {
-        status: 200,
-        headers: { 'content-length': String(model.length) },
-      });
-    const relativePath = 'other-models/abc124/model.gguf';
-
-    const result = (await call('qortino:downloadUrl', {
-      url: 'https://huggingface.co/someone/model-GGUF/resolve/main/model.gguf',
-      relativePath,
-    })) as { path: string; bytesWritten: number };
-
-    expect(result.bytesWritten).toBe(model.length);
-    expect(fs.readFileSync(result.path)).toEqual(Buffer.from(model));
-  });
-
-  it('keeps a finished download it could not read, and does not call it a web page', async () => {
-    const model = new Uint8Array([0x47, 0x47, 0x55, 0x46, 3, 0, 0, 0]);
-    fake.fetch = async () =>
-      new Response(model, {
-        status: 200,
-        headers: { 'content-length': String(model.length) },
-      });
-    const relativePath = 'other-models/abc125/model.gguf';
-    const target = path.join(fake.userData, 'Qortino AI', relativePath);
-    // Another program holds the file for a moment (a virus scanner, say).
-    const realOpen = fs.promises.open.bind(fs.promises);
-    vi.spyOn(fs.promises, 'open').mockImplementation((async (
-      file: fs.PathLike,
-      ...rest: unknown[]
-    ) => {
-      if (String(file) === target) {
-        throw Object.assign(new Error('EBUSY: resource busy or locked'), {
-          code: 'EBUSY',
-        });
-      }
-      return (realOpen as (...args: unknown[]) => unknown)(file, ...rest);
-    }) as typeof fs.promises.open);
-
-    const outcome = await call('qortino:downloadUrl', {
-      url: 'https://huggingface.co/someone/model-GGUF/resolve/main/model.gguf',
-      relativePath,
-    }).then(
-      () => 'saved',
-      (error: Error) => error.message
-    );
-
-    expect(outcome).not.toBe('saved');
-    expect(outcome).not.toBe('not_gguf');
-    expect(fs.readFileSync(target)).toEqual(Buffer.from(model));
-  });
-
-  it('trying again checks the file a last try saved, without downloading it again', async () => {
-    const model = new Uint8Array([0x47, 0x47, 0x55, 0x46, 3, 0, 0, 0]);
-    const relativePath = 'other-models/abc126/model.gguf';
-    const target = path.join(fake.userData, 'Qortino AI', relativePath);
-    await fs.promises.mkdir(path.dirname(target), { recursive: true });
-    await fs.promises.writeFile(target, model);
+  it('downloads nothing from a host that is not one of the nodes', async () => {
     let requests = 0;
     fake.fetch = async () => {
       requests += 1;
-      return new Response(model, {
+      return new Response(new Uint8Array(8), { status: 200 });
+    };
+    for (const url of [
+      'https://huggingface.co/someone/model-GGUF/resolve/main/model.gguf',
+      'http://127.0.0.1:12392/arbitrary/FILE/Qortino%20AI/qshare_file_part',
+      'file:///etc/passwd',
+    ]) {
+      await expect(
+        call('qortino:downloadUrl', {
+          url,
+          relativePath: 'other-models/big-model/big-00001-of-00002.gguf',
+        })
+      ).rejects.toThrow('only from your node');
+    }
+    expect(requests).toBe(0);
+    expect(
+      fs.existsSync(path.join(fake.userData, 'Qortino AI', 'other-models'))
+    ).toBe(false);
+  });
+
+  it('downloads a part again when an earlier copy of it is there', async () => {
+    // The renderer asks only for a part whose copy is missing or damaged.
+    const relativePath = 'other-models/big-model/big-00001-of-00002.gguf';
+    const target = path.join(fake.userData, 'Qortino AI', relativePath);
+    await fs.promises.mkdir(path.dirname(target), { recursive: true });
+    await fs.promises.writeFile(target, Buffer.from('damaged copy'));
+    const part = new Uint8Array([0x47, 0x47, 0x55, 0x46, 3, 0, 0, 0, 9, 9]);
+    let requests = 0;
+    fake.fetch = async () => {
+      requests += 1;
+      return new Response(part, {
         status: 200,
-        headers: { 'content-length': String(model.length) },
+        headers: { 'content-length': String(part.length) },
       });
     };
 
     const result = (await call('qortino:downloadUrl', {
-      url: 'https://huggingface.co/someone/model-GGUF/resolve/main/model.gguf',
+      url: NODE_PART,
       relativePath,
     })) as { path: string; bytesWritten: number };
 
-    expect(requests).toBe(0);
-    expect(result).toEqual({ path: target, bytesWritten: model.length });
+    expect(requests).toBe(1);
+    expect(result).toEqual({ path: target, bytesWritten: part.length });
+    expect(fs.readFileSync(target)).toEqual(Buffer.from(part));
   });
 
-  it('does not fill the disk with a link model bigger than the free space', async () => {
-    // 2 MB free on the disk; the model is 18 GB.
+  it('does not fill the disk with a part bigger than the free space', async () => {
+    // 2 MB free on the disk; the part is 1.8 GB.
     const realStatfs = fs.promises.statfs.bind(fs.promises);
     vi.spyOn(fs.promises, 'statfs').mockImplementation((async (
       dir: fs.PathLike
@@ -228,13 +181,13 @@ describe('Qortino link downloads in the main process', () => {
         }),
         {
           status: 200,
-          headers: { 'content-length': String(18_556_686_752) },
+          headers: { 'content-length': String(1_789_492_512) },
         }
       );
-    const relativePath = 'other-models/def456/big.gguf';
+    const relativePath = 'other-models/big-model/big-00002-of-00002.gguf';
     let outcome = 'pending';
     void call('qortino:downloadUrl', {
-      url: 'https://huggingface.co/x/resolve/main/big.gguf',
+      url: NODE_PART,
       relativePath,
     }).then(
       () => {
@@ -249,5 +202,36 @@ describe('Qortino link downloads in the main process', () => {
     // Refused, rather than writing until the disk is full.
     expect(outcome).not.toBe('pending');
     expect(sent).toBeLessThan(2 * 1024 ** 2);
+  });
+
+  it("deletes a part and its .part, and the model's folder once it is empty", async () => {
+    const folder = path.join(fake.userData, 'Qortino AI', 'other-models', 'm');
+    await fs.promises.mkdir(folder, { recursive: true });
+    for (const name of ['m-00001-of-00002.gguf', 'm-00002-of-00002.gguf']) {
+      await fs.promises.writeFile(path.join(folder, name), 'x');
+    }
+    await fs.promises.writeFile(
+      path.join(folder, 'm-00002-of-00002.gguf.part'),
+      'x'
+    );
+
+    await call('qortino:removeOtherModel', {
+      relativePath: 'other-models/m/m-00001-of-00002.gguf',
+    });
+    expect(fs.readdirSync(folder).sort()).toEqual([
+      'm-00002-of-00002.gguf',
+      'm-00002-of-00002.gguf.part',
+    ]);
+
+    await call('qortino:removeOtherModel', {
+      relativePath: 'other-models/m/m-00002-of-00002.gguf',
+    });
+    expect(fs.existsSync(folder)).toBe(false);
+    // Qortino's own folder is not for this.
+    await expect(
+      call('qortino:removeOtherModel', {
+        relativePath: 'models/qortino-00001-of-00002.gguf',
+      })
+    ).rejects.toThrow();
   });
 });

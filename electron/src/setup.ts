@@ -29,6 +29,7 @@ import { restrictQAppGuestWebRtc } from './qapp-guest-network-policy';
 import { QAppFileWorkers, QAPP_FILE_WORKER_CSP } from './qapp-file-workers';
 import { QAPP_FILE_WORKER_URL } from './qapp-file-protocol';
 import { isQAppFileGuest } from './qapp-file-guest';
+import { isUrlOnAllowedOrigin } from './qortino-llm-files';
 import type { CapacitorElectronConfig } from '@capacitor-community/electron';
 import { QChatNotificationSink } from './qchat-notification-sink';
 import {
@@ -632,6 +633,11 @@ function guessMimeTypeFromFileName(fileName: string): string {
 const domainHolder = {
   allowedDomains: [...defaultDomains],
 };
+
+/** `url` is on one of the nodes Hub's page may reach: Qortino's downloads. */
+export function isAllowedNodeUrl(url: string): boolean {
+  return isUrlOnAllowedOrigin(url, domainHolder.allowedDomains);
+}
 
 /** Same path layout as `getSharedSettingsFilePath('wallet-storage.json')` (preload `walletStorage`). */
 function getWalletStorageJsonPathSync(): string {

@@ -9,9 +9,8 @@ import {
   fetchKeepingKeyOnOrigin,
   isDownloadTarget,
   isLoadableModelPath,
-  modelFileNameFromUrl,
+  isUrlOnAllowedOrigin,
   OTHER_MODELS_DIR,
-  otherModelRelativePath,
   readPickedModels,
   rememberPickedModel,
   resolveInsideRoot,
@@ -85,51 +84,36 @@ describe('Qortino folder paths', () => {
       expect(() => resolveInsideRoot(root, bad)).toThrow();
     }
   });
-
-  it('names a linked model after its file, safely', () => {
-    expect(
-      modelFileNameFromUrl(
-        'https://huggingface.co/x/y/resolve/main/Phi-4-mini-Q4_K_M.gguf?download=true'
-      )
-    ).toBe('Phi-4-mini-Q4_K_M.gguf');
-    expect(modelFileNameFromUrl('https://example.com/a%20b/..%2Fevil')).toBe(
-      '_evil.gguf'
-    );
-    expect(modelFileNameFromUrl('not a url')).toBe('model.gguf');
-  });
 });
 
-describe('models added by link', () => {
-  it('keeps the .gguf ending on a very long name', () => {
-    const long = `${'a'.repeat(200)}.gguf`;
-    const name = modelFileNameFromUrl(`https://e.com/${long}`);
-    expect(name.endsWith('.gguf')).toBe(true);
-    expect(name.length).toBeLessThanOrEqual(155);
-  });
-
-  it('gives each link a folder of its own, the same one with or without a query', () => {
-    const a = otherModelRelativePath('https://a.example/x/model-Q4_K_M.gguf');
-    const b = otherModelRelativePath('https://b.example/y/model-Q4_K_M.gguf');
-    const again = otherModelRelativePath(
-      'https://a.example/x/model-Q4_K_M.gguf?download=true'
-    );
-    expect(a.filename).toBe('model-Q4_K_M.gguf');
-    expect(a.relativePath).toMatch(
-      new RegExp(`^${OTHER_MODELS_DIR}/[0-9a-f]{12}/model-Q4_K_M\\.gguf$`)
-    );
-    expect(b.relativePath).not.toBe(a.relativePath);
-    expect(again.relativePath).toBe(a.relativePath);
-    // A query that names another file is another file.
-    expect(
-      otherModelRelativePath('https://e.com/get.php?file=a.gguf').relativePath
-    ).not.toBe(
-      otherModelRelativePath('https://e.com/get.php?file=b.gguf').relativePath
-    );
+describe('models Hub downloads', () => {
+  it('come only from the allowed origins, compared whole', () => {
+    const nodes = ['http://127.0.0.1:12391', 'https://ext-node.qortal.link'];
+    for (const url of [
+      'http://127.0.0.1:12391/arbitrary/FILE/Qortino%20AI/x',
+      'HTTP://127.0.0.1:12391/arbitrary/FILE/x',
+      'https://ext-node.qortal.link:443/arbitrary/FILE/x',
+    ]) {
+      expect(isUrlOnAllowedOrigin(url, nodes)).toBe(true);
+    }
+    for (const url of [
+      'https://huggingface.co/x/resolve/main/m.gguf',
+      'https://127.0.0.1:12391/arbitrary/FILE/x',
+      'http://127.0.0.1:1239/arbitrary/FILE/x',
+      'https://ext-node.qortal.link.example.com/x',
+      'http://user@evil.example/?http://127.0.0.1:12391',
+      'file:///etc/passwd',
+      'not a url',
+    ]) {
+      expect(isUrlOnAllowedOrigin(url, nodes)).toBe(false);
+    }
   });
 
   it('downloads only model files, into their own folders', () => {
     expect(isDownloadTarget('models/q-00001-of-00002.gguf')).toBe(true);
-    expect(isDownloadTarget(`${OTHER_MODELS_DIR}/abc/phi.gguf`)).toBe(true);
+    expect(
+      isDownloadTarget(`${OTHER_MODELS_DIR}/big/big-00002-of-00011.gguf`)
+    ).toBe(true);
     expect(isDownloadTarget('qortino-picked-models.json')).toBe(false);
     expect(isDownloadTarget('models/evil.json')).toBe(false);
     expect(isDownloadTarget('cache/x.gguf')).toBe(false);
@@ -162,19 +146,21 @@ describe('which model files may be loaded', () => {
 });
 
 describe('cleaning up the Qortino folder', () => {
-  it('deletes what is not kept, but never the models added by link', async () => {
+  it('deletes what is not kept, but never the other models Hub downloaded', async () => {
     await write('models/part-1.gguf', 'aa');
     await write('models/old-pack.zip', 'bbbb');
     await write('cache/warmup.kv', 'c');
-    await write(`${OTHER_MODELS_DIR}/phi.gguf`, 'phi');
+    await write(`${OTHER_MODELS_DIR}/big/big-00001-of-00002.gguf`, 'big');
 
     const result = await cleanupStorage(root, ['models/part-1.gguf']);
     expect(result).toEqual({ deletedFiles: 2, freedBytes: 5 });
     expect(fs.existsSync(path.join(root, 'models/part-1.gguf'))).toBe(true);
     expect(fs.existsSync(path.join(root, 'cache'))).toBe(false);
-    expect(fs.existsSync(path.join(root, OTHER_MODELS_DIR, 'phi.gguf'))).toBe(
-      true
-    );
+    expect(
+      fs.existsSync(
+        path.join(root, OTHER_MODELS_DIR, 'big', 'big-00001-of-00002.gguf')
+      )
+    ).toBe(true);
   });
 });
 

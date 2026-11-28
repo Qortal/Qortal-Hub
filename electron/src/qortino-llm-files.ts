@@ -1,6 +1,6 @@
 /**
  * Qortino AI's files on this computer: the model parts downloaded from QDN,
- * other models the user added by link, and the downloads that lead to them.
+ * Qortino's own and the other models', and the downloads that lead to them.
  * Everything stays inside one folder in Hub's user data; paths from the
  * renderer are checked so they cannot leave it.
  */
@@ -13,7 +13,7 @@ import { pipeline } from 'stream/promises';
 
 /** Folder name under Hub's user data. */
 export const QORTINO_ROOT_NAME = 'Qortino AI';
-/** Under the root: models the user added by a download link. */
+/** Under the root: models other than Qortino's own that Hub downloaded. */
 export const OTHER_MODELS_DIR = 'other-models';
 
 /**
@@ -42,50 +42,23 @@ export function resolveInsideRoot(root: string, relativePath: string): string {
   return resolved;
 }
 
-/** A file name for a model downloaded by link, from its URL. */
-export function modelFileNameFromUrl(url: string): string {
-  let name = 'model.gguf';
-  try {
-    const last = new URL(url).pathname.split('/').filter(Boolean).pop();
-    if (last) name = decodeURIComponent(last);
-  } catch {
-    /* keep the default */
-  }
-  const base = name
-    .replace(/\.gguf$/i, '')
-    .replace(/[^A-Za-z0-9._-]+/g, '_')
-    .replace(/^\.+/, '')
-    .slice(0, 150);
-  return `${base || 'model'}.gguf`;
-}
-
 /**
- * Where a model downloaded by link is saved, under `other-models/`: a folder
- * per link (its address without the query), so two links that end in the
- * same file name never share a file, and the same file asked for again
- * (with `?download=true`, say) is found where it is.
+ * `url` is an http(s) address on one of `allowedOrigins`: Hub's nodes, the
+ * hosts Hub's page may connect to (setup.ts).
  */
-export function otherModelRelativePath(url: string): {
-  relativePath: string;
-  filename: string;
-} {
-  let key = url.trim();
+export function isUrlOnAllowedOrigin(
+  url: string,
+  allowedOrigins: readonly string[]
+): boolean {
   try {
     const parsed = new URL(url);
-    // "?download=true" asks for the same file; any other query may name
-    // another one (download.php?file=…).
-    parsed.searchParams.delete('download');
-    parsed.hash = '';
-    key = `${parsed.protocol}//${parsed.host}${parsed.pathname}${parsed.search}`;
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false;
+    }
+    return allowedOrigins.includes(parsed.origin);
   } catch {
-    /* hash what was given */
+    return false;
   }
-  const folder = createHash('sha256').update(key).digest('hex').slice(0, 12);
-  const filename = modelFileNameFromUrl(url);
-  return {
-    relativePath: `${OTHER_MODELS_DIR}/${folder}/${filename}`,
-    filename,
-  };
 }
 
 /** `absolutePath` (not resolved through links) lies inside `root`. */
@@ -206,8 +179,8 @@ export async function sha256File(
 
 /**
  * Delete every file under `root` that is not in `keep` (paths relative to
- * the root, with forward slashes), then the folders left empty. Models the
- * user added by link are kept: they have a remove of their own.
+ * the root, with forward slashes), then the folders left empty. The other
+ * models in OTHER_MODELS_DIR are kept: they have a remove of their own.
  */
 export async function cleanupStorage(
   root: string,
@@ -272,22 +245,6 @@ export function availableMemoryBytes(): number {
     }
   }
   return os.freemem();
-}
-
-/**
- * A GGUF file starts with the four bytes "GGUF". Throws when the file cannot
- * be read, so that is never taken for a file that is something else.
- */
-export async function isGgufFile(filePath: string): Promise<boolean> {
-  let file: fs.promises.FileHandle | undefined;
-  try {
-    file = await fs.promises.open(filePath, 'r');
-    const head = Buffer.alloc(4);
-    const { bytesRead } = await file.read(head, 0, 4, 0);
-    return bytesRead === 4 && head.toString('latin1') === 'GGUF';
-  } finally {
-    await file?.close().catch(() => undefined);
-  }
 }
 
 export async function diskSpace(
@@ -381,8 +338,6 @@ export const ABORT_KEEPING_PART = 'keep-part';
 
 /** Error for a download the disk has no room for. */
 export const NOT_ENOUGH_SPACE = 'not_enough_space';
-/** Error for a link that brought something other than a GGUF model. */
-export const NOT_GGUF = 'not_gguf';
 
 /**
  * Download `url` to `target`, through `<target>.part`. A `.part` left by a

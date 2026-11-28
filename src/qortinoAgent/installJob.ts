@@ -44,7 +44,7 @@ export const RETRY_DELAYS_MS = [15_000, 30_000, 60_000, 120_000, 300_000];
 /** Tries in a row that get no further before the job gives up (~40 min). */
 export const MAX_TRIES_WITHOUT_PROGRESS = 12;
 /** A damaged part is downloaded whole again; not endlessly. */
-const MAX_CHECKSUM_RETRIES = 2;
+export const MAX_CHECKSUM_RETRIES = 2;
 
 const RETRYABLE = new Set<QortinoInstallJobError['code']>([
   'stalled',
@@ -76,7 +76,7 @@ export function progressScore(progress: DownloadProgress): number {
   );
 }
 
-function jobError(e: unknown): QortinoInstallJobError {
+export function jobError(e: unknown): QortinoInstallJobError {
   if (e instanceof QortinoInstallError && e.code !== 'cancelled') {
     return { code: e.code, detail: e.detail };
   }
@@ -89,7 +89,7 @@ function jobError(e: unknown): QortinoInstallJobError {
   return { code: 'generic', detail: detail || undefined };
 }
 
-function isRetryable(error: QortinoInstallJobError): boolean {
+export function isRetryable(error: QortinoInstallJobError): boolean {
   if (!RETRYABLE.has(error.code)) return false;
   // Not the desktop app: no try will change that.
   return !(

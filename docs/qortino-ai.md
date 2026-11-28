@@ -23,17 +23,32 @@ It is off until the user opens it. Nothing is downloaded unless they ask.
   answer instantly (`goldenAnswers.json`, matched by `goldenMatch.ts`); a
   close match is given to the model as a hint. Q-App and guide cards under
   Qortal answers open the app in a Hub tab, next to the panel.
-- **Other models:** settings → Model → Add a model. Any open model in GGUF
-  format, from a file on this computer (used where it is) or a download link
-  (saved in Qortino's folder). A few suggestions fill the link in. A link to
-  one part of a model split into several files is refused: the user
-  downloads all of its parts into one folder and picks the first one with
-  "Choose a file…". A link download is refused when the disk has no room
-  for it (with 300 MB to spare), and a downloaded file that does not start
-  with `GGUF` (a model's web page, say) is deleted. A finished file that
-  cannot be read for that check is kept, and "Try the download again"
-  checks it again without downloading it. The curated answers and Qortino's persona work
-  with every model.
+- **Other models:** settings → Model. Hub downloads models from QDN only,
+  never from the web.
+  - **A bigger model from QDN:** Qwen3 30B A3B Instruct 2507 (Apache-2.0,
+    17.3 GB, best with 32 GB of memory), Unsloth's Q4_K_M in 11 parts
+    published with Q-Share under `Qortino AI`, like Qortino's own model
+    (`QWEN3_30B_MODEL` in `manifest.ts`). Its download goes through the
+    same path and checks: each part is fetched through the node and
+    checked against its sha256, and the model is loaded through its first
+    part. The node is asked for one part ahead at a time, not all of them.
+    The free space is checked before each try, and the download waits and
+    tries again when peers stop sending (`qdnModelDownload.ts`, with
+    `installJob.ts`'s rules). It downloads through the user's own node only:
+    its parts are bigger than the public node carries, and it has no layout
+    in smaller parts like Qortino's own model. On the public node the row
+    says so and offers no Download, and a download stops if Hub switches to
+    the public node. Stop keeps the parts saved so far (and the
+    node keeps the chunks it fetched), to carry on from; Remove deletes
+    every part.
+  - **A file on this computer:** "Add a model file…" opens a file picker
+    for any open model in GGUF format, which is used where it is. For a
+    model split into several files, the user picks the first part.
+  - A model an earlier test build downloaded from a web link stays usable
+    if it finished, and can be removed either way.
+
+  The curated answers and Qortino's persona work with every model.
+
 - **Settings:** answer length, text size, Enter sends, how long the model
   stays loaded after closing, graphics card on/off, delete all chats, remove
   Qortino's model.
@@ -72,10 +87,16 @@ Model process
   keeps what it read last time, so only the new part is read. The system
   prompt is read ahead while the user types (`warmup`).
 - **Files** live in `<userData>/Qortino AI/`: `models/` for Qortino's parts,
-  `other-models/` for models added by link. Paths from the renderer are
+  `other-models/<model>/` for the other models Hub downloads. Clean-ups of
+  Qortino's own files never touch `other-models/`, so removing or repairing
+  Qortino's model leaves the others alone. Paths from the renderer are
   checked to stay inside that folder.
 - **Downloads** go through the Hub window's network session (`session.fetch`),
   which trusts the local node's HTTPS certificate and uses the system proxy.
+  The main process downloads only from Hub's nodes: an address whose origin
+  is not on the list Hub's page may connect to (`isAllowedNodeUrl` in
+  `setup.ts`) is refused before anything is fetched. A redirect from a node
+  is followed as before (each part is checked against its sha256 anyway).
   The node API key is sent as an `X-API-KEY` header, never in the URL. A
   `.part` file is resumed with a Range request (the public node cuts long
   transfers near 1 GiB). Each part is checked against its sha256.
@@ -97,7 +118,7 @@ src/components/Group/qortinoHome
 src/components/Group/__tests__/HomeQortinoWorkspaceCard electron/src/qortino-llm`
   runs its tests. The last two match by the start of the file name:
   `HomeQortinoWorkspaceCard*.test.tsx` and `qortino-llm*.test.ts` (the
-  main process's tests, such as `qortino-llm.linkDownloads.test.ts`).
+  main process's tests, such as `qortino-llm.freeSpace.test.ts`).
 - The curated answers, the Q-App catalog and the persona are written in
   English (as in GO); the model answers in the user's language when asked
   in it. All of the UI is translated.

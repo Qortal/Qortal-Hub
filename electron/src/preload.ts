@@ -2947,7 +2947,6 @@ try {
     cleanupStorage: qortinoInvoke('qortino:cleanupStorage'),
     downloadUrl: qortinoInvoke('qortino:downloadUrl'),
     cancelDownload: qortinoInvoke('qortino:cancelDownload'),
-    otherModelPath: qortinoInvoke('qortino:otherModelPath'),
     removeOtherModel: qortinoInvoke('qortino:removeOtherModel'),
     pickModelFile: qortinoInvoke('qortino:pickModelFile'),
     loadModel: qortinoInvoke('qortino:loadModel'),

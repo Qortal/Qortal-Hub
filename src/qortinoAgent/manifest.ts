@@ -31,6 +31,11 @@ export type QortinoModelSpec = {
   recommendedRamBytes: number;
   /** Context window the chat loads the model with. */
   contextTokens: number;
+  /**
+   * Folder under the Qortino storage root its parts are saved in. Qortino's
+   * own layouts use QORTINO_MODELS_DIR.
+   */
+  folder?: string;
 };
 
 export const QORTINO_MODEL: QortinoModelSpec = {
@@ -104,9 +109,111 @@ export function qortinoLayoutForPath(llmPath?: string): QortinoModelSpec {
 /** Folder under the Qortino storage root that holds the model parts. */
 export const QORTINO_MODELS_DIR = 'models';
 
+/**
+ * Folder for models other than Qortino's own. Cleaning up Qortino's folder
+ * never touches it; each model there is removed on its own.
+ */
+export const QORTINO_OTHER_MODELS_DIR = 'other-models';
+
 export function modelPartRelativePath(part: QortinoModelPart): string {
   return `${QORTINO_MODELS_DIR}/${part.filename}`;
 }
+
+/** Where a part of `model` is saved, under the Qortino storage root. */
+export function modelPartPath(
+  model: QortinoModelSpec,
+  part: QortinoModelPart
+): string {
+  return `${model.folder ?? QORTINO_MODELS_DIR}/${part.filename}`;
+}
+
+/**
+ * A bigger open model for computers with plenty of memory, on QDN under the
+ * same name: Qwen3-30B-A3B-Instruct-2507 (Apache-2.0), Unsloth's Q4_K_M
+ * GGUF split into 11 parts with llama-gguf-split --split-max-size 1800M.
+ * It is a mixture of experts (8 of its 128 experts run for each token), so
+ * it answers quickly for its size. Saved apart from Qortino's own model, so
+ * removing or repairing one leaves the other alone.
+ */
+export const QWEN3_30B_MODEL: QortinoModelSpec = {
+  id: 'qwen3-30b-a3b-instruct-2507-q4km',
+  label: 'Qwen3 30B A3B Instruct 2507',
+  license: 'Apache-2.0',
+  parts: [
+    {
+      filename: 'qortino-qwen3-30b-a3b-2507-q4km-00001-of-00011.gguf',
+      sizeBytes: 1_657_913_024,
+      sha256:
+        '27943a1cdfd572a4cdcec1aa610584bc7e59450ef45055be1dd45fa3008f1101',
+    },
+    {
+      filename: 'qortino-qwen3-30b-a3b-2507-q4km-00002-of-00011.gguf',
+      sizeBytes: 1_789_492_512,
+      sha256:
+        '3832391209d4266befc1b637fda8d5d6df868fdb315d727e19b1459e123bc65e',
+    },
+    {
+      filename: 'qortino-qwen3-30b-a3b-2507-q4km-00003-of-00011.gguf',
+      sizeBytes: 1_747_157_600,
+      sha256:
+        'b5abaf29ff6a8a6211dc915fd46b13e683a188d05be249b7ff5247f05442513f',
+    },
+    {
+      filename: 'qortino-qwen3-30b-a3b-2507-q4km-00004-of-00011.gguf',
+      sizeBytes: 1_696_310_016,
+      sha256:
+        '447cc75f5fe3a25b3eea961577735b17715253a38125f013241194b4376e68bb',
+    },
+    {
+      filename: 'qortino-qwen3-30b-a3b-2507-q4km-00005-of-00011.gguf',
+      sizeBytes: 1_737_317_728,
+      sha256:
+        'e1b868e9965f68c4e6002e2083d57eaa867c33a4b167d426ccf0e4c1229c880d',
+    },
+    {
+      filename: 'qortino-qwen3-30b-a3b-2507-q4km-00006-of-00011.gguf',
+      sizeBytes: 1_747_157_632,
+      sha256:
+        '76b368be5459811d66c7b34b48584f3b259a3fd569fb62361ec42b57261c0c06',
+    },
+    {
+      filename: 'qortino-qwen3-30b-a3b-2507-q4km-00007-of-00011.gguf',
+      sizeBytes: 1_696_039_680,
+      sha256:
+        '04a6571aedb57df4e9557de7a6b0330e6996b7862f570f2b2d5f8c0241121083',
+    },
+    {
+      filename: 'qortino-qwen3-30b-a3b-2507-q4km-00008-of-00011.gguf',
+      sizeBytes: 1_737_588_064,
+      sha256:
+        'b1f8169038df3ab3ad7d3e5faba6caf820e69827d24d2a72fb215dd8ac9ff17c',
+    },
+    {
+      filename: 'qortino-qwen3-30b-a3b-2507-q4km-00009-of-00011.gguf',
+      sizeBytes: 1_694_982_784,
+      sha256:
+        '272ad5f9f79ca633cd8e17b6ee185813f5084fab758afab6def4b7dde0335c55',
+    },
+    {
+      filename: 'qortino-qwen3-30b-a3b-2507-q4km-00010-of-00011.gguf',
+      sizeBytes: 1_728_691_488,
+      sha256:
+        'fcaf29cb59d6da1ed6efbe695dd18a9986e4a1da0502945f5e716b9c13254cd9',
+    },
+    {
+      filename: 'qortino-qwen3-30b-a3b-2507-q4km-00011-of-00011.gguf',
+      sizeBytes: 1_324_037_536,
+      sha256:
+        'ced8bc3e0fabb6c7e2fe98e1a6b8bc47c003a5c0ec4ad9f526f886ad8c86c57c',
+    },
+  ],
+  recommendedRamBytes: 32 * 1024 ** 3,
+  contextTokens: 4096,
+  folder: `${QORTINO_OTHER_MODELS_DIR}/qwen3-30b-a3b-instruct-2507-q4km`,
+};
+
+/** Models besides Qortino's own that Hub offers to download from QDN. */
+export const QDN_OTHER_MODELS: QortinoModelSpec[] = [QWEN3_30B_MODEL];
 
 export function modelTotalBytes(
   model: QortinoModelSpec = QORTINO_MODEL
@@ -151,6 +258,62 @@ export const PUBLISHED_QSHARE_FILES: Record<
     identifier: 'qshare_file_qortino-ai-qwen3-4b-instruct-2_f0lX83',
     service: 'FILE',
     sizeBytes: 722_850_144,
+  },
+  // Q-Share qshare_file_qortino-ai-qwen3-30b-a3b-instr_AGGTub, 22 Nov 2026.
+  'qortino-qwen3-30b-a3b-2507-q4km-00001-of-00011.gguf': {
+    identifier: 'qshare_file_qortino-ai-qwen3-30b-a3b-instr_II5IHb',
+    service: 'FILE',
+    sizeBytes: 1_657_913_024,
+  },
+  'qortino-qwen3-30b-a3b-2507-q4km-00002-of-00011.gguf': {
+    identifier: 'qshare_file_qortino-ai-qwen3-30b-a3b-instr_X5jrbs',
+    service: 'FILE',
+    sizeBytes: 1_789_492_512,
+  },
+  'qortino-qwen3-30b-a3b-2507-q4km-00003-of-00011.gguf': {
+    identifier: 'qshare_file_qortino-ai-qwen3-30b-a3b-instr_F1tlTx',
+    service: 'FILE',
+    sizeBytes: 1_747_157_600,
+  },
+  'qortino-qwen3-30b-a3b-2507-q4km-00004-of-00011.gguf': {
+    identifier: 'qshare_file_qortino-ai-qwen3-30b-a3b-instr_OWfFbk',
+    service: 'FILE',
+    sizeBytes: 1_696_310_016,
+  },
+  'qortino-qwen3-30b-a3b-2507-q4km-00005-of-00011.gguf': {
+    identifier: 'qshare_file_qortino-ai-qwen3-30b-a3b-instr_71dKjx',
+    service: 'FILE',
+    sizeBytes: 1_737_317_728,
+  },
+  'qortino-qwen3-30b-a3b-2507-q4km-00006-of-00011.gguf': {
+    identifier: 'qshare_file_qortino-ai-qwen3-30b-a3b-instr_kGYsOM',
+    service: 'FILE',
+    sizeBytes: 1_747_157_632,
+  },
+  'qortino-qwen3-30b-a3b-2507-q4km-00007-of-00011.gguf': {
+    identifier: 'qshare_file_qortino-ai-qwen3-30b-a3b-instr_3NG0eK',
+    service: 'FILE',
+    sizeBytes: 1_696_039_680,
+  },
+  'qortino-qwen3-30b-a3b-2507-q4km-00008-of-00011.gguf': {
+    identifier: 'qshare_file_qortino-ai-qwen3-30b-a3b-instr_kx7XDk',
+    service: 'FILE',
+    sizeBytes: 1_737_588_064,
+  },
+  'qortino-qwen3-30b-a3b-2507-q4km-00009-of-00011.gguf': {
+    identifier: 'qshare_file_qortino-ai-qwen3-30b-a3b-instr_iUwbGd',
+    service: 'FILE',
+    sizeBytes: 1_694_982_784,
+  },
+  'qortino-qwen3-30b-a3b-2507-q4km-00010-of-00011.gguf': {
+    identifier: 'qshare_file_qortino-ai-qwen3-30b-a3b-instr_fXLBQr',
+    service: 'FILE',
+    sizeBytes: 1_728_691_488,
+  },
+  'qortino-qwen3-30b-a3b-2507-q4km-00011-of-00011.gguf': {
+    identifier: 'qshare_file_qortino-ai-qwen3-30b-a3b-instr_eeOePQ',
+    service: 'FILE',
+    sizeBytes: 1_324_037_536,
   },
 };
 

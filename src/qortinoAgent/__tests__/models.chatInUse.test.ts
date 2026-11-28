@@ -44,18 +44,15 @@ const worker = vi.hoisted(() => {
 });
 
 const llm = vi.hoisted(() => ({
-  otherModelPath: vi.fn(async ({ url }: { url: string }) => {
-    const name = url.split('?')[0].split('/').pop() as string;
-    return { relativePath: `other-models/${name}`, filename: name };
-  }),
   getStoragePaths: vi.fn(async () => ({
     rootDir: '/data/Qortino AI',
     modelsDir: '/data/Qortino AI/models',
     knowledgeDir: '/data/Qortino AI/knowledge',
   })),
-  downloadUrl: vi.fn(),
   cancelDownload: vi.fn(async () => undefined),
-  removeOtherModel: vi.fn(async () => ({ freedBytes: 1 })),
+  removeOtherModel: vi.fn(async (_options: { relativePath: string }) => ({
+    freedBytes: 1,
+  })),
   addListener: vi.fn(async () => ({ remove: async () => undefined })),
   loadModel: vi.fn(({ path }: { path: string }) =>
     worker.inLine(() => {
@@ -80,10 +77,17 @@ vi.mock('../qortinoLlm', () => ({
   isQortinoLlmNativeAvailable: () => true,
 }));
 
+const qdn = vi.hoisted(() => ({
+  downloadQdnModelWithRetries: vi.fn<() => Promise<{ path: string }>>(),
+}));
+vi.mock('../qdnModelDownload', () => qdn);
+
+import { modelPartPath, QWEN3_30B_MODEL } from '../manifest';
 import {
   addFileModel,
-  addLinkModel,
+  downloadQdnOtherModel,
   getQortinoModels,
+  qdnModelEntryId,
   QORTINO_OWN_MODEL_ID,
   removeOtherModel,
   resetQortinoModelsForTests,
@@ -96,7 +100,11 @@ import {
 } from '../modelSession';
 import { resetQortinoSettingsForTests } from '../settings';
 
-const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
+const settle = async (ms = 0) => {
+  // The first download from QDN also loads its module.
+  await vi.dynamicImportSettled();
+  await new Promise((resolve) => setTimeout(resolve, ms));
+};
 
 describe('Qortino models while the chat is in use', () => {
   beforeEach(() => {
@@ -106,7 +114,7 @@ describe('Qortino models while the chat is in use', () => {
     worker.reset();
     worker.loaded = null;
     vi.clearAllMocks();
-    llm.downloadUrl.mockReset();
+    qdn.downloadQdnModelWithRetries.mockReset();
   });
 
   afterEach(() => {
@@ -116,14 +124,13 @@ describe('Qortino models while the chat is in use', () => {
   });
 
   it('removes a model that is writing an answer without waiting for the answer to end', async () => {
-    llm.downloadUrl.mockResolvedValueOnce({
-      path: '/data/Qortino AI/other-models/phi.gguf',
-      bytesWritten: 9,
+    const first = modelPartPath(QWEN3_30B_MODEL, QWEN3_30B_MODEL.parts[0]);
+    qdn.downloadQdnModelWithRetries.mockResolvedValueOnce({
+      path: `/data/Qortino AI/${first}`,
     });
-    const model = await addLinkModel({ url: 'https://e.com/phi.gguf' });
-    await settle();
-    await settle();
-    setActiveQortinoModel(model.id);
+    await downloadQdnOtherModel(QWEN3_30B_MODEL);
+    const id = qdnModelEntryId(QWEN3_30B_MODEL);
+    setActiveQortinoModel(id);
     const ready = getQortinoModels().others[0];
     expect(ready.status).toBe('ready');
 
@@ -135,29 +142,33 @@ describe('Qortino models while the chat is in use', () => {
 
     // Settings, over the chat: Remove, confirmed.
     let removed = false;
-    void removeOtherModel(model.id).then(() => {
+    void removeOtherModel(id).then(() => {
       removed = true;
     });
     await settle(50);
 
     expect(removed).toBe(true);
     expect(getQortinoModels().others).toEqual([]);
-    expect(llm.removeOtherModel).toHaveBeenCalledWith({
-      relativePath: 'other-models/phi.gguf',
-    });
+    // Every part goes.
+    expect(llm.removeOtherModel.mock.calls.map(([args]) => args)).toEqual(
+      QWEN3_30B_MODEL.parts.map((part) => ({
+        relativePath: modelPartPath(QWEN3_30B_MODEL, part),
+      }))
+    );
   });
 
   it("keeps Qortino's own model when the user chose it while another one was downloading", async () => {
     // Another model was in use.
     addFileModel({ path: '/home/me/b.gguf', name: 'b.gguf', size: 5 });
-    let finish!: (value: { path: string; bytesWritten: number }) => void;
-    llm.downloadUrl.mockImplementation(
+    let finish!: (value: { path: string }) => void;
+    qdn.downloadQdnModelWithRetries.mockImplementation(
       () =>
         new Promise((resolve) => {
           finish = resolve;
         })
     );
-    const link = await addLinkModel({ url: 'https://e.com/c.gguf' });
+    void downloadQdnOtherModel(QWEN3_30B_MODEL);
+    await settle();
 
     // The user picks Qortino's own model and chats with it.
     setActiveQortinoModel(QORTINO_OWN_MODEL_ID);
@@ -169,13 +180,15 @@ describe('Qortino models while the chat is in use', () => {
     void askQuestion();
     await settle();
 
-    // The link's download ends in the middle of that chat.
-    finish({ path: '/data/Qortino AI/other-models/c.gguf', bytesWritten: 9 });
+    // The download ends in the middle of that chat.
+    finish({ path: '/data/Qortino AI/other-models/big/big-1.gguf' });
     await settle();
     await settle();
 
     expect(
-      getQortinoModels().others.find((m) => m.id === link.id)?.status
+      getQortinoModels().others.find(
+        (m) => m.id === qdnModelEntryId(QWEN3_30B_MODEL)
+      )?.status
     ).toBe('ready');
     expect(getQortinoModels().activeId).toBe(QORTINO_OWN_MODEL_ID);
   });

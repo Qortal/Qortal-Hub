@@ -6,6 +6,7 @@ import {
   stripUrlQuery,
 } from './nodeRequest';
 import {
+  modelPartPath,
   modelPartRelativePath,
   QORTINO_MODEL,
   QORTINO_MODEL_LAYOUTS,
@@ -314,10 +315,10 @@ async function waitForPartReady(
 /** Stream a part from the connected node straight into Qortino's folder. */
 async function savePart(
   part: ResolvedPart,
+  relativePath: string,
   onBytes: (received: number) => void,
   signal?: AbortSignal
 ): Promise<void> {
-  const relativePath = modelPartRelativePath(part);
   const progressHandle = await QortinoLlm.addListener(
     'downloadProgress',
     (event) => {
@@ -359,9 +360,9 @@ async function savePart(
 
 async function partMatches(
   part: QortinoModelPart,
+  rel: string,
   onBytes?: (read: number) => void
 ): Promise<boolean> {
-  const rel = modelPartRelativePath(part);
   const hit = await QortinoLlm.fileExists({ relativePath: rel });
   if (!hit.exists || (part.sizeBytes > 0 && hit.size !== part.sizeBytes))
     return false;
@@ -395,7 +396,7 @@ export async function savedModelBytes(
   let total = 0;
   for (const part of model.parts) {
     const hit = await QortinoLlm.fileExists({
-      relativePath: modelPartRelativePath(part),
+      relativePath: modelPartPath(model, part),
     }).catch(() => null);
     if (hit?.exists && hit.size === part.sizeBytes) {
       total += part.sizeBytes;
@@ -403,7 +404,7 @@ export async function savedModelBytes(
     }
     // A download that broke off already holds its share of the space.
     const partial = await QortinoLlm.fileExists({
-      relativePath: `${modelPartRelativePath(part)}.part`,
+      relativePath: `${modelPartPath(model, part)}.part`,
     }).catch(() => null);
     if (partial?.exists) total += Math.min(partial.size, part.sizeBytes);
   }
@@ -453,27 +454,48 @@ export async function chooseQortinoModelLayout(
   return publicNode ? QORTINO_MODEL_PUBLIC_NODE : QORTINO_MODEL;
 }
 
-/**
- * Download, verify and record the model. Parts already on this computer with
- * the right checksum (a retry after a failed second part) are kept.
- */
-export async function installQortinoModel(options: {
+type PartsDownload = {
   onProgress?: (progress: DownloadProgress) => void;
   signal?: AbortSignal;
-  model?: QortinoModelSpec;
-}): Promise<QortinoInstallState> {
-  const { onProgress, signal } = options;
-  const model = options.model ?? QORTINO_MODEL;
-  if (!isQortinoLlmNativeAvailable()) {
-    throw new QortinoInstallError('download', 'desktop app required');
-  }
+  /** Deletes a part whose checksum is wrong, so the next try fetches it again. */
+  dropDamagedPart: (part: QortinoModelPart) => Promise<unknown>;
+  /**
+   * How many parts after the one being saved the node is asked to fetch.
+   * Unset: every part is asked for up front.
+   */
+  fetchAhead?: number;
+  /**
+   * Parts already checked against their sha256 by an earlier try of the
+   * same download: at the right size, they are not read and hashed again.
+   * Each part that passes is added.
+   */
+  verified?: Set<string>;
+};
+
+function progressReporter(
+  model: QortinoModelSpec,
+  onProgress?: (progress: DownloadProgress) => void
+) {
   const partCount = model.parts.length;
-  const report = (
+  return (
     phase: DownloadPhase,
     partIndex: number,
     bytesDone: number,
     bytesTotal: number
   ) => onProgress?.({ phase, partIndex, partCount, bytesDone, bytesTotal });
+}
+
+/**
+ * Fetch every part of `model` through the node into its folder and check
+ * each one's sha256. Parts already there with the right checksum (a retry
+ * after a failed part) are kept.
+ */
+async function downloadModelParts(
+  model: QortinoModelSpec,
+  options: PartsDownload
+): Promise<void> {
+  const { signal, fetchAhead, verified } = options;
+  const report = progressReporter(model, options.onProgress);
 
   report('locate', 1, 0, 0);
   // A cold node can take minutes over this; a cancel does not wait for it.
@@ -482,31 +504,44 @@ export async function installQortinoModel(options: {
   const onDisk = await Promise.all(
     resolved.map(async (part) => {
       const hit = await QortinoLlm.fileExists({
-        relativePath: modelPartRelativePath(part),
+        relativePath: modelPartPath(model, part),
       });
       return hit.exists && hit.size === part.sizeBytes;
     })
   );
-  await Promise.all(
-    resolved
-      .filter((_, i) => !onDisk[i])
-      .map((part) => kickPartFetch(part, signal))
-  );
+  const asked = new Set<number>();
+  const askFor = async (i: number) => {
+    if (i >= resolved.length || onDisk[i] || asked.has(i)) return;
+    asked.add(i);
+    await kickPartFetch(resolved[i], signal);
+  };
+  if (fetchAhead === undefined) {
+    await Promise.all(resolved.map((_, i) => askFor(i)));
+  }
 
   for (let i = 0; i < resolved.length; i += 1) {
     const part = resolved[i];
     const index = i + 1;
+    const rel = modelPartPath(model, part);
     if (signal?.aborted) throw new QortinoInstallError('cancelled');
+    if (fetchAhead !== undefined) {
+      await Promise.all(
+        Array.from({ length: fetchAhead + 1 }, (_, k) => askFor(i + k))
+      );
+    }
 
     if (onDisk[i]) {
+      if (verified?.has(rel)) continue;
       report('verify', index, 0, part.sizeBytes);
       if (
-        await partMatches(part, (read) =>
+        await partMatches(part, rel, (read) =>
           report('verify', index, read, part.sizeBytes)
         )
       ) {
+        verified?.add(rel);
         continue;
       }
+      verified?.delete(rel);
       await kickPartFetch(part, signal);
     }
 
@@ -523,27 +558,54 @@ export async function installQortinoModel(options: {
     );
     await savePart(
       part,
+      rel,
       (received) => report('save', index, received, part.sizeBytes),
       signal
     );
 
     report('verify', index, 0, part.sizeBytes);
     if (
-      !(await partMatches(part, (read) =>
+      !(await partMatches(part, rel, (read) =>
         report('verify', index, read, part.sizeBytes)
       ))
     ) {
-      // Drop the bad copy so the next attempt downloads it again.
-      await QortinoLlm.cleanupStorage({
-        keep: model.parts
-          .filter((other) => other.filename !== part.filename)
-          .map(modelPartRelativePath),
-      }).catch(() => undefined);
+      await options.dropDamagedPart(part).catch(() => undefined);
       throw new QortinoInstallError('checksum', part.filename);
     }
+    verified?.add(rel);
   }
   // Cancelled while the last part was being checked.
   if (signal?.aborted) throw new QortinoInstallError('cancelled');
+}
+
+/**
+ * Download, verify and record the model. Parts already on this computer with
+ * the right checksum (a retry after a failed second part) are kept.
+ */
+export async function installQortinoModel(options: {
+  onProgress?: (progress: DownloadProgress) => void;
+  signal?: AbortSignal;
+  model?: QortinoModelSpec;
+}): Promise<QortinoInstallState> {
+  const { onProgress, signal } = options;
+  const model = options.model ?? QORTINO_MODEL;
+  if (!isQortinoLlmNativeAvailable()) {
+    throw new QortinoInstallError('download', 'desktop app required');
+  }
+  const partCount = model.parts.length;
+  const report = progressReporter(model, onProgress);
+
+  await downloadModelParts(model, {
+    onProgress,
+    signal,
+    // Drop the bad copy so the next attempt downloads it again.
+    dropDamagedPart: (part) =>
+      QortinoLlm.cleanupStorage({
+        keep: model.parts
+          .filter((other) => other.filename !== part.filename)
+          .map(modelPartRelativePath),
+      }),
+  });
 
   report('finalizing', partCount, 0, 0);
   // The model is whole: the other layout's leftovers can go.
@@ -559,4 +621,38 @@ export async function installQortinoModel(options: {
   await clearLegacyInstall();
   report('done', partCount, 1, 1);
   return state;
+}
+
+/**
+ * Download one of the QDN_OTHER_MODELS into its own folder, part by part,
+ * with the same checks as Qortino's own model. A damaged part is deleted on
+ * its own: nothing else in Qortino's folder is touched. The node is asked
+ * for one part ahead rather than all of them, so a download stopped half way
+ * leaves it little to fetch for nothing. Resolves with the first part's
+ * path, which the model is loaded from.
+ */
+export async function downloadQdnModel(
+  model: QortinoModelSpec,
+  options: {
+    onProgress?: (progress: DownloadProgress) => void;
+    signal?: AbortSignal;
+    /** Parts an earlier try of this download already checked. */
+    verified?: Set<string>;
+  }
+): Promise<{ path: string }> {
+  if (!isQortinoLlmNativeAvailable()) {
+    throw new QortinoInstallError('download', 'desktop app required');
+  }
+  await downloadModelParts(model, {
+    ...options,
+    fetchAhead: 1,
+    dropDamagedPart: (part) =>
+      QortinoLlm.removeOtherModel({ relativePath: modelPartPath(model, part) }),
+  });
+  const { rootDir } = await QortinoLlm.getStoragePaths();
+  const partCount = model.parts.length;
+  progressReporter(model, options.onProgress)('done', partCount, 1, 1);
+  return {
+    path: `${rootDir.replace(/[\\/]$/, '')}/${modelPartPath(model, model.parts[0])}`,
+  };
 }
