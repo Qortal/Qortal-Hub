@@ -36,7 +36,7 @@ import {
 
 /** Accessible name (the tooltip), the name shown, the detail shown. */
 const TOOLS = [
-  ['User Search', 'User Search', 'Find a name or address'],
+  ['Explorer', 'Explorer', 'Find a name or address'],
   ['Wallets', 'Wallets', 'QORT and other coins'],
   ['Apps', 'Apps', 'Browse and open Q-Apps'],
   ['Q-Chat', 'Q-Chat', 'Messages and groups'],

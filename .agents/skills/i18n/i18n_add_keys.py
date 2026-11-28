@@ -41,7 +41,7 @@ def _find_repo_root(start: Path) -> Path:
 REPO_ROOT = _find_repo_root(Path(__file__).resolve().parent)
 LOCALES = REPO_ROOT / 'src' / 'i18n' / 'locales'
 LANGS = ['ar', 'de', 'en', 'es', 'et', 'fi', 'fr', 'it', 'ja', 'pt', 'ru', 'zh']
-NAMESPACES = ['auth', 'core', 'group', 'node', 'question', 'reticulum']
+NAMESPACES = ['auth', 'core', 'explorer', 'group', 'node', 'question', 'reticulum']
 
 
 def sort_node(node):
