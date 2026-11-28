@@ -209,7 +209,15 @@ beforeEach(() => {
   );
 });
 
-afterEach(() => {
+// AppsDesktop updates the top bar 100 ms after a tab changes. That update
+// has to come while the page is still there, not after the file is done.
+const LATE_TOP_BAR_UPDATE_MS = 100;
+
+afterEach(async () => {
+  // Timers fire in order, so this one comes after any late update.
+  await new Promise((resolve) =>
+    setTimeout(resolve, LATE_TOP_BAR_UPDATE_MS + 100)
+  );
   vi.unstubAllGlobals();
 });
 
