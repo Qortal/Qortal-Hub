@@ -58,6 +58,10 @@ import qortinoHeadUrl from '../../assets/svgs/QortinoHead.svg';
 import { isQortinoLlmNativeAvailable } from '../../qortinoAgent/qortinoLlm';
 import { toggleQortinoAgentSheet } from '../../qortinoAgent/qortinoSheetNav';
 import { CoreSyncStatus } from '../CoreSyncStatus';
+import {
+  nodeManagerOpenAtom,
+  openNodeManager,
+} from '../NodeManager/nodeManagerEvents';
 import LanguageSelector from '../Language/LanguageSelector';
 import ThemeSelector from '../Theme/ThemeSelector';
 
@@ -318,8 +322,9 @@ export const DesktopSideBar = ({
   const setIsNewTabWindow = useSetAtom(isNewTabWindowAtom);
   const hasUnreadGroups = useAtomValue(hasUnreadGroupsAtom);
   const theme = useTheme();
-  const { t } = useTranslation(['core']);
+  const { t } = useTranslation(['core', 'node']);
   const nodeState = useNodeState();
+  const isNodeManagerOpen = useAtomValue(nodeManagerOpenAtom);
   const address = useAtomValue(userInfoAtom)?.address;
   const [panel, updatePanel] = useSidePanelSettings(address);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -744,12 +749,26 @@ export const DesktopSideBar = ({
             key="info"
             onClose={() => setIsInfoActive(false)}
             onOpen={() => setIsInfoActive(true)}
+            // Never over the Node Manager itself.
+            open={isInfoActive && !isNodeManagerOpen}
             placement="right"
             slotProps={{ tooltip: { sx: coreInfoSurfaceSx(theme) } }}
-            title={<CoreSyncStatus panelOnly />}
+            title={
+              <CoreSyncStatus
+                onOpenNodeManager={() => runSidebarAction(openNodeManager)}
+                panelOnly
+              />
+            }
           >
             <Box>
-              <SidebarItem isInfo label="Info">
+              <SidebarItem
+                isInfo
+                label={t('node:manager.side_panel_label', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+                // The Node Manager; the node's information shows on hover.
+                onClick={() => runSidebarAction(openNodeManager)}
+              >
                 {/* Always mounted: it keeps the P2P health others read. */}
                 <CoreSyncStatus
                   iconOnly

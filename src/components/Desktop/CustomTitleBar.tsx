@@ -13,6 +13,7 @@ import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { useTheme } from '@mui/material/styles';
+import { useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import CloseIcon from '@mui/icons-material/Close';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -25,6 +26,10 @@ import { WalletIcon } from '../../assets/Icons/WalletIcon';
 import { coreInfoSurfaceSx } from './coreInfoSurface';
 import { NodeStateLogo } from './NodeStateLogo';
 import { useNodeState } from './nodeState';
+import {
+  nodeManagerOpenAtom,
+  openNodeManager,
+} from '../NodeManager/nodeManagerEvents';
 
 // Loaded when first opened: the title bar stays light.
 const CoreSyncStatus = lazy(() =>
@@ -143,14 +148,20 @@ export function CustomTitleBar(props?: {
 }) {
   const { appsBar, rightNav } = props ?? {};
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group', 'node']);
   const isElectron = useIsElectron();
   const platform = usePlatform();
   const [isMaximized, setIsMaximized] = useState(false);
   const nodeState = useNodeState();
-  // Signed in, in the main window: the title shows the node's information.
+  const isNodeManagerOpen = useAtomValue(nodeManagerOpenAtom);
+  // Signed in, in the main window: the title shows the node's information
+  // on hover, and opens the Node Manager.
   const canShowNodeInfo = !!rightNav;
   const [isNodeInfoOpen, setIsNodeInfoOpen] = useState(false);
+  const openNodeManagerFromTitle = useCallback(() => {
+    setIsNodeInfoOpen(false);
+    openNodeManager();
+  }, []);
   // The information loads the first time it opens: it's placed again then.
   const nodeInfoPopper = useRef<{ update: () => unknown } | null>(null);
   const placeNodeInfo = useCallback(() => {
@@ -423,17 +434,19 @@ export function CustomTitleBar(props?: {
     </>
   );
 
-  // The title, clickable for the node's information once signed in. It
-  // sits in the middle, or on the left when the apps bar takes the middle.
+  // The title, once signed in: the node's information on hover, the Node
+  // Manager on a click. It sits in the middle, or on the left when the apps
+  // bar takes the middle.
   const titleBadge = canShowNodeInfo ? (
     <Tooltip
-      // On hover, at once; a click or the keyboard opens it too.
+      // On hover, at once.
       enterDelay={0}
       enterNextDelay={0}
       leaveDelay={120}
       onClose={() => setIsNodeInfoOpen(false)}
       onOpen={() => setIsNodeInfoOpen(true)}
-      open={isNodeInfoOpen}
+      // Never over the Node Manager itself.
+      open={isNodeInfoOpen && !isNodeManagerOpen}
       placement="bottom"
       slotProps={{
         popper: { popperRef: nodeInfoPopper as never },
@@ -442,17 +455,20 @@ export function CustomTitleBar(props?: {
       title={
         // The same information as the side panel's logo on hover.
         <Suspense fallback={null}>
-          <CoreSyncStatus panelOnly />
+          <CoreSyncStatus
+            onOpenNodeManager={openNodeManagerFromTitle}
+            panelOnly
+          />
           <WhenShown onMount={placeNodeInfo} />
         </Suspense>
       }
     >
       <ButtonBase
-        aria-expanded={isNodeInfoOpen}
-        aria-label={t('core:core.information', {
+        aria-haspopup="dialog"
+        aria-label={t('node:manager.open', {
           postProcess: 'capitalizeFirstChar',
         })}
-        onClick={() => setIsNodeInfoOpen(true)}
+        onClick={openNodeManagerFromTitle}
         // A double click here isn't the title bar's maximize.
         onDoubleClick={(event) => event.stopPropagation()}
         sx={{
