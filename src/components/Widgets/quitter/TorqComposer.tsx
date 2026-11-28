@@ -65,6 +65,9 @@ type PublishPhase = 'idle' | 'preparing' | 'submitted';
 
 const IMAGE_TYPES = 'image/jpeg,image/png,image/webp';
 
+/** How often a composer hidden with Home looks whether it's still there. */
+const GONE_CHECK_MS = 5_000;
+
 const isCancelError = (err: unknown) =>
   err instanceof QuitterPublishCancelledError ||
   (err as Error | null)?.name === 'QuitterPublishCancelledError';
@@ -137,6 +140,14 @@ export const TorqComposer = ({
     if (node) elementRef.current = node;
   }, []);
   const isGone = () => elementRef.current?.isConnected === false;
+  const freePreviews = () =>
+    imagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+  const goneCheckRef = useRef<number | null>(null);
+  const stopGoneCheck = () => {
+    if (goneCheckRef.current === null) return;
+    window.clearInterval(goneCheckRef.current);
+    goneCheckRef.current = null;
+  };
 
   // Home stays mounted in <Activity>: leaving it runs this cleanup too, and
   // keeps the composer as it was. A post with the approval dialog or on its
@@ -144,8 +155,12 @@ export const TorqComposer = ({
   // still being prepared stops, as Cancel stops it, and says so: its dialog
   // would open over another app's tab. The draft stays; its previews are
   // freed once the composer is gone (another account, the window removed).
-  useEffect(
-    () => () => {
+  // Removed while hidden (signed out, another account), it gets no second
+  // cleanup, so a hidden composer holding photos looks now and then whether
+  // it's still in the page, until Home is back.
+  useEffect(() => {
+    stopGoneCheck();
+    return () => {
       if (phaseRef.current === 'preparing') {
         abortRef.current?.abort();
         abortRef.current = null;
@@ -153,13 +168,18 @@ export const TorqComposer = ({
         setProgress(null);
         setError(tcRef.current('error.not_posted_left_home'));
       }
-      if (!isGone()) return;
-      imagesRef.current.forEach((image) =>
-        URL.revokeObjectURL(image.previewUrl)
-      );
-    },
-    []
-  );
+      if (isGone()) {
+        freePreviews();
+        return;
+      }
+      if (!imagesRef.current.length) return;
+      goneCheckRef.current = window.setInterval(() => {
+        if (!isGone()) return;
+        stopGoneCheck();
+        freePreviews();
+      }, GONE_CHECK_MS);
+    };
+  }, []);
 
   const body = useMemo(() => torqDocToPostBody(doc), [doc]);
   const normalizedPoll = useMemo(
