@@ -1,5 +1,11 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Box, ClickAwayListener, Popper, Typography, useTheme } from '@mui/material';
+import {
+  Box,
+  ClickAwayListener,
+  Popper,
+  Typography,
+  useTheme,
+} from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import AccountBalanceWalletRoundedIcon from '@mui/icons-material/AccountBalanceWalletRounded';
 import BoltRoundedIcon from '@mui/icons-material/BoltRounded';
@@ -156,11 +162,18 @@ export const GroupScoreBadge = ({
           border: circle ? 0 : `0.75px solid ${alpha(color, 0.78)}`,
           borderRadius: circle ? '50%' : compact ? '6px' : '999px',
           boxShadow: circle ? `0 2px 7px ${alpha(color, 0.34)}` : 'none',
-          color: circle && score.score >= 45 && score.score <= 64 ? '#17120a' : circle ? '#ffffff' : color,
+          color:
+            circle && score.score >= 45 && score.score <= 64
+              ? '#17120a'
+              : circle
+                ? '#ffffff'
+                : color,
           cursor: 'pointer',
           display: 'inline-flex',
           flexShrink: 0,
-          fontSize: circle ? Math.max(11, Math.round(circleSize * 0.39)) : undefined,
+          fontSize: circle
+            ? Math.max(11, Math.round(circleSize * 0.39))
+            : undefined,
           fontWeight: circle ? 800 : undefined,
           height: badgeHeight,
           justifyContent: circle ? 'center' : undefined,
@@ -168,11 +181,14 @@ export const GroupScoreBadge = ({
           overflow: 'hidden',
           p: 0,
           textAlign: 'left',
-          transition: 'background-color 140ms ease, box-shadow 140ms ease, transform 140ms ease',
+          transition:
+            'background-color 140ms ease, box-shadow 140ms ease, transform 140ms ease',
           width: circle ? circleSize : menu ? '100%' : undefined,
           '&:focus-visible, &:hover': {
             backgroundColor: circle ? color : alpha(color, 0.08),
-            boxShadow: circle ? `0 0 0 2px ${alpha(color, 0.2)}, 0 3px 9px ${alpha(color, 0.38)}` : `0 0 0 2px ${alpha(color, 0.1)}`,
+            boxShadow: circle
+              ? `0 0 0 2px ${alpha(color, 0.2)}, 0 3px 9px ${alpha(color, 0.38)}`
+              : `0 0 0 2px ${alpha(color, 0.1)}`,
             outline: 'none',
             transform: circle ? 'scale(1.05)' : 'none',
           },
@@ -182,13 +198,59 @@ export const GroupScoreBadge = ({
           score.score
         ) : (
           <>
-            <Box sx={{ alignItems: 'center', boxSizing: 'border-box', display: 'flex', height: '100%', justifyContent: menu ? 'flex-start' : 'center', minWidth: menu ? 38 : undefined, pl: menu ? 0.85 : compact ? 0.8 : 1, pr: menu ? 0 : compact ? 0.65 : 0.85 }}>
-              <StarRoundedIcon sx={{ fontSize: menu ? 20 : compact ? 14 : 16 }} />
+            <Box
+              sx={{
+                alignItems: 'center',
+                boxSizing: 'border-box',
+                display: 'flex',
+                height: '100%',
+                justifyContent: menu ? 'flex-start' : 'center',
+                minWidth: menu ? 38 : undefined,
+                pl: menu ? 0.85 : compact ? 0.8 : 1,
+                pr: menu ? 0 : compact ? 0.65 : 0.85,
+              }}
+            >
+              <StarRoundedIcon
+                sx={{ fontSize: menu ? 20 : compact ? 14 : 16 }}
+              />
             </Box>
-            <Typography noWrap sx={{ alignItems: 'center', color: 'text.primary', display: 'flex', flex: 1, fontSize: menu ? 14 : compact ? 11.5 : 13, fontWeight: menu ? 600 : 500, height: '100%', lineHeight: 1, pl: menu ? 0 : 0.15, pr: compact ? 0.85 : 1.1 }}>
+            <Typography
+              noWrap
+              sx={{
+                alignItems: 'center',
+                color: 'text.primary',
+                display: 'flex',
+                flex: 1,
+                fontSize: menu ? 14 : compact ? 11.5 : 13,
+                fontWeight: menu ? 600 : 500,
+                height: '100%',
+                lineHeight: 1,
+                pl: menu ? 0 : 0.15,
+                pr: compact ? 0.85 : 1.1,
+              }}
+            >
               Group Score
             </Typography>
-            <Box sx={{ alignItems: 'center', backgroundColor: alpha(color, 0.82), borderLeft: `0.75px solid ${alpha(color, 0.72)}`, borderRadius: compact ? '0 5px 5px 0' : '0 999px 999px 0', color: score.score >= 45 && score.score <= 64 ? '#17120a' : '#071018', display: 'flex', fontSize: menu ? 14 : compact ? 13 : 15, fontWeight: 750, height: '100%', justifyContent: 'center', lineHeight: 1, minWidth: menu ? 43 : compact ? 34 : 41, px: 0.7 }}>
+            <Box
+              sx={{
+                alignItems: 'center',
+                backgroundColor: alpha(color, 0.82),
+                borderLeft: `0.75px solid ${alpha(color, 0.72)}`,
+                borderRadius: compact ? '0 5px 5px 0' : '0 999px 999px 0',
+                color:
+                  score.score >= 45 && score.score <= 64
+                    ? '#17120a'
+                    : '#071018',
+                display: 'flex',
+                fontSize: menu ? 14 : compact ? 13 : 15,
+                fontWeight: 750,
+                height: '100%',
+                justifyContent: 'center',
+                lineHeight: 1,
+                minWidth: menu ? 43 : compact ? 34 : 41,
+                px: 0.7,
+              }}
+            >
               {score.score}
             </Box>
           </>
@@ -208,12 +270,13 @@ export const GroupScoreBadge = ({
         sx={{
           visibility: popoverPositioned ? 'visible' : 'hidden',
           zIndex: 1800,
-          '&[data-popper-placement*="top"] .reticulum-group-score-popover::before': {
-            borderBottom: 0,
-            borderTop: `7px solid ${alpha(color, 0.82)}`,
-            bottom: -7,
-            top: 'auto',
-          },
+          '&[data-popper-placement*="top"] .reticulum-group-score-popover::before':
+            {
+              borderBottom: 0,
+              borderTop: `7px solid ${alpha(color, 0.82)}`,
+              bottom: -7,
+              top: 'auto',
+            },
         }}
       >
         <ClickAwayListener onClickAway={closePopover}>
@@ -245,41 +308,112 @@ export const GroupScoreBadge = ({
                 left: popoverAlign === 'center' ? '50%' : 22,
                 position: 'absolute',
                 top: -7,
-                transform: popoverAlign === 'center' ? 'translateX(-50%)' : 'none',
+                transform:
+                  popoverAlign === 'center' ? 'translateX(-50%)' : 'none',
               },
             }}
             tabIndex={-1}
           >
-            <Typography sx={{ color, fontSize: 10, fontWeight: 700, letterSpacing: '0.13em', textAlign: 'center' }}>
+            <Typography
+              sx={{
+                color,
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.13em',
+                textAlign: 'center',
+              }}
+            >
               GROUP SCORE {score.score}/100
             </Typography>
-            <Typography sx={{ color: 'text.secondary', fontSize: 11, mt: 0.45, textAlign: 'center' }}>
+            <Typography
+              sx={{
+                color: 'text.secondary',
+                fontSize: 11,
+                mt: 0.45,
+                textAlign: 'center',
+              }}
+            >
               Four public-group signals combined
               <br />
               into one score
             </Typography>
-            <Box sx={{ borderTop: `1px solid ${theme.palette.divider}`, mt: 1.35 }} />
+            <Box
+              sx={{ borderTop: `1px solid ${theme.palette.divider}`, mt: 1.35 }}
+            />
             {rows.map((row) => (
-              <Box key={row.label} sx={{ alignItems: 'center', borderBottom: `1px solid ${theme.palette.divider}`, display: 'grid', gap: 1, gridTemplateColumns: '23px minmax(0,1fr) auto', py: 1.05 }}>
+              <Box
+                key={row.label}
+                sx={{
+                  alignItems: 'center',
+                  borderBottom: `1px solid ${theme.palette.divider}`,
+                  display: 'grid',
+                  gap: 1,
+                  gridTemplateColumns: '23px minmax(0,1fr) auto',
+                  py: 1.05,
+                }}
+              >
                 <Box sx={{ color: 'text.secondary' }}>{row.icon}</Box>
                 <Box sx={{ minWidth: 0 }}>
-                  <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>{row.label} · {row.weight}</Typography>
-                  <Typography noWrap sx={{ color: 'text.secondary', fontSize: 10.5, mt: 0.2 }}>{row.detail}</Typography>
+                  <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>
+                    {row.label} · {row.weight}
+                  </Typography>
+                  <Typography
+                    noWrap
+                    sx={{ color: 'text.secondary', fontSize: 10.5, mt: 0.2 }}
+                  >
+                    {row.detail}
+                  </Typography>
                 </Box>
                 <Box sx={{ textAlign: 'right' }}>
-                  <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>{Math.round(row.score)}/100</Typography>
-                  <Typography sx={{ color: 'text.secondary', fontSize: 10 }}>+{row.points} pts</Typography>
+                  <Typography sx={{ fontSize: 12.5, fontWeight: 700 }}>
+                    {Math.round(row.score)}/100
+                  </Typography>
+                  <Typography sx={{ color: 'text.secondary', fontSize: 10 }}>
+                    +{row.points} pts
+                  </Typography>
                 </Box>
               </Box>
             ))}
-            <Typography sx={{ fontSize: 12, fontWeight: 650, mt: 1.15, textAlign: 'center' }}>
+            <Typography
+              sx={{
+                fontSize: 12,
+                fontWeight: 650,
+                mt: 1.15,
+                textAlign: 'center',
+              }}
+            >
               Weighted total = {score.score}/100
             </Typography>
             <Box sx={{ display: 'flex', gap: 0.55, mt: 1.35 }}>
               {SCORE_BANDS.map((band, index) => (
-                <Box key={band.label} sx={{ flex: index === 3 ? 1.5 : 1, minWidth: 0 }}>
-                  <Box sx={{ backgroundColor: band.color, borderRadius: 1, boxShadow: index === activeBandIndex ? `0 0 0 2px ${alpha(band.color, 0.45)}` : 'none', height: 7 }} />
-                  <Typography sx={{ color: index === activeBandIndex ? band.color : 'text.secondary', fontSize: 8.5, mt: 0.45, textAlign: 'center' }}>{band.label}</Typography>
+                <Box
+                  key={band.label}
+                  sx={{ flex: index === 3 ? 1.5 : 1, minWidth: 0 }}
+                >
+                  <Box
+                    sx={{
+                      backgroundColor: band.color,
+                      borderRadius: 1,
+                      boxShadow:
+                        index === activeBandIndex
+                          ? `0 0 0 2px ${alpha(band.color, 0.45)}`
+                          : 'none',
+                      height: 7,
+                    }}
+                  />
+                  <Typography
+                    sx={{
+                      color:
+                        index === activeBandIndex
+                          ? band.color
+                          : 'text.secondary',
+                      fontSize: 8.5,
+                      mt: 0.45,
+                      textAlign: 'center',
+                    }}
+                  >
+                    {band.label}
+                  </Typography>
                 </Box>
               ))}
             </Box>

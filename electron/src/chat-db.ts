@@ -72,7 +72,8 @@ function rowToEvent(r: EventRow): ChatEvent {
       // Malformed JSON — skip gracefully
     }
   }
-  if (r.attachment_data_hash != null) ev.attachmentDataHash = r.attachment_data_hash;
+  if (r.attachment_data_hash != null)
+    ev.attachmentDataHash = r.attachment_data_hash;
   // attachmentData is intentionally NOT populated from history rows —
   // it lives in the chat_attachments table and is fetched on demand.
   return ev;
@@ -341,14 +342,18 @@ export class ChatDatabase {
 
   private runMigrations(): void {
     const existingCols = (
-      this.db.prepare('PRAGMA table_info(chat_events)').all() as { name: string }[]
+      this.db.prepare('PRAGMA table_info(chat_events)').all() as {
+        name: string;
+      }[]
     ).map((r) => r.name);
 
     if (!existingCols.includes('attachment_meta')) {
       this.db.exec('ALTER TABLE chat_events ADD COLUMN attachment_meta TEXT');
     }
     if (!existingCols.includes('attachment_data_hash')) {
-      this.db.exec('ALTER TABLE chat_events ADD COLUMN attachment_data_hash TEXT');
+      this.db.exec(
+        'ALTER TABLE chat_events ADD COLUMN attachment_data_hash TEXT'
+      );
     }
   }
 
@@ -451,7 +456,9 @@ export class ChatDatabase {
       reply_to: event.replyTo ?? null,
       target_id: event.targetId ?? null,
       signature: event.signature,
-      attachment_meta: event.attachmentMeta ? JSON.stringify(event.attachmentMeta) : null,
+      attachment_meta: event.attachmentMeta
+        ? JSON.stringify(event.attachmentMeta)
+        : null,
       attachment_data_hash: event.attachmentDataHash ?? null,
     };
 
@@ -462,7 +469,11 @@ export class ChatDatabase {
       if (info.changes > 0) {
         // Store attachment blob in the separate table if present.
         if (event.attachmentData) {
-          this.stmtInsertAttachment.run(event.id, event.chatId, event.attachmentData);
+          this.stmtInsertAttachment.run(
+            event.id,
+            event.chatId,
+            event.attachmentData
+          );
         }
         const { cnt } = this.stmtCountForChat.get(event.chatId) as {
           cnt: number;
@@ -478,7 +489,11 @@ export class ChatDatabase {
     });
 
     insertAndTrim();
-    this.updateSyncStateIncremental(event.chatId, event.authorAddress, event.seq);
+    this.updateSyncStateIncremental(
+      event.chatId,
+      event.authorAddress,
+      event.seq
+    );
     return true;
   }
 
@@ -513,14 +528,24 @@ export class ChatDatabase {
           reply_to: event.replyTo ?? null,
           target_id: event.targetId ?? null,
           signature: event.signature,
-          attachment_meta: event.attachmentMeta ? JSON.stringify(event.attachmentMeta) : null,
+          attachment_meta: event.attachmentMeta
+            ? JSON.stringify(event.attachmentMeta)
+            : null,
           attachment_data_hash: event.attachmentDataHash ?? null,
         };
         this.stmtInsert.run(row); // idempotent INSERT OR IGNORE
         if (event.attachmentData) {
-          this.stmtInsertAttachment.run(event.id, event.chatId, event.attachmentData);
+          this.stmtInsertAttachment.run(
+            event.id,
+            event.chatId,
+            event.attachmentData
+          );
         }
-        this.updateSyncStateIncremental(event.chatId, event.authorAddress, event.seq);
+        this.updateSyncStateIncremental(
+          event.chatId,
+          event.authorAddress,
+          event.seq
+        );
       }
       // Trim all affected chats once at the end
       const affectedChats = new Set(newEvents.map((e) => e.chatId));
@@ -546,7 +571,11 @@ export class ChatDatabase {
   getEvents(chatId: string, limit = 50, beforeTimestamp?: number): ChatEvent[] {
     const rows =
       beforeTimestamp != null
-        ? (this.stmtGetEventsBefore.all(chatId, beforeTimestamp, limit) as EventRow[])
+        ? (this.stmtGetEventsBefore.all(
+            chatId,
+            beforeTimestamp,
+            limit
+          ) as EventRow[])
         : (this.stmtGetEvents.all(chatId, limit) as EventRow[]);
     return rows.map(rowToEvent);
   }
@@ -693,9 +722,7 @@ export class ChatDatabase {
    *
    * Uses idx_read_receipts_event for an O(k log n) lookup.
    */
-  getReadReceiptsForEvents(
-    eventIds: string[]
-  ): Record<string, string[]> {
+  getReadReceiptsForEvents(eventIds: string[]): Record<string, string[]> {
     if (eventIds.length === 0) return {};
     const rows = this.getReceiptLookupStatement(eventIds.length).all(
       ...eventIds
@@ -715,10 +742,9 @@ export class ChatDatabase {
    * envelope for events they authored that we've already seen.
    */
   getReadReceiptsByReader(chatId: string, readerAddress: string): string[] {
-    const rows = this.stmtGetReceiptsByReader.all(
-      chatId,
-      readerAddress
-    ) as { event_id: string }[];
+    const rows = this.stmtGetReceiptsByReader.all(chatId, readerAddress) as {
+      event_id: string;
+    }[];
     return rows.map((r) => r.event_id);
   }
 
@@ -746,7 +772,9 @@ export class ChatDatabase {
    * or the blob was never received).
    */
   getAttachment(eventId: string): string | null {
-    const row = this.stmtGetAttachment.get(eventId) as { data: string } | undefined;
+    const row = this.stmtGetAttachment.get(eventId) as
+      | { data: string }
+      | undefined;
     return row?.data ?? null;
   }
 
@@ -816,7 +844,9 @@ export class ChatDatabase {
     let stmt = this.receiptLookupStatements.get(eventCount);
     if (stmt) return stmt;
 
-    const placeholders = Array.from({ length: eventCount }, () => '?').join(', ');
+    const placeholders = Array.from({ length: eventCount }, () => '?').join(
+      ', '
+    );
     stmt = this.db.prepare(
       `SELECT event_id, reader_address FROM read_receipts WHERE event_id IN (${placeholders})`
     );
@@ -826,9 +856,9 @@ export class ChatDatabase {
 
   private refreshSeenEventIdsForChat(chatId: string): void {
     const retainedIds = new Set(
-      (
-        this.stmtLoadEventIdsForChat.all(chatId) as { id: string }[]
-      ).map((row) => row.id)
+      (this.stmtLoadEventIdsForChat.all(chatId) as { id: string }[]).map(
+        (row) => row.id
+      )
     );
 
     for (const [eventId, mappedChatId] of this.seenEventIdToChatId.entries()) {

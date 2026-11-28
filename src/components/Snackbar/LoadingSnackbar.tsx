@@ -2,7 +2,9 @@ import { useEffect, useRef } from 'react';
 import { executeEvent } from '../../utils/events';
 
 export const LoadingSnackbar = ({ open, info }) => {
-  const sourceIdRef = useRef(`loading-snackbar-${Math.random().toString(36).slice(2)}`);
+  const sourceIdRef = useRef(
+    `loading-snackbar-${Math.random().toString(36).slice(2)}`
+  );
   const lastMessageRef = useRef<string | null>(null);
 
   useEffect(() => {

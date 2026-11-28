@@ -42,6 +42,7 @@
     "error": {
       "add_to_list": "échec de l'ajout à la liste",
       "app_fee_not_sent": "la publication a réussi, mais les frais de l'application n'ont pas été envoyés : {{ error }}",
+      "app_fee_outcome_unknown": "la publication a réussi, mais Hub n'a pas pu déterminer si les frais de l'application ont été payés. Vérifiez-le dans vos transactions.",
       "at_info": "impossible de trouver les informations AT.",
       "buy_order": "échec de l'envoi de l'ordre d'achat",
       "cancel_sell_order": "échec de l'annulation de l'ordre de vente. Veuillez réessayer !",
@@ -104,6 +105,7 @@
       "node_info": "échec de la récupération des infos du nœud",
       "node_status": "échec de la récupération de l'état du nœud",
       "only_encrypted_data": "seules les données chiffrées peuvent être utilisées dans des services privés",
+      "payment_outcome_unknown": "Hub n'a pas pu déterminer si ce paiement a abouti. Vérifiez vos transactions avant de réessayer.",
       "payments_partially_sent": "paiements effectués avant cette erreur : {{ sent }} sur {{ total }}. Vérifiez vos transactions avant de réessayer. {{ error }}",
       "perform_request": "échec de l'exécution de la requête",
       "poll_create": "échec de la création du sondage",

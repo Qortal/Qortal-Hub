@@ -21,6 +21,16 @@
     "sign_failed": "Не удалось подписать событие чата Reticulum",
     "welcome_failed": "Не удалось опубликовать приветствие Reticulum"
   },
+  "context_menu": {
+    "clipboard_permission_denied": "Невозможно получить доступ к буферу обмена",
+    "copy": "Копировать",
+    "copy_shortcut": "Копировать\tCtrl+C",
+    "cut": "Вырезать",
+    "cut_shortcut": "Вырезать\tCtrl+X",
+    "no_suggestions": "Нет предложений",
+    "paste": "Вставить",
+    "paste_shortcut": "Вставить\tCtrl+V"
+  },
   "copy_invite_link": "скопировать ссылку-приглашение",
   "discussion": {
     "choose_emoji": "choose emoji",
@@ -118,6 +128,13 @@
     "enter_qortal_land": "Войти в Qortal Land",
     "return_to_chat": "Вернуться в чат"
   },
+  "notification": {
+    "mention_special_in_group": "{{sender}} упомянул {{target}} в {{groupName}}",
+    "mention_you_in_group": "{{sender}} упомянул вас в {{groupName}}",
+    "reply_you_in_group": "{{sender}} ответил вам в {{groupName}}",
+    "someone": "кто-то",
+    "welcome_joined": "{{name}} присоединился к группе {{groupName}}"
+  },
   "onboarding": {
     "find_communities": "Найти сообщества",
     "invite_error_invalid": "Это не похоже на действительную ссылку-приглашение в группу Qortal.",
@@ -203,15 +220,20 @@
     "nav": {
       "mentions": "Упоминания",
       "messages": "Сообщения",
+      "notifications": "Notifications",
       "text_size": "Размер текста",
       "threads": "Threads"
     },
     "notifications": {
+      "apply_button": "Apply to All Groups",
+      "delivery_ephemeral_tooltip": "Ephemeral notifications are gone forever after the preview disappears.",
+      "delivery_native_tooltip": "Push notifications go into your OS Notification Manager after the preview disappears.",
       "description": "Показывать упоминания из Reticulum Q-Chat на панели уведомлений Hub. Обычные непрочитанные сообщения не создают уведомлений Hub.",
       "mentions": {
         "description": "Уведомлять меня, когда кто-то упоминает меня в канале.",
         "label": "Уведомления об упоминаниях"
       },
+      "revert_button": "Revert to Defaults",
       "title": "Уведомления"
     },
     "text_size": {

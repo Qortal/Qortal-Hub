@@ -42,6 +42,7 @@
     "error": {
       "add_to_list": "failed to add to list",
       "app_fee_not_sent": "the publish went through, but the app fee was not sent: {{ error }}",
+      "app_fee_outcome_unknown": "the publish went through, but Hub couldn't tell whether the app fee was paid. Check your transactions to see whether it was.",
       "at_info": "cannot find AT info.",
       "buy_order": "failed to submit trade order",
       "cancel_sell_order": "failed to Cancel Sell Order. Try again!",
@@ -104,6 +105,7 @@
       "node_info": "failed to retrieve node info",
       "node_status": "failed to retrieve node status",
       "only_encrypted_data": "only encrypted data can go into private services",
+      "payment_outcome_unknown": "Hub couldn't tell whether this payment went through. Check your transactions before trying again.",
       "payments_partially_sent": "{{ sent }} of {{ total }} payments went through before this error. Check your transactions before trying again. {{ error }}",
       "perform_request": "failed to perform request",
       "poll_create": "failed to create poll",

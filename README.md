@@ -51,7 +51,7 @@ The app is also the home for newer network-facing features, including Reticulum-
 
 ## Need Help?
 
-If you hit a snag, join the community on [Discord](https://discord.com/invite/54UyhB7), join the Qortal private cloud chat (no registration required) - [Qortal Cloud Chat](https://cloud.qortal.org/call/iiip9ufk)   visit [qortal.dev](https://qortal.dev).
+If you hit a snag, join the community on [Discord](https://discord.com/invite/54UyhB7), join the Qortal private cloud chat (no registration required) - [Qortal Cloud Chat](https://cloud.qortal.org/call/iiip9ufk) visit [qortal.dev](https://qortal.dev).
 
 ## Development
 

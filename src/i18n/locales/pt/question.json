@@ -42,6 +42,7 @@
     "error": {
       "add_to_list": "falha ao adicionar à lista",
       "app_fee_not_sent": "a publicação foi concluída, mas a taxa do aplicativo não foi enviada: {{ error }}",
+      "app_fee_outcome_unknown": "a publicação foi concluída, mas o Hub não conseguiu determinar se a taxa do aplicativo foi paga. Confira nas suas transações.",
       "at_info": "não foi possível encontrar informações do AT.",
       "buy_order": "falha ao enviar ordem de troca",
       "cancel_sell_order": "falha ao cancelar a ordem de venda. Tente novamente!",
@@ -104,6 +105,7 @@
       "node_info": "falha ao recuperar informações do nó",
       "node_status": "falha ao recuperar status do nó",
       "only_encrypted_data": "somente dados criptografados podem ser usados em serviços privados",
+      "payment_outcome_unknown": "o Hub não conseguiu determinar se este pagamento foi concluído. Verifique suas transações antes de tentar novamente.",
       "payments_partially_sent": "pagamentos concluídos antes deste erro: {{ sent }} de {{ total }}. Verifique suas transações antes de tentar novamente. {{ error }}",
       "perform_request": "falha ao realizar a solicitação",
       "poll_create": "falha ao criar a enquete",

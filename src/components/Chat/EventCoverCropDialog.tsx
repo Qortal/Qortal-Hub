@@ -117,7 +117,6 @@ export function EventCoverCropDialog({ file, open, onApply, onClose }: Props) {
   useEffect(() => {
     setPosition((current) => clampPosition(current));
     // Position is deliberately excluded: this effect only responds to scale.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [naturalSize.height, naturalSize.width, zoom]);
 
   const apply = async () => {

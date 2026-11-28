@@ -165,7 +165,10 @@ export function ReceiveQortOverlay({
         <Box
           component={motion.button}
           type="button"
-          aria-label={td('close_receive_qort_modal', 'Close receive QORT modal')}
+          aria-label={td(
+            'close_receive_qort_modal',
+            'Close receive QORT modal'
+          )}
           initial={{
             opacity: 0,
             backdropFilter: 'blur(0px) brightness(1) saturate(1)',
@@ -270,7 +273,9 @@ export function ReceiveQortOverlay({
                 py: 1.45,
               }}
             >
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <Box
+                sx={{ display: 'flex', flexDirection: 'column', gap: '4px' }}
+              >
                 <Typography
                   sx={{
                     color: theme.palette.text.primary,
@@ -300,7 +305,10 @@ export function ReceiveQortOverlay({
                   height: 30,
                   width: 30,
                   '&:hover': {
-                    backgroundColor: alpha(theme.palette.common.white, isDarkMode ? 0.05 : 0.55),
+                    backgroundColor: alpha(
+                      theme.palette.common.white,
+                      isDarkMode ? 0.05 : 0.55
+                    ),
                     color: theme.palette.text.primary,
                   },
                 }}
@@ -365,7 +373,10 @@ export function ReceiveQortOverlay({
               >
                 <Typography
                   sx={{
-                    color: alpha(theme.palette.text.secondary, isDarkMode ? 0.9 : 0.82),
+                    color: alpha(
+                      theme.palette.text.secondary,
+                      isDarkMode ? 0.9 : 0.82
+                    ),
                     fontSize: '0.84rem',
                     fontWeight: 600,
                     letterSpacing: '-0.01em',
@@ -393,7 +404,9 @@ export function ReceiveQortOverlay({
                   startIcon={<ContentCopyIcon sx={{ fontSize: '0.95rem' }} />}
                   sx={{
                     backgroundColor: alpha(
-                      isDarkMode ? theme.palette.common.white : theme.palette.background.paper,
+                      isDarkMode
+                        ? theme.palette.common.white
+                        : theme.palette.background.paper,
                       isDarkMode ? 0.024 : 0.72
                     ),
                     borderColor: alpha(theme.palette.divider, 0.18),

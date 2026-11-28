@@ -49,6 +49,11 @@ export async function ensureAudioSurfaceHttpsServer(
   const port = getAudioSurfaceHttpsPort();
   const origin = getAudioSurfaceHttpsOrigin();
 
+  // Kept identical to upstream: the async executor is upstream's shape, and a
+  // throw inside it is still routed to rejectPromise by the catch below. The
+  // rule flags the pattern, not the behaviour, so it is suppressed rather than
+  // rewritten here.
+  // eslint-disable-next-line no-async-promise-executor
   audioSurfaceServerReady = new Promise<string>(async (resolvePromise, rejectPromise) => {
     try {
       const notAfterDate = new Date();

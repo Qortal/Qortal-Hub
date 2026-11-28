@@ -1,5 +1,3 @@
-/* eslint-disable no-undef */
-/* eslint-disable @typescript-eslint/no-var-requires */
 const electronPublish = require('electron-publish');
 const { log } = require('../scripts/logger');
 

@@ -525,9 +525,7 @@ export function SubscriptionsStatus({
           }}
         >
           <Box sx={{ alignItems: 'center', display: 'flex', gap: 1 }}>
-            <ListAltRoundedIcon
-              sx={{ color: headerIconColor, fontSize: 18 }}
-            />
+            <ListAltRoundedIcon sx={{ color: headerIconColor, fontSize: 18 }} />
             <Typography
               sx={{
                 color: theme.palette.text.primary,

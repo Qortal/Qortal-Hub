@@ -127,6 +127,23 @@ export const SIDE_PANEL_SETTINGS_CHANGE_EVENT = 'side-panel-settings-change';
 export const sidePanelStorageKey = (address: string) =>
   `side-panel-v1:${address}`;
 
+/**
+ * The account setting this panel replaces: "Show action drawer", in the
+ * account settings before the panel had a "show" of its own. Turned off, it
+ * kept the buttons beside the content — this panel's "always". Read once, as
+ * the panel's own setting takes over from the first change made here.
+ */
+const LEGACY_ACTION_DRAWER_KEY = 'qortal-hub-show-action-drawer';
+
+const legacyActionDrawerOff = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(LEGACY_ACTION_DRAWER_KEY) === 'false';
+  } catch {
+    return false;
+  }
+};
+
 export const isSidePanelQdnItem = (
   item: SidePanelItem
 ): item is SidePanelQdnItem => item.kind === 'qdn';
@@ -354,7 +371,15 @@ export const readSidePanel = (
   }
   try {
     const raw = window.localStorage.getItem(sidePanelStorageKey(address));
-    return normalizeSidePanel(raw === null ? null : JSON.parse(raw));
+    if (raw === null) {
+      // Nothing arranged here yet: carry over the account setting this panel
+      // replaces, so a panel that used to stay open still does.
+      const carriedOver = normalizeSidePanel(null);
+      return legacyActionDrawerOff()
+        ? { ...carriedOver, show: 'always' }
+        : carriedOver;
+    }
+    return normalizeSidePanel(JSON.parse(raw));
   } catch {
     return normalizeSidePanel(null);
   }

@@ -1,9 +1,5 @@
 import GroupsRoundedIcon from '@mui/icons-material/GroupsRounded';
-import {
-  Box,
-  Button,
-  Typography,
-} from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import qortalOfficialLogo from '../../assets/sidebar/qortal-logo-official.webp';
 import chatBubbleDots from '../../assets/qchat/caught-up-chat-dots.webp';
@@ -287,8 +283,7 @@ export function ReturningUserCaughtUpState({
             lineHeight: 1,
             px: '22px',
             textTransform: 'none',
-            transition:
-              'background-color 150ms ease, border-color 150ms ease',
+            transition: 'background-color 150ms ease, border-color 150ms ease',
             width: 'clamp(225px, 18vw, 250px)',
             '& .MuiButton-startIcon': {
               margin: 0,

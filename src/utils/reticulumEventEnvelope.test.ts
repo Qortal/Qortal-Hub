@@ -27,10 +27,7 @@ describe('Reticulum renderer event envelope', () => {
       expiresAt: 100,
     };
 
-    const merged = mergeReticulumPayloadWithVerifiedEnvelope(
-      payload,
-      envelope
-    );
+    const merged = mergeReticulumPayloadWithVerifiedEnvelope(payload, envelope);
     expect(merged).toMatchObject(envelope);
     expect(merged.decryptedData).toBe(payload);
   });

@@ -123,7 +123,6 @@ export const BoundedNumericTextField = ({
     setTextFieldValue(value);
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { onChange, ...noChangeProps } = { ...props };
   return (
     <CustomInput

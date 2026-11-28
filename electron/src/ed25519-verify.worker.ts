@@ -12,7 +12,9 @@ function loadVerifier(): typeof import('./ed25519-verify-common') {
   // inside app.asar. Load the packed helper module explicitly in that case.
   if (__dirname.includes('app.asar.unpacked')) {
     const packedDir = __dirname.replace('app.asar.unpacked', 'app.asar');
-    return require(path.join(packedDir, 'ed25519-verify-common.js')) as typeof import('./ed25519-verify-common');
+    return require(
+      path.join(packedDir, 'ed25519-verify-common.js')
+    ) as typeof import('./ed25519-verify-common');
   }
   return require('./ed25519-verify-common') as typeof import('./ed25519-verify-common');
 }

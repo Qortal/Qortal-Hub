@@ -57,10 +57,43 @@ const GROUP_ROW_HEIGHT = 82;
 const FIND_GROUPS_PAGE_SIZE = 10;
 const FIND_GROUPS_AVATAR_LIMIT = 20;
 
+/**
+ * Whether joining this group sends a JOIN transaction (open) or a join request
+ * (private).
+ *
+ * Normalised through `Number()`, the same way `GroupList` reads `groupType`. The
+ * strict `=== 0` here treated a string `'0'` from the node as private, so a
+ * public group rendered as private and recorded a join *request* instead of the
+ * join. An absent or unrecognised type is treated as closed on purpose: assuming
+ * open would send a JOIN the group may reject, taking a fee for nothing.
+ */
 export const isOpenGroup = (group) =>
   group?.isOpen === true ||
-  group?.groupType === 0 ||
+  Number(group?.groupType) === 0 ||
   group?.groupType === 'OPEN';
+
+/** The tx-list entry types that mean "a join for this group is in flight". */
+const PENDING_JOIN_TX_TYPES = ['joined-group', 'joined-group-request'];
+
+/**
+ * Whether a join for `groupId` is already in flight, from the tx list.
+ *
+ * Both types count. A private group writes `joined-group-request`, and matching
+ * only `joined-group` left the row looking un-joined: every further click signed
+ * and paid for another JOIN_GROUP.
+ */
+export const isPendingGroup = (txList, groupId) =>
+  (txList || []).some(
+    (tx) =>
+      PENDING_JOIN_TX_TYPES.includes(tx?.type) &&
+      tx?.done !== true &&
+      String(tx?.groupId) === String(groupId)
+  );
+
+export const isJoinedGroup = (memberGroups, groupId) =>
+  (memberGroups || []).some(
+    (group) => String(group?.groupId) === String(groupId)
+  );
 const formatMemberCount = (count) =>
   new Intl.NumberFormat().format(Math.max(0, Number(count) || 0));
 
@@ -88,8 +121,9 @@ export const AddGroupList = ({
   const [sortMode, setSortMode] = useState<
     'top' | 'active' | 'newest' | 'largest' | 'holdings'
   >('top');
-  const [showOpen, setShowOpen] = useState(false);
-  const [showPrivate, setShowPrivate] = useState(false);
+  const [accessFilter, setAccessFilter] = useState<'all' | 'open' | 'private'>(
+    'all'
+  );
   const [visibleCount, setVisibleCount] = useState(FIND_GROUPS_PAGE_SIZE);
   const [groupOwnerNames, setGroupOwnerNames] = useState({});
   const avatarOwnerLookupAttemptedRef = useRef<Set<string>>(new Set());
@@ -155,11 +189,8 @@ export const AddGroupList = ({
   // Derive filtered list from groups + search so refetches (e.g. when memberGroups updates) don't clear the filter
   const filteredItems = useMemo(() => {
     const query = (inputValue || '').trim().toLowerCase();
-    const publicOnlySort = sortMode === 'top' || sortMode === 'active';
     const scoreFor = (group) =>
-      isOpenGroup(group)
-        ? groupScoreSnapshot.groups[String(group?.groupId)]
-        : undefined;
+      groupScoreSnapshot.groups[String(group?.groupId)];
     const compareCreated = (a, b) =>
       Number(b?.created || 0) - Number(a?.created || 0);
     const compareMembers = (a, b) =>
@@ -197,11 +228,10 @@ export const AddGroupList = ({
           String(item?.description || '')
             .toLowerCase()
             .includes(query);
-        if (publicOnlySort && !isOpenGroup(item)) return false;
         const matchesAccess =
-          (!showOpen && !showPrivate) ||
-          (showOpen && isOpenGroup(item)) ||
-          (showPrivate && !isOpenGroup(item));
+          accessFilter === 'all' ||
+          (accessFilter === 'open' && isOpenGroup(item)) ||
+          (accessFilter === 'private' && !isOpenGroup(item));
         return matchesQuery && matchesAccess;
       })
       .sort((a, b) => {
@@ -247,7 +277,7 @@ export const AddGroupList = ({
           compareCreated(a, b)
         );
       });
-  }, [groups, inputValue, groupScoreSnapshot, showOpen, showPrivate, sortMode]);
+  }, [groups, inputValue, groupScoreSnapshot, accessFilter, sortMode]);
 
   const visibleItems = useMemo(
     () => filteredItems.slice(0, visibleCount),
@@ -269,7 +299,7 @@ export const AddGroupList = ({
   useEffect(() => {
     setVisibleCount(FIND_GROUPS_PAGE_SIZE);
     listRef.current?.scrollToRow?.(0);
-  }, [inputValue, showOpen, showPrivate, sortMode]);
+  }, [inputValue, accessFilter, sortMode]);
 
   // Load the first twenty directory avatars, then retain every additional avatar
   // the user discovers by searching or loading more results during this session.
@@ -303,12 +333,20 @@ export const AddGroupList = ({
         }
       })
     ).then((entries) => {
-      if (!cancelled) {
-        setGroupOwnerNames((previous) => ({
-          ...previous,
-          ...Object.fromEntries(entries),
-        }));
+      if (cancelled) {
+        // The attempt was recorded before the fetch, so a search that changed
+        // mid-flight left those ids marked as done while their results were
+        // thrown away: the group kept its placeholder avatar for the rest of the
+        // session. Unmark them so the next pass retries.
+        groupsToResolve.forEach((group) => {
+          avatarOwnerLookupAttemptedRef.current.delete(String(group?.groupId));
+        });
+        return;
       }
+      setGroupOwnerNames((previous) => ({
+        ...previous,
+        ...Object.fromEntries(entries),
+      }));
     });
     return () => {
       cancelled = true;
@@ -322,26 +360,15 @@ export const AddGroupList = ({
   const handleSortChange = (
     nextSortMode: 'top' | 'active' | 'newest' | 'largest' | 'holdings'
   ) => {
-    if (nextSortMode === 'top' || nextSortMode === 'active') {
-      setShowPrivate(false);
-    }
     setSortMode(nextSortMode);
   };
 
-  const isJoinedGroup = (groupId) =>
-    (memberGroups || []).some(
-      (group) => String(group?.groupId) === String(groupId)
-    );
-  const isPendingGroup = (groupId) =>
-    (txList || []).some(
-      (tx) =>
-        tx?.type === 'joined-group' &&
-        tx?.done !== true &&
-        String(tx?.groupId) === String(groupId)
-    );
-
   const getGroups = async () => {
-    setGroupsLoading(true);
+    // Only blank the list on the first load. This re-runs whenever membership
+    // changes (to refresh member counts after a join), and raising the spinner
+    // for a refetch unmounted the virtualized list, throwing away the user's
+    // scroll position and search result.
+    setGroupsLoading((previous) => previous || groups.length === 0);
     try {
       const response = await fetch(`${getBaseApiReact()}/groups/?limit=0`);
       const groupData = await response.json();
@@ -365,7 +392,7 @@ export const AddGroupList = ({
   };
 
   const handleGroupClick = (group) => {
-    if (isJoinedGroup(group?.groupId) && onJoinedGroupOpen) {
+    if (isJoinedGroup(memberGroups, group?.groupId) && onJoinedGroupOpen) {
       const joinedGroup = (memberGroups || []).find(
         (memberGroup) => String(memberGroup?.groupId) === String(group?.groupId)
       );
@@ -426,13 +453,21 @@ export const AddGroupList = ({
 
       const fee = await getFee('JOIN_GROUP');
 
-      await show({
-        message: t('core:message.question.perform_transaction', {
-          action: 'JOIN_GROUP',
-          postProcess: 'capitalizeFirstChar',
-        }),
-        publishFee: fee.fee + ' QORT',
-      });
+      // `cancelIfReplaced` answers this confirmation as cancelled if another
+      // `show()` takes its place (a group link, a Q-App request). Without it the
+      // replaced promise is never settled, this `await` never returns, the
+      // `finally` never runs, and `joiningGroupIdRef` wedges every join button
+      // until the page is reloaded.
+      await show(
+        {
+          message: t('core:message.question.perform_transaction', {
+            action: 'JOIN_GROUP',
+            postProcess: 'capitalizeFirstChar',
+          }),
+          publishFee: fee.fee + ' QORT',
+        },
+        { cancelIfReplaced: true }
+      );
       setIsLoading(true);
 
       await new Promise((res, rej) => {
@@ -440,8 +475,15 @@ export const AddGroupList = ({
           .sendMessage('joinGroup', {
             groupId,
           })
-          .then((response) => {
-            if (!response?.error) {
+          .then((rawResponse) => {
+            // `sendMessageBackground` reports a failed payload as
+            // `{ error: undefined, message: '...' }`, so a bare `.error` test
+            // read that as success: the user got the success toast and a
+            // signature-less pending entry nothing could clear.
+            const response = rawResponse as
+              | { error?: string; message?: string; [key: string]: unknown }
+              | undefined;
+            if (!response?.error && !response?.message) {
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success.group_join', {
@@ -570,14 +612,12 @@ export const AddGroupList = ({
     const group = visibleItems[index];
     const memberCount = group?.memberCount ?? 0;
     const openGroup = isOpenGroup(group);
-    const joinedGroup = isJoinedGroup(group?.groupId);
-    const pendingGroup = isPendingGroup(group?.groupId);
+    const joinedGroup = isJoinedGroup(memberGroups, group?.groupId);
+    const pendingGroup = isPendingGroup(txList, group?.groupId);
     const joiningGroup = joiningGroupId === String(group?.groupId);
     const pinnedGroup = isPinnedTopGroup(sortMode, group);
     const membershipUnavailable = joinedGroup || pendingGroup;
-    const groupScore = openGroup
-      ? groupScoreSnapshot.groups[String(group?.groupId)]
-      : undefined;
+    const groupScore = groupScoreSnapshot.groups[String(group?.groupId)];
     const ownerName =
       groupOwnerNames[String(group?.groupId)] || group?.ownerPrimaryName;
     const showRemoteAvatar = Boolean(ownerName);
@@ -655,12 +695,13 @@ export const AddGroupList = ({
                 }}
               >
                 <Typography
+                  variant="h1"
                   sx={{
                     fontSize: 16,
                     fontWeight: 700,
                     color: theme.palette.text.primary,
                     letterSpacing: '-0.015em',
-                    lineHeight: '21px',
+                    lineHeight: '16px',
                     minWidth: 0,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
@@ -680,7 +721,7 @@ export const AddGroupList = ({
                     <PublicRoundedIcon
                       aria-label={t('group:find_groups.open_group')}
                       sx={{
-                        color: 'text.secondary',
+                        color: '#3f8cff',
                         flexShrink: 0,
                         fontSize: 15,
                       }}
@@ -689,7 +730,7 @@ export const AddGroupList = ({
                     <LockIcon
                       aria-label={t('group:find_groups.encrypted_group')}
                       sx={{
-                        color: 'text.secondary',
+                        color: '#dc2626',
                         flexShrink: 0,
                         fontSize: 15,
                       }}
@@ -817,20 +858,17 @@ export const AddGroupList = ({
               sx={{
                 background: membershipUnavailable
                   ? theme.palette.action.selected
-                  : openGroup
-                    ? 'linear-gradient(180deg, #3f8cff 0%, #2f6fd8 100%)'
-                    : 'transparent',
-                border: `1px solid ${membershipUnavailable ? theme.palette.divider : openGroup ? '#5ea2ff' : theme.palette.divider}`,
+                  : 'linear-gradient(180deg, #3f8cff 0%, #2f6fd8 100%)',
+                border: `1px solid ${membershipUnavailable ? theme.palette.divider : '#5ea2ff'}`,
                 borderRadius: '8px',
-                boxShadow:
-                  openGroup && !joinedGroup
-                    ? '0 3px 10px rgba(47,111,216,0.22), inset 0 1px 0 rgba(255,255,255,0.12)'
-                    : 'none',
+                boxShadow: !joinedGroup
+                  ? '0 3px 10px rgba(47,111,216,0.22), inset 0 1px 0 rgba(255,255,255,0.12)'
+                  : 'none',
                 color: membershipUnavailable
                   ? 'text.secondary'
                   : openGroup
                     ? '#ffffff'
-                    : 'text.secondary',
+                    : '#ffffff',
                 fontSize: 14,
                 fontWeight: 600,
                 height: 38,
@@ -843,20 +881,12 @@ export const AddGroupList = ({
                 '&:hover': {
                   background: membershipUnavailable
                     ? theme.palette.action.selected
-                    : openGroup
-                      ? 'linear-gradient(180deg, #4b96ff 0%, #3779e8 100%)'
-                      : theme.palette.action.hover,
-                  borderColor:
-                    openGroup && !membershipUnavailable ? '#78b1ff' : undefined,
-                  color: membershipUnavailable
-                    ? 'text.secondary'
-                    : openGroup
-                      ? '#ffffff'
-                      : 'text.primary',
+                    : 'linear-gradient(180deg, #4b96ff 0%, #3779e8 100%)',
+                  borderColor: !membershipUnavailable ? '#78b1ff' : undefined,
+                  color: membershipUnavailable ? 'text.secondary' : '#ffffff',
                 },
                 '&:active': {
-                  background:
-                    openGroup && !membershipUnavailable ? '#2b63c5' : undefined,
+                  background: !membershipUnavailable ? '#2b63c5' : undefined,
                   boxShadow: 'none',
                 },
                 '&:focus-visible': {
@@ -866,9 +896,7 @@ export const AddGroupList = ({
                 '&.Mui-disabled': {
                   color: membershipUnavailable
                     ? theme.palette.text.secondary
-                    : openGroup
-                      ? '#ffffff'
-                      : theme.palette.text.secondary,
+                    : '#ffffff',
                   cursor: pendingGroup ? 'not-allowed' : undefined,
                   opacity: membershipUnavailable ? 0.72 : 0.5,
                 },
@@ -894,8 +922,11 @@ export const AddGroupList = ({
 
   const isSelectedGroupOpen =
     selectedGroup != null && isOpenGroup(selectedGroup);
-  const isSelectedGroupJoined = isJoinedGroup(selectedGroup?.groupId);
-  const isSelectedGroupPending = isPendingGroup(selectedGroup?.groupId);
+  const isSelectedGroupJoined = isJoinedGroup(
+    memberGroups,
+    selectedGroup?.groupId
+  );
+  const isSelectedGroupPending = isPendingGroup(txList, selectedGroup?.groupId);
   const selectedGroupMemberCount = Math.max(
     0,
     Number(selectedGroup?.memberCount) || 0
@@ -907,13 +938,6 @@ export const AddGroupList = ({
   const selectedOwnerAvatarUrl = ownerPrimaryName
     ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${encodeURIComponent(ownerPrimaryName)}/qortal_avatar?async=true`
     : undefined;
-  const privateFilterDisabled = sortMode === 'top' || sortMode === 'active';
-  const privateFilterExplanation =
-    sortMode === 'top'
-      ? t('group:find_groups.private_filter_top')
-      : sortMode === 'active'
-        ? t('group:find_groups.private_filter_active')
-        : '';
   const sortDescription = {
     top: t('group:find_groups.sorted_by_top'),
     active: t('group:find_groups.sorted_by_active'),
@@ -1005,10 +1029,22 @@ export const AddGroupList = ({
               >
                 {isSelectedGroupOpen ? (
                   <PublicRoundedIcon
-                    sx={{ flexShrink: 0, fontSize: 17, mr: 1 }}
+                    sx={{
+                      flexShrink: 0,
+                      fontSize: 17,
+                      mr: 1,
+                      color: '#3f8cff',
+                    }}
                   />
                 ) : (
-                  <LockIcon sx={{ flexShrink: 0, fontSize: 17, mr: 1 }} />
+                  <LockIcon
+                    sx={{
+                      flexShrink: 0,
+                      fontSize: 16,
+                      mr: 1,
+                      color: '#dc2626',
+                    }}
+                  />
                 )}
                 <Typography component="span" sx={{ fontSize: 14 }}>
                   {isSelectedGroupOpen
@@ -1519,76 +1555,68 @@ export const AddGroupList = ({
                   {filter.label}
                 </ButtonBase>
               ))}
-              <ButtonBase
-                aria-pressed={showOpen}
-                onClick={() => setShowOpen((current) => !current)}
-                sx={{
-                  backgroundColor: showOpen ? 'primary.main' : 'transparent',
-                  border: `1px solid ${showOpen ? theme.palette.primary.main : theme.palette.divider}`,
-                  borderRadius: '9px',
-                  color: showOpen ? 'primary.contrastText' : 'text.secondary',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  gap: 1,
-                  height: 40,
-                  letterSpacing: '-0.01em',
-                  px: 1.75,
-                  '&:hover': {
-                    backgroundColor: showOpen
-                      ? 'primary.dark'
-                      : theme.palette.action.hover,
-                  },
-                  '&:focus-visible': {
-                    outline: '2px solid #60a5fa',
-                    outlineOffset: 2,
-                  },
-                }}
-              >
-                <PublicRoundedIcon sx={{ fontSize: 17 }} />
-                {t('group:find_groups.filter_open')}
-              </ButtonBase>
-              <Tooltip arrow title={privateFilterExplanation}>
-                <span style={{ display: 'inline-flex' }}>
-                  <ButtonBase
-                    aria-pressed={showPrivate}
-                    disabled={privateFilterDisabled}
-                    onClick={() => setShowPrivate((current) => !current)}
-                    sx={{
-                      backgroundColor: showPrivate
+            </Box>
+            <Box
+              sx={{
+                alignItems: 'center',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 1.25,
+              }}
+            >
+              {[
+                {
+                  label: t('group:find_groups.filter_all'),
+                  value: 'all' as const,
+                },
+                {
+                  icon: <PublicRoundedIcon sx={{ fontSize: 17 }} />,
+                  label: t('group:find_groups.filter_open'),
+                  value: 'open' as const,
+                },
+                {
+                  icon: <LockIcon sx={{ fontSize: 17 }} />,
+                  label: t('group:find_groups.filter_private'),
+                  value: 'private' as const,
+                },
+              ].map((filter) => (
+                <ButtonBase
+                  aria-pressed={accessFilter === filter.value}
+                  key={filter.value}
+                  onClick={() => setAccessFilter(filter.value)}
+                  sx={{
+                    backgroundColor:
+                      accessFilter === filter.value
                         ? 'primary.main'
                         : 'transparent',
-                      border: `1px solid ${showPrivate ? theme.palette.primary.main : theme.palette.divider}`,
-                      borderRadius: '9px',
-                      color: showPrivate
+                    border: `1px solid ${accessFilter === filter.value ? theme.palette.primary.main : theme.palette.divider}`,
+                    borderRadius: '9px',
+                    color:
+                      accessFilter === filter.value
                         ? 'primary.contrastText'
                         : 'text.secondary',
-                      fontSize: 14,
-                      fontWeight: 600,
-                      gap: 1,
-                      height: 40,
-                      letterSpacing: '-0.01em',
-                      px: 1.75,
-                      '&:hover': {
-                        backgroundColor: showPrivate
+                    fontSize: 14,
+                    fontWeight: 600,
+                    gap: 1,
+                    height: 40,
+                    letterSpacing: '-0.01em',
+                    px: 1.75,
+                    '&:hover': {
+                      backgroundColor:
+                        accessFilter === filter.value
                           ? 'primary.dark'
                           : theme.palette.action.hover,
-                      },
-                      '&:focus-visible': {
-                        outline: '2px solid #60a5fa',
-                        outlineOffset: 2,
-                      },
-                      '&.Mui-disabled': {
-                        borderColor: theme.palette.divider,
-                        color: theme.palette.text.disabled,
-                        opacity: 0.58,
-                      },
-                    }}
-                  >
-                    <LockIcon sx={{ fontSize: 17 }} />
-                    {t('group:find_groups.filter_private')}
-                  </ButtonBase>
-                </span>
-              </Tooltip>
+                    },
+                    '&:focus-visible': {
+                      outline: '2px solid #60a5fa',
+                      outlineOffset: 2,
+                    },
+                  }}
+                >
+                  {filter.icon}
+                  {filter.label}
+                </ButtonBase>
+              ))}
             </Box>
           </Box>
 

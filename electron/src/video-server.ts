@@ -76,7 +76,10 @@ function decryptChunk(
 function fetchRange(url: string, start: number, end: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const urlObj = new URL(url);
-    const client = urlObj.protocol === 'https:' && !isLocalPrivateHost(urlObj.hostname) ? https : http;
+    const client =
+      urlObj.protocol === 'https:' && !isLocalPrivateHost(urlObj.hostname)
+        ? https
+        : http;
 
     const options: http.RequestOptions = {
       hostname: urlObj.hostname,

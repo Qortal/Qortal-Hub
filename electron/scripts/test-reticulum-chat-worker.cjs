@@ -4,13 +4,20 @@ const os = require('os');
 const path = require('path');
 const Database = require('better-sqlite3');
 const nacl = require('tweetnacl');
-const { ReticulumChatWorkerPool } = require('../build/src/reticulum-chat-worker-pool.js');
+const {
+  ReticulumChatWorkerPool,
+} = require('../build/src/reticulum-chat-worker-pool.js');
 
 function digestHash(events) {
   const ids = [...events]
-    .sort((a, b) => a.timestamp - b.timestamp || a.eventId.localeCompare(b.eventId))
+    .sort(
+      (a, b) => a.timestamp - b.timestamp || a.eventId.localeCompare(b.eventId)
+    )
     .map((event) => event.eventId);
-  return crypto.createHash('sha256').update(JSON.stringify(ids), 'utf8').digest('hex');
+  return crypto
+    .createHash('sha256')
+    .update(JSON.stringify(ids), 'utf8')
+    .digest('hex');
 }
 
 async function main() {
@@ -47,8 +54,20 @@ async function main() {
         (event_id, group_id, channel_id, timestamp, feed_timestamp, event_type, expires_at)
       VALUES (?, 716, ?, ?, ?, ?, NULL)
     `);
-    insertEvent.run('public-message', 'testing', createdAt - 300, createdAt - 300, 'message');
-    insertEvent.run('private-message', 'admin-private', createdAt - 200, createdAt - 200, 'message');
+    insertEvent.run(
+      'public-message',
+      'testing',
+      createdAt - 300,
+      createdAt - 300,
+      'message'
+    );
+    insertEvent.run(
+      'private-message',
+      'admin-private',
+      createdAt - 200,
+      createdAt - 200,
+      'message'
+    );
     insertEvent.run(
       'private-metadata',
       'admin-private',
@@ -64,18 +83,28 @@ async function main() {
       createdAt,
     });
     if (!result || !result.ok || result.kind !== 'build_group_digest_state') {
-      throw new Error(`Worker failed: ${result && !result.ok ? result.error : 'no result'}`);
+      throw new Error(
+        `Worker failed: ${result && !result.ok ? result.error : 'no result'}`
+      );
     }
     const channelIds = result.state.channelHeads.map((head) => head.channelId);
-    for (const expected of ['admin-private', 'general', 'qortal-land', 'testing']) {
-      if (!channelIds.includes(expected)) throw new Error(`Missing channel head: ${expected}`);
+    for (const expected of [
+      'admin-private',
+      'general',
+      'qortal-land',
+      'testing',
+    ]) {
+      if (!channelIds.includes(expected))
+        throw new Error(`Missing channel head: ${expected}`);
     }
     const expectedDigest = digestHash([
       { eventId: 'public-message', timestamp: createdAt - 300 },
       { eventId: 'private-metadata', timestamp: createdAt - 100 },
     ]);
     if (result.state.snapshot.digestHash !== expectedDigest) {
-      throw new Error('Digest included private message content or omitted public metadata');
+      throw new Error(
+        'Digest included private message content or omitted public metadata'
+      );
     }
     if (result.state.snapshot.latest?.eventId !== 'private-metadata') {
       throw new Error('Latest digest cursor is incorrect');
@@ -88,7 +117,10 @@ async function main() {
     }
     const landKeyPair = nacl.sign.keyPair();
     const landStateBytes = Buffer.from('qortal-land-state-worker-test', 'utf8');
-    const landStateSignature = nacl.sign.detached(landStateBytes, landKeyPair.secretKey);
+    const landStateSignature = nacl.sign.detached(
+      landStateBytes,
+      landKeyPair.secretKey
+    );
     const validLandState = await pool.run({
       kind: 'verify_land_state_signature',
       signedBytes: landStateBytes,
@@ -135,7 +167,10 @@ async function main() {
       kind: 'verify_land_state_signature',
       signedBytes: landStateBytes,
       signature: landStateSignature,
-      publicKey: landKeyPair.publicKey.subarray(0, landKeyPair.publicKey.length - 1),
+      publicKey: landKeyPair.publicKey.subarray(
+        0,
+        landKeyPair.publicKey.length - 1
+      ),
     });
     if (
       !malformedLandStatePublicKey ||

@@ -65,7 +65,11 @@ export const connectFourDropRow = (
   state: ConnectFourState,
   column: number
 ): number | null => {
-  if (!Number.isInteger(column) || column < 0 || column >= CONNECT_FOUR_COLUMNS) {
+  if (
+    !Number.isInteger(column) ||
+    column < 0 ||
+    column >= CONNECT_FOUR_COLUMNS
+  ) {
     return null;
   }
   for (let row = 0; row < CONNECT_FOUR_ROWS; row += 1) {
@@ -86,7 +90,10 @@ const hasConnectFourLine = (
   for (const direction of [-1, 1] as const) {
     let x = column + dx * direction;
     let y = row + dy * direction;
-    while (isBoardCoordinate(x, y) && getConnectFourCell(state, x, y) === seat) {
+    while (
+      isBoardCoordinate(x, y) &&
+      getConnectFourCell(state, x, y) === seat
+    ) {
       count += 1;
       x += dx * direction;
       y += dy * direction;
@@ -113,7 +120,10 @@ export const getConnectFourWinningCells = (
         for (let offset = 0; offset < 4; offset += 1) {
           const x = column + dx * offset;
           const y = row + dy * offset;
-          if (!isBoardCoordinate(x, y) || getConnectFourCell(state, x, y) !== seat) {
+          if (
+            !isBoardCoordinate(x, y) ||
+            getConnectFourCell(state, x, y) !== seat
+          ) {
             cells.length = 0;
             break;
           }
@@ -132,7 +142,7 @@ export const applyConnectFourMove = (
   column: number
 ): ConnectFourState => {
   if (state.outcome) throw new Error('Qonnect Four match has already finished');
-  if (state.nextSeat !== seat) throw new Error('It is not this player\'s turn');
+  if (state.nextSeat !== seat) throw new Error("It is not this player's turn");
   const row = connectFourDropRow(state, column);
   if (row === null) throw new Error('Qonnect Four column is not playable');
 
@@ -144,14 +154,14 @@ export const applyConnectFourMove = (
     ply: state.ply + 1,
     outcome: null,
   };
-  const won = ([
-    [1, 0],
-    [0, 1],
-    [1, 1],
-    [1, -1],
-  ] as const).some(([dx, dy]) =>
-    hasConnectFourLine(next, column, row, seat, dx, dy)
-  );
+  const won = (
+    [
+      [1, 0],
+      [0, 1],
+      [1, 1],
+      [1, -1],
+    ] as const
+  ).some(([dx, dy]) => hasConnectFourLine(next, column, row, seat, dx, dy));
   if (won) next.outcome = { type: 'win', winner: seat };
   else if (next.ply === CONNECT_FOUR_COLUMNS * CONNECT_FOUR_ROWS) {
     next.outcome = { type: 'draw' };

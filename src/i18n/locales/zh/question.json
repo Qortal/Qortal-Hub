@@ -42,6 +42,7 @@
     "error": {
       "add_to_list": "添加到列表失败",
       "app_fee_not_sent": "发布已完成，但应用费用未发送：{{ error }}",
+      "app_fee_outcome_unknown": "发布已完成，但 Hub 无法确定应用费用是否已支付。请在您的交易中查看。",
       "at_info": "无法找到AT信息。",
       "buy_order": "提交交易订单失败",
       "cancel_sell_order": "取消出售订单失败。请再试一次！",
@@ -104,6 +105,7 @@
       "node_info": "获取节点信息失败",
       "node_status": "获取节点状态失败",
       "only_encrypted_data": "仅加密数据可用于私有服务",
+      "payment_outcome_unknown": "Hub 无法确定此笔付款是否已完成。请先检查您的交易，再重试。",
       "payments_partially_sent": "在此错误之前，{{ total }} 笔付款中已有 {{ sent }} 笔完成。请先检查您的交易，再重试。{{ error }}",
       "perform_request": "请求执行失败",
       "poll_create": "创建投票失败",

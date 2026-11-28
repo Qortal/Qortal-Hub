@@ -66,9 +66,15 @@ async function buildProtocolResponse(
   });
 }
 
-function resolveProtocolPath(directory: string, requestPathname: string): string {
+function resolveProtocolPath(
+  directory: string,
+  requestPathname: string
+): string {
   const decodedPath = decodeURIComponent(requestPathname);
-  const sanitizedRelative = normalize(decodedPath).replace(/^(\.\.(\/|\\|$))+/, '');
+  const sanitizedRelative = normalize(decodedPath).replace(
+    /^(\.\.(\/|\\|$))+/,
+    ''
+  );
   const resolved = resolve(directory, `.${sep}${sanitizedRelative}`);
   const normalizedDirectory = ensureTrailingSep(resolve(directory));
   if (!ensureTrailingSep(resolved).startsWith(normalizedDirectory)) {
@@ -116,7 +122,9 @@ function isEmbedderCriticalAsset(requestPathname: string): boolean {
   );
 }
 
-function shouldTraceAudioSurfaceIsolationAsset(requestPathname: string): boolean {
+function shouldTraceAudioSurfaceIsolationAsset(
+  requestPathname: string
+): boolean {
   return (
     requestPathname === AUDIO_SURFACE_ENTRY_PATH ||
     /\/assets\/.*\.(?:js|mjs|cjs|css|wasm)$/i.test(requestPathname) ||

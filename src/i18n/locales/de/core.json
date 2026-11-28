@@ -1056,7 +1056,14 @@
       "name": "Name",
       "website": "Website"
     },
-    "suggestions": "Vorschläge"
+    "suggestions": "Vorschläge",
+    "zoom": {
+      "button": "Zoom: {{percent}}",
+      "kept": "für {{name}} auf diesem Computer gespeichert",
+      "same_as_hub": "wie Hub",
+      "zoom_in": "vergrößern",
+      "zoom_out": "verkleinern"
+    }
   },
   "new_post_in": "neuer Beitrag in {{ title }}",
   "node_state": {
@@ -1878,6 +1885,7 @@
       "image_metadata_unremovable": "Bild {{index}} kann nicht gepostet werden: Standort- und Kameradaten lassen sich aus diesem Format nicht entfernen. Speichere es als JPEG oder PNG und versuche es erneut.",
       "images_too_large": "diese Bilder sind zusammen zu groß für einen Beitrag. Entferne ein Bild und versuche es erneut.",
       "name_required": "zum Veröffentlichen ist ein Qortal-Name erforderlich",
+      "not_posted_left_home": "nicht gepostet: du hast die Startseite verlassen, bevor der Beitrag gesendet wurde. Veröffentliche ihn erneut, wenn du so weit bist.",
       "post_too_large": "dieser Beitrag ist größer als 5 MB, deshalb würde {{app}} ihn nicht anzeigen. Kürze ihn oder entferne ein Bild.",
       "publish_failed": "Veröffentlichung fehlgeschlagen",
       "too_many_images": "maximal {{count}} Bilder pro Beitrag"

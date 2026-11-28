@@ -38,7 +38,10 @@ describe('createRefcountedFanout', () => {
 
     fanout.broadcast('gcall:key', { roomId: 'r1' });
     expect(wc.sent).toHaveLength(1);
-    expect(wc.sent[0]).toEqual({ channel: 'gcall:key', payload: { roomId: 'r1' } });
+    expect(wc.sent[0]).toEqual({
+      channel: 'gcall:key',
+      payload: { roomId: 'r1' },
+    });
 
     fanout.removeSubscriber(wc);
     expect(fanout.getRefCount(wc)).toBe(0);

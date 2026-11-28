@@ -239,7 +239,9 @@ type PhysicalDiskSpace = {
   reserveBytes: number;
 };
 
-export function getReticulumResourceFreeDiskReserveBytes(totalBytes: number): number {
+export function getReticulumResourceFreeDiskReserveBytes(
+  totalBytes: number
+): number {
   const normalizedTotal = Number.isFinite(totalBytes)
     ? Math.max(0, Math.floor(totalBytes))
     : 0;
@@ -253,19 +255,31 @@ export function getReticulumResourceFreeDiskReserveBytes(totalBytes: number): nu
 }
 
 function defaultReticulumResourceRootDir(): string {
-  return path.join(app.getPath('appData'), 'qortal-shared', 'reticulum-resources');
+  return path.join(
+    app.getPath('appData'),
+    'qortal-shared',
+    'reticulum-resources'
+  );
 }
 
 function defaultReticulumResourceDbPath(): string {
-  return path.join(app.getPath('appData'), 'qortal-shared', 'reticulum-resources.db');
+  return path.join(
+    app.getPath('appData'),
+    'qortal-shared',
+    'reticulum-resources.db'
+  );
 }
 
 function safeFileName(value: string): string {
-  const base = path.basename(value || 'resource.bin').replace(/[^\w.\- ()]+/g, '_');
+  const base = path
+    .basename(value || 'resource.bin')
+    .replace(/[^\w.\- ()]+/g, '_');
   return base || 'resource.bin';
 }
 
-function parseJsonObject(value: string | null): Record<string, unknown> | undefined {
+function parseJsonObject(
+  value: string | null
+): Record<string, unknown> | undefined {
   if (!value) return undefined;
   try {
     const parsed = JSON.parse(value) as unknown;
@@ -294,7 +308,9 @@ function sha256File(filePath: string): string {
   return hash.digest('hex');
 }
 
-function normalizeManifest(manifest: ReticulumResourceManifest): ReticulumResourceManifest {
+function normalizeManifest(
+  manifest: ReticulumResourceManifest
+): ReticulumResourceManifest {
   return {
     ...manifest,
     fileHash:
@@ -308,7 +324,10 @@ function normalizeManifest(manifest: ReticulumResourceManifest): ReticulumResour
 }
 
 function isManagedResourceNamespace(namespace: string): boolean {
-  return namespace === 'reticulum-group-resource' || namespace === 'reticulum-dm-resource';
+  return (
+    namespace === 'reticulum-group-resource' ||
+    namespace === 'reticulum-dm-resource'
+  );
 }
 
 function rowToManifest(row: ResourceRow): ReticulumResourceManifest {
@@ -321,9 +340,15 @@ function rowToManifest(row: ResourceRow): ReticulumResourceManifest {
     fileHash: row.file_hash,
     encrypted: row.encrypted === 1,
     createdAt: row.created_at,
-    ...(parseJsonObject(row.metadata) ? { metadata: parseJsonObject(row.metadata) } : {}),
+    ...(parseJsonObject(row.metadata)
+      ? { metadata: parseJsonObject(row.metadata) }
+      : {}),
     ...(parseJsonObject(row.thumbnail)
-      ? { thumbnail: parseJsonObject(row.thumbnail) as ReticulumResourceManifest['thumbnail'] }
+      ? {
+          thumbnail: parseJsonObject(
+            row.thumbnail
+          ) as ReticulumResourceManifest['thumbnail'],
+        }
       : {}),
   };
 }
@@ -502,14 +527,16 @@ export class ReticulumResourceStore {
     }, STORAGE_MAINTENANCE_INTERVAL_MS);
     this.maintenanceTimer.unref?.();
     this.scheduleNextExpirationMaintenance();
-    if (!this.reconciliationPending) this.scheduleCleanup('startup_maintenance');
+    if (!this.reconciliationPending)
+      this.scheduleCleanup('startup_maintenance');
   }
 
   close(): void {
     this.closed = true;
     clearInterval(this.maintenanceTimer);
     if (this.expirationTimer) clearTimeout(this.expirationTimer);
-    if (this.reconciliationRetryTimer) clearTimeout(this.reconciliationRetryTimer);
+    if (this.reconciliationRetryTimer)
+      clearTimeout(this.reconciliationRetryTimer);
     this.expirationTimer = null;
     this.reconciliationRetryTimer = null;
     this.nextExpirationAt = null;
@@ -526,7 +553,8 @@ export class ReticulumResourceStore {
       next.remoteGuaranteeRatio === this.policy.remoteGuaranteeRatio &&
       next.transferReserveRatio === this.policy.transferReserveRatio &&
       next.stalePartialAgeMs === this.policy.stalePartialAgeMs
-    ) return;
+    )
+      return;
     this.policy = next;
     this.db.exec(`
       INSERT OR IGNORE INTO reticulum_resource_cleanup_dirty(file_hash)
@@ -543,13 +571,21 @@ export class ReticulumResourceStore {
     return { ...this.policy };
   }
 
-  importLocalFile(options: ReticulumResourceImportOptions): ReticulumResourceManifest {
+  importLocalFile(
+    options: ReticulumResourceImportOptions
+  ): ReticulumResourceManifest {
     const sourcePath = path.resolve(options.sourcePath);
     const stat = fs.statSync(sourcePath);
     if (!stat.isFile()) throw new Error('sourcePath must be a file');
     const now = this.now();
     const digest = sha256File(sourcePath);
-    const normalized = this.buildLocalImportManifest(options, sourcePath, stat.size, digest, now);
+    const normalized = this.buildLocalImportManifest(
+      options,
+      sourcePath,
+      stat.size,
+      digest,
+      now
+    );
     const prepared = this.prepareLocalImport(normalized);
     const releaseAuthoredReservation = prepared.requiresAuthoredAdmission
       ? this.reserveAuthoredImport(
@@ -575,8 +611,12 @@ export class ReticulumResourceStore {
     const sourcePath = path.resolve(options.sourcePath);
     const stat = await fs.promises.stat(sourcePath);
     if (!stat.isFile()) throw new Error('sourcePath must be a file');
-    const hashResult = await this.workerPool.run({ kind: 'hash_file', path: sourcePath }, 1);
-    if (!hashResult) throw new Error('Resource worker unavailable during import');
+    const hashResult = await this.workerPool.run(
+      { kind: 'hash_file', path: sourcePath },
+      1
+    );
+    if (!hashResult)
+      throw new Error('Resource worker unavailable during import');
     if (hashResult.ok === false) throw new Error(hashResult.error);
     if (!hashResult.hash || !/^[0-9a-f]{64}$/i.test(hashResult.hash)) {
       throw new Error('Resource worker returned an invalid file hash');
@@ -601,7 +641,9 @@ export class ReticulumResourceStore {
         );
       }
       if (!prepared.existingPath) {
-        const releaseDiskReservation = await this.reservePhysicalDisk(normalized.sizeBytes);
+        const releaseDiskReservation = await this.reservePhysicalDisk(
+          normalized.sizeBytes
+        );
         let committed = false;
         try {
           const finalizeResult = await this.workerPool.run(
@@ -614,8 +656,10 @@ export class ReticulumResourceStore {
             },
             1
           );
-          if (!finalizeResult) throw new Error('Resource worker unavailable during import');
-          if (finalizeResult.ok === false) throw new Error(finalizeResult.error);
+          if (!finalizeResult)
+            throw new Error('Resource worker unavailable during import');
+          if (finalizeResult.ok === false)
+            throw new Error(finalizeResult.error);
           committed = true;
         } finally {
           releaseDiskReservation(committed);
@@ -661,23 +705,34 @@ export class ReticulumResourceStore {
     requiresAuthoredAdmission: boolean;
   } {
     if (this.evictingFileHashes.has(normalized.fileHash)) {
-      throw new Error('Resource is currently being reclaimed; retry the import');
+      throw new Error(
+        'Resource is currently being reclaimed; retry the import'
+      );
     }
     const existingManifest = this.getManifest(normalized.fileHash);
     const existingRow = this.stmtGetResource.get(normalized.fileHash) as
       | ResourceRow
       | undefined;
-    if (existingManifest && existingManifest.sizeBytes !== normalized.sizeBytes) {
+    if (
+      existingManifest &&
+      existingManifest.sizeBytes !== normalized.sizeBytes
+    ) {
       throw new Error('Resource manifest size conflicts with its content hash');
     }
-    if (existingManifest && existingManifest.encrypted !== normalized.encrypted) {
-      throw new Error('Resource manifest encryption conflicts with its content hash');
+    if (
+      existingManifest &&
+      existingManifest.encrypted !== normalized.encrypted
+    ) {
+      throw new Error(
+        'Resource manifest encryption conflicts with its content hash'
+      );
     }
     const existingPath = this.getVerifiedAssembledPath(normalized.fileHash);
     return {
       existingPath,
       assembledPath: existingPath ?? this.assembledPath(normalized),
-      stalePartialPath: existingRow?.partial_path ?? this.partialPath(normalized),
+      stalePartialPath:
+        existingRow?.partial_path ?? this.partialPath(normalized),
       requiresAuthoredAdmission:
         this.getProvenance(normalized.fileHash) !== 'local_authored',
     };
@@ -727,12 +782,16 @@ export class ReticulumResourceStore {
     const normalized = normalizeManifest(manifest);
     this.validateManifest(normalized);
     const now = this.now();
-    const existing = this.stmtGetResource.get(normalized.fileHash) as ResourceRow | undefined;
+    const existing = this.stmtGetResource.get(normalized.fileHash) as
+      | ResourceRow
+      | undefined;
     if (existing && existing.size_bytes !== normalized.sizeBytes) {
       throw new Error('Resource manifest size conflicts with its content hash');
     }
     if (existing && (existing.encrypted === 1) !== normalized.encrypted) {
-      throw new Error('Resource manifest encryption conflicts with its content hash');
+      throw new Error(
+        'Resource manifest encryption conflicts with its content hash'
+      );
     }
     this.stmtUpsertResource.run({
       namespace: normalized.namespace,
@@ -742,21 +801,30 @@ export class ReticulumResourceStore {
       size_bytes: normalized.sizeBytes,
       file_hash: normalized.fileHash,
       encrypted: normalized.encrypted ? 1 : 0,
-      status: existing?.status === 'complete' ? 'complete' : options.status ?? 'pending',
+      status:
+        existing?.status === 'complete'
+          ? 'complete'
+          : (options.status ?? 'pending'),
       assembled_path:
         options.assembledPath !== undefined
           ? options.assembledPath
-          : existing?.assembled_path ?? null,
+          : (existing?.assembled_path ?? null),
       partial_path:
         options.partialPath !== undefined
           ? options.partialPath
-          : existing?.partial_path ?? null,
-      metadata: normalized.metadata ? JSON.stringify(normalized.metadata) : null,
-      thumbnail: normalized.thumbnail ? JSON.stringify(normalized.thumbnail) : null,
+          : (existing?.partial_path ?? null),
+      metadata: normalized.metadata
+        ? JSON.stringify(normalized.metadata)
+        : null,
+      thumbnail: normalized.thumbnail
+        ? JSON.stringify(normalized.thumbnail)
+        : null,
       created_at: normalized.createdAt || now,
       updated_at: now,
-      final_verified_at: options.finalVerifiedAt ?? existing?.final_verified_at ?? null,
-      provenance: options.provenance ?? existing?.provenance ?? 'remote_downloaded',
+      final_verified_at:
+        options.finalVerifiedAt ?? existing?.final_verified_at ?? null,
+      provenance:
+        options.provenance ?? existing?.provenance ?? 'remote_downloaded',
       resident_bytes: Math.max(
         0,
         options.residentBytes ?? existing?.resident_bytes ?? 0
@@ -764,47 +832,66 @@ export class ReticulumResourceStore {
       last_accessed_at: existing?.last_accessed_at ?? null,
       last_served_at: existing?.last_served_at ?? null,
       access_count: existing?.access_count ?? 0,
-      retention_until: options.retentionUntil ?? existing?.retention_until ?? null,
+      retention_until:
+        options.retentionUntil ?? existing?.retention_until ?? null,
       managed:
-        existing?.managed === 1 || isManagedResourceNamespace(normalized.namespace) ? 1 : 0,
+        existing?.managed === 1 ||
+        isManagedResourceNamespace(normalized.namespace)
+          ? 1
+          : 0,
     });
-    const stored = this.stmtGetResource.get(normalized.fileHash) as ResourceRow | undefined;
+    const stored = this.stmtGetResource.get(normalized.fileHash) as
+      | ResourceRow
+      | undefined;
     if (!stored) throw new Error('Resource manifest was not stored');
     if (Number.isFinite(options.retentionUntil)) {
       this.considerExpirationAt(Number(options.retentionUntil));
     }
     if (stored.status !== 'complete' && stored.resident_bytes > 0) {
-      this.considerExpirationAt(stored.updated_at + this.policy.stalePartialAgeMs);
+      this.considerExpirationAt(
+        stored.updated_at + this.policy.stalePartialAgeMs
+      );
     }
-    if ((options.residentBytes ?? 0) > 0) this.scheduleCleanup('resource_stored');
+    if ((options.residentBytes ?? 0) > 0)
+      this.scheduleCleanup('resource_stored');
   }
 
   getManifest(fileHash: string): ReticulumResourceManifest | null {
-    const row = this.stmtGetResource.get(String(fileHash || '').trim().toLowerCase()) as
-      | ResourceRow
-      | undefined;
+    const row = this.stmtGetResource.get(
+      String(fileHash || '')
+        .trim()
+        .toLowerCase()
+    ) as ResourceRow | undefined;
     return row ? rowToManifest(row) : null;
   }
 
   getCompletedRanges(fileHash: string): ReticulumResourceByteRangeStatus[] {
-    const normalizedFileHash = String(fileHash || '').trim().toLowerCase();
-    return (this.stmtGetRanges.all(normalizedFileHash) as RangeRow[])
-      .map((row) => ({
+    const normalizedFileHash = String(fileHash || '')
+      .trim()
+      .toLowerCase();
+    return (this.stmtGetRanges.all(normalizedFileHash) as RangeRow[]).map(
+      (row) => ({
         fileHash: row.file_hash,
         startByte: row.start_byte,
         endByteExclusive: row.end_byte_exclusive,
         sizeBytes: Math.max(0, row.end_byte_exclusive - row.start_byte),
         status: 'complete' as const,
         updatedAt: row.updated_at,
-      }));
+      })
+    );
   }
 
   getCompletedBytes(fileHash: string): number {
-    const row = this.stmtGetResource.get(String(fileHash || '').trim().toLowerCase()) as
-      | ResourceRow
-      | undefined;
+    const row = this.stmtGetResource.get(
+      String(fileHash || '')
+        .trim()
+        .toLowerCase()
+    ) as ResourceRow | undefined;
     if (!row) return 0;
-    return Math.max(0, Math.min(row.size_bytes, Number(row.resident_bytes || 0)));
+    return Math.max(
+      0,
+      Math.min(row.size_bytes, Number(row.resident_bytes || 0))
+    );
   }
 
   hasCompletedRange(
@@ -812,27 +899,39 @@ export class ReticulumResourceStore {
     startByte: number,
     endByteExclusive: number
   ): boolean {
-    const row = this.db.prepare(`
+    const row = this.db
+      .prepare(
+        `
       SELECT 1 FROM reticulum_resource_ranges
       WHERE file_hash = ? AND status = 'complete'
         AND start_byte <= ? AND end_byte_exclusive >= ?
       LIMIT 1
-    `).get(
-      String(fileHash || '').trim().toLowerCase(),
-      Math.floor(startByte),
-      Math.floor(endByteExclusive)
-    );
+    `
+      )
+      .get(
+        String(fileHash || '')
+          .trim()
+          .toLowerCase(),
+        Math.floor(startByte),
+        Math.floor(endByteExclusive)
+      );
     return Boolean(row);
   }
 
   getLatestRangeUpdatedAt(fileHash: string): number | null {
-    const row = this.db.prepare(`
+    const row = this.db
+      .prepare(
+        `
       SELECT MAX(updated_at) AS updated_at
       FROM reticulum_resource_ranges
       WHERE file_hash = ? AND status = 'complete'
-    `).get(String(fileHash || '').trim().toLowerCase()) as
-      | { updated_at?: number | null }
-      | undefined;
+    `
+      )
+      .get(
+        String(fileHash || '')
+          .trim()
+          .toLowerCase()
+      ) as { updated_at?: number | null } | undefined;
     if (Number.isFinite(row?.updated_at)) return Number(row?.updated_at);
     return this.getCompletedRanges(fileHash).reduce(
       (latest: number | null, range) =>
@@ -841,11 +940,21 @@ export class ReticulumResourceStore {
     );
   }
 
-  getVerifiedAssembledPath(fileHash: string, recordAccess = true): string | null {
-    const row = this.stmtGetResource.get(String(fileHash || '').trim().toLowerCase()) as
-      | ResourceRow
-      | undefined;
-    if (!row || row.status !== 'complete' || !row.final_verified_at || !row.assembled_path) {
+  getVerifiedAssembledPath(
+    fileHash: string,
+    recordAccess = true
+  ): string | null {
+    const row = this.stmtGetResource.get(
+      String(fileHash || '')
+        .trim()
+        .toLowerCase()
+    ) as ResourceRow | undefined;
+    if (
+      !row ||
+      row.status !== 'complete' ||
+      !row.final_verified_at ||
+      !row.assembled_path
+    ) {
       return null;
     }
     try {
@@ -859,11 +968,14 @@ export class ReticulumResourceStore {
   }
 
   getPartialPath(fileHash: string): string | null {
-    const row = this.stmtGetResource.get(String(fileHash || '').trim().toLowerCase()) as
-      | ResourceRow
-      | undefined;
+    const row = this.stmtGetResource.get(
+      String(fileHash || '')
+        .trim()
+        .toLowerCase()
+    ) as ResourceRow | undefined;
     if (!row) return null;
-    if (row.partial_path && fs.existsSync(row.partial_path)) return row.partial_path;
+    if (row.partial_path && fs.existsSync(row.partial_path))
+      return row.partial_path;
     const candidate = this.partialPath(rowToManifest(row));
     return fs.existsSync(candidate) ? candidate : null;
   }
@@ -877,10 +989,13 @@ export class ReticulumResourceStore {
     expiresAt?: number;
     manifest?: ReticulumResourceManifest;
   }): void {
-    const fileHash = String(input.fileHash || '').trim().toLowerCase();
+    const fileHash = String(input.fileHash || '')
+      .trim()
+      .toLowerCase();
     const groupId = Number(input.groupId);
     if (!/^[0-9a-f]{64}$/i.test(fileHash)) throw new Error('Invalid file hash');
-    if (!Number.isInteger(groupId) || groupId <= 0) throw new Error('Invalid group id');
+    if (!Number.isInteger(groupId) || groupId <= 0)
+      throw new Error('Invalid group id');
     const eventId =
       typeof input.eventId === 'string' && input.eventId.trim()
         ? input.eventId.trim()
@@ -915,22 +1030,29 @@ export class ReticulumResourceStore {
         eventId,
         ownerId: ownerId ?? undefined,
         locallyAuthored: this.getProvenance(fileHash) === 'local_authored',
-        createdAt: Number.isFinite(input.createdAt) ? Number(input.createdAt) : now,
+        createdAt: Number.isFinite(input.createdAt)
+          ? Number(input.createdAt)
+          : now,
         expiresAt: input.expiresAt,
       });
     }
   }
 
   hasGroupReference(fileHash: string, groupId: number): boolean {
-    const normalizedFileHash = String(fileHash || '').trim().toLowerCase();
+    const normalizedFileHash = String(fileHash || '')
+      .trim()
+      .toLowerCase();
     const normalizedGroupId = Number(groupId);
     if (!/^[0-9a-f]{64}$/i.test(normalizedFileHash)) return false;
-    if (!Number.isInteger(normalizedGroupId) || normalizedGroupId <= 0) return false;
+    if (!Number.isInteger(normalizedGroupId) || normalizedGroupId <= 0)
+      return false;
     return !!this.stmtHasGroupRef.get(normalizedFileHash, normalizedGroupId);
   }
 
   listGroupReferences(fileHash: string): ReticulumResourceGroupRef[] {
-    const normalizedFileHash = String(fileHash || '').trim().toLowerCase();
+    const normalizedFileHash = String(fileHash || '')
+      .trim()
+      .toLowerCase();
     if (!/^[0-9a-f]{64}$/i.test(normalizedFileHash)) return [];
     return this.listDbGroupReferences(normalizedFileHash);
   }
@@ -959,18 +1081,32 @@ export class ReticulumResourceStore {
         provenance: input.locallyAuthored ? 'local_authored' : undefined,
       });
     } else if (input.locallyAuthored) {
-      this.db.prepare(`
+      this.db
+        .prepare(
+          `
         UPDATE reticulum_resources
         SET provenance = 'local_authored', retention_until = NULL,
             managed = MAX(managed, ?), updated_at = ?
         WHERE file_hash = ?
-      `).run(isManagedResourceNamespace(manifest.namespace) ? 1 : 0, now, manifest.fileHash);
+      `
+        )
+        .run(
+          isManagedResourceNamespace(manifest.namespace) ? 1 : 0,
+          now,
+          manifest.fileHash
+        );
     } else if (isManagedResourceNamespace(manifest.namespace)) {
-      this.db.prepare(`
+      this.db
+        .prepare(
+          `
         UPDATE reticulum_resources SET managed = 1, updated_at = ? WHERE file_hash = ?
-      `).run(now, manifest.fileHash);
+      `
+        )
+        .run(now, manifest.fileHash);
     }
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       INSERT INTO reticulum_resource_refs
         (file_hash, scope_type, scope_id, event_id, owner_id, namespace, file_name,
          mime_type, size_bytes, encrypted, metadata, thumbnail, state,
@@ -997,25 +1133,31 @@ export class ReticulumResourceStore {
           WHEN excluded.expires_at IS NULL THEN reticulum_resource_refs.expires_at
           ELSE MIN(reticulum_resource_refs.expires_at, excluded.expires_at)
         END
-    `).run(
-      manifest.fileHash,
-      input.scopeType,
-      scopeId,
-      eventId,
-      input.ownerId ?? manifest.ownerId ?? null,
-      manifest.namespace,
-      manifest.fileName,
-      manifest.mimeType,
-      manifest.sizeBytes,
-      manifest.encrypted ? 1 : 0,
-      manifest.metadata ? JSON.stringify(manifest.metadata) : null,
-      manifest.thumbnail ? JSON.stringify(manifest.thumbnail) : null,
-      state,
-      input.locallyAuthored ? 1 : 0,
-      Number.isFinite(input.createdAt) ? Number(input.createdAt) : manifest.createdAt || now,
-      now,
-      Number.isFinite(input.expiresAt) ? Math.floor(Number(input.expiresAt)) : null
-    );
+    `
+      )
+      .run(
+        manifest.fileHash,
+        input.scopeType,
+        scopeId,
+        eventId,
+        input.ownerId ?? manifest.ownerId ?? null,
+        manifest.namespace,
+        manifest.fileName,
+        manifest.mimeType,
+        manifest.sizeBytes,
+        manifest.encrypted ? 1 : 0,
+        manifest.metadata ? JSON.stringify(manifest.metadata) : null,
+        manifest.thumbnail ? JSON.stringify(manifest.thumbnail) : null,
+        state,
+        input.locallyAuthored ? 1 : 0,
+        Number.isFinite(input.createdAt)
+          ? Number(input.createdAt)
+          : manifest.createdAt || now,
+        now,
+        Number.isFinite(input.expiresAt)
+          ? Math.floor(Number(input.expiresAt))
+          : null
+      );
     if (Number.isFinite(input.expiresAt)) {
       this.considerExpirationAt(Math.floor(Number(input.expiresAt)));
     }
@@ -1044,7 +1186,13 @@ export class ReticulumResourceStore {
     eventId: string;
     state: ReticulumResourceReferenceState;
   }): number {
-    const values: unknown[] = [input.state, this.now(), input.scopeType, String(input.scopeId), input.eventId];
+    const values: unknown[] = [
+      input.state,
+      this.now(),
+      input.scopeType,
+      String(input.scopeId),
+      input.eventId,
+    ];
     let sql = `
       UPDATE reticulum_resource_refs
       SET state = ?, updated_at = ?
@@ -1065,7 +1213,9 @@ export class ReticulumResourceStore {
     state: ReticulumResourceReferenceState;
   }): number {
     const groupId = Number(input.groupId);
-    const eventId = String(input.eventId || '').trim().toLowerCase();
+    const eventId = String(input.eventId || '')
+      .trim()
+      .toLowerCase();
     if (!Number.isInteger(groupId) || groupId <= 0 || !eventId) return 0;
     const result = this.db
       .prepare(
@@ -1105,7 +1255,11 @@ export class ReticulumResourceStore {
     references: Array<{ eventId: string; expiresAt: number | null }>;
   }): number {
     const scopeId = String(input.scopeId ?? '').trim();
-    if (!scopeId || !Array.isArray(input.references) || input.references.length === 0) {
+    if (
+      !scopeId ||
+      !Array.isArray(input.references) ||
+      input.references.length === 0
+    ) {
       return 0;
     }
     const references = input.references
@@ -1167,24 +1321,40 @@ export class ReticulumResourceStore {
     scopeId: string | number,
     eventId?: string
   ): boolean {
-    const normalizedHash = String(fileHash || '').trim().toLowerCase();
+    const normalizedHash = String(fileHash || '')
+      .trim()
+      .toLowerCase();
     const normalizedScopeId = String(scopeId ?? '').trim();
     if (!normalizedHash || !normalizedScopeId) return false;
     const row = eventId
-      ? this.db.prepare(`
+      ? this.db
+          .prepare(
+            `
           SELECT 1 FROM reticulum_resource_refs
           WHERE file_hash = ? AND scope_type = ? AND scope_id = ?
             AND event_id = ? AND event_id <> '' AND state = 'live'
             AND (expires_at IS NULL OR expires_at > ?)
           LIMIT 1
-        `).get(normalizedHash, scopeType, normalizedScopeId, eventId, this.now())
-      : this.db.prepare(`
+        `
+          )
+          .get(
+            normalizedHash,
+            scopeType,
+            normalizedScopeId,
+            eventId,
+            this.now()
+          )
+      : this.db
+          .prepare(
+            `
           SELECT 1 FROM reticulum_resource_refs
           WHERE file_hash = ? AND scope_type = ? AND scope_id = ?
             AND event_id <> '' AND state = 'live'
             AND (expires_at IS NULL OR expires_at > ?)
           LIMIT 1
-        `).get(normalizedHash, scopeType, normalizedScopeId, this.now());
+        `
+          )
+          .get(normalizedHash, scopeType, normalizedScopeId, this.now());
     return !!row;
   }
 
@@ -1194,7 +1364,13 @@ export class ReticulumResourceStore {
     scopeId: string | number,
     eventId?: string
   ): ReticulumResourceManifest | null {
-    const params: unknown[] = [String(fileHash || '').trim().toLowerCase(), scopeType, String(scopeId)];
+    const params: unknown[] = [
+      String(fileHash || '')
+        .trim()
+        .toLowerCase(),
+      scopeType,
+      String(scopeId),
+    ];
     let sql = `
       SELECT namespace, owner_id, file_name, mime_type, size_bytes, file_hash,
              encrypted, metadata, thumbnail, created_at
@@ -1209,19 +1385,21 @@ export class ReticulumResourceStore {
       params.push(eventId);
     }
     sql += ' ORDER BY updated_at DESC LIMIT 1';
-    const row = this.db.prepare(sql).get(...params) as Pick<
-      ResourceRow,
-      | 'namespace'
-      | 'owner_id'
-      | 'file_name'
-      | 'mime_type'
-      | 'size_bytes'
-      | 'file_hash'
-      | 'encrypted'
-      | 'metadata'
-      | 'thumbnail'
-      | 'created_at'
-    > | undefined;
+    const row = this.db.prepare(sql).get(...params) as
+      | Pick<
+          ResourceRow,
+          | 'namespace'
+          | 'owner_id'
+          | 'file_name'
+          | 'mime_type'
+          | 'size_bytes'
+          | 'file_hash'
+          | 'encrypted'
+          | 'metadata'
+          | 'thumbnail'
+          | 'created_at'
+        >
+      | undefined;
     if (!row) return null;
     return rowToManifest({
       ...row,
@@ -1241,11 +1419,19 @@ export class ReticulumResourceStore {
   }
 
   listReferences(fileHash: string): ReticulumResourceReference[] {
-    const rows = this.db.prepare(`
+    const rows = this.db
+      .prepare(
+        `
       SELECT * FROM reticulum_resource_refs
       WHERE file_hash = ?
       ORDER BY scope_type, scope_id, event_id
-    `).all(String(fileHash || '').trim().toLowerCase()) as Array<{
+    `
+      )
+      .all(
+        String(fileHash || '')
+          .trim()
+          .toLowerCase()
+      ) as Array<{
       file_hash: string;
       scope_type: 'group' | 'dm';
       scope_id: string;
@@ -1279,9 +1465,15 @@ export class ReticulumResourceStore {
         fileHash: row.file_hash,
         encrypted: row.encrypted === 1,
         createdAt: row.created_at,
-        ...(parseJsonObject(row.metadata) ? { metadata: parseJsonObject(row.metadata) } : {}),
+        ...(parseJsonObject(row.metadata)
+          ? { metadata: parseJsonObject(row.metadata) }
+          : {}),
         ...(parseJsonObject(row.thumbnail)
-          ? { thumbnail: parseJsonObject(row.thumbnail) as ReticulumResourceManifest['thumbnail'] }
+          ? {
+              thumbnail: parseJsonObject(
+                row.thumbnail
+              ) as ReticulumResourceManifest['thumbnail'],
+            }
           : {}),
       },
       state: row.state,
@@ -1297,8 +1489,11 @@ export class ReticulumResourceStore {
     leaseType: 'transfer' | 'viewer' | 'seed' | 'save' | 'assembly',
     ttlMs = 10 * 60_000
   ): string {
-    const normalizedHash = String(fileHash || '').trim().toLowerCase();
-    if (!this.getManifest(normalizedHash)) throw new Error('Unknown resource manifest');
+    const normalizedHash = String(fileHash || '')
+      .trim()
+      .toLowerCase();
+    if (!this.getManifest(normalizedHash))
+      throw new Error('Unknown resource manifest');
     if (this.evictingFileHashes.has(normalizedHash)) {
       throw new Error('Resource is currently being reclaimed');
     }
@@ -1307,7 +1502,9 @@ export class ReticulumResourceStore {
       leaseType === 'viewer'
         ? `viewer:${normalizedHash}`
         : nodeCrypto.randomUUID();
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       INSERT INTO reticulum_resource_leases
         (lease_id, file_hash, lease_type, expires_at, created_at)
       VALUES (?, ?, ?, ?, ?)
@@ -1315,26 +1512,42 @@ export class ReticulumResourceStore {
         file_hash = excluded.file_hash,
         lease_type = excluded.lease_type,
         expires_at = excluded.expires_at
-    `).run(leaseId, normalizedHash, leaseType, now + Math.max(1_000, ttlMs), now);
+    `
+      )
+      .run(
+        leaseId,
+        normalizedHash,
+        leaseType,
+        now + Math.max(1_000, ttlMs),
+        now
+      );
     this.considerExpirationAt(now + Math.max(1_000, ttlMs));
     return leaseId;
   }
 
   renewLease(leaseId: string, ttlMs = 10 * 60_000): boolean {
     const expiresAt = this.now() + Math.max(1_000, ttlMs);
-    const result = this.db.prepare(`
+    const result = this.db
+      .prepare(
+        `
       UPDATE reticulum_resource_leases SET expires_at = ? WHERE lease_id = ?
-    `).run(expiresAt, leaseId);
+    `
+      )
+      .run(expiresAt, leaseId);
     if (result.changes > 0) this.considerExpirationAt(expiresAt);
     return result.changes > 0;
   }
 
   releaseLease(leaseId: string): void {
-    this.db.prepare('DELETE FROM reticulum_resource_leases WHERE lease_id = ?').run(leaseId);
+    this.db
+      .prepare('DELETE FROM reticulum_resource_leases WHERE lease_id = ?')
+      .run(leaseId);
   }
 
   private beginResourceOperation(fileHash: string): () => void {
-    const normalizedHash = String(fileHash || '').trim().toLowerCase();
+    const normalizedHash = String(fileHash || '')
+      .trim()
+      .toLowerCase();
     if (!normalizedHash) throw new Error('Invalid resource hash');
     if (this.evictingFileHashes.has(normalizedHash)) {
       throw new Error('Resource is currently being reclaimed');
@@ -1347,7 +1560,8 @@ export class ReticulumResourceStore {
     return () => {
       if (released) return;
       released = true;
-      const remaining = (this.activeResourceOperations.get(normalizedHash) ?? 1) - 1;
+      const remaining =
+        (this.activeResourceOperations.get(normalizedHash) ?? 1) - 1;
       if (remaining <= 0) this.activeResourceOperations.delete(normalizedHash);
       else this.activeResourceOperations.set(normalizedHash, remaining);
     };
@@ -1364,18 +1578,22 @@ export class ReticulumResourceStore {
     const reservationId = nodeCrypto.randomUUID();
     const now = this.now();
     const expiresAt = now + Math.max(60_000, input.ttlMs ?? 30 * 60_000);
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       INSERT INTO reticulum_resource_reservations
         (reservation_id, file_hash, provenance, size_bytes, expires_at, created_at)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(
-      reservationId,
-      input.fileHash ? String(input.fileHash).trim().toLowerCase() : null,
-      input.provenance,
-      sizeBytes,
-      expiresAt,
-      now
-    );
+    `
+      )
+      .run(
+        reservationId,
+        input.fileHash ? String(input.fileHash).trim().toLowerCase() : null,
+        input.provenance,
+        sizeBytes,
+        expiresAt,
+        now
+      );
     this.considerExpirationAt(expiresAt);
     return reservationId;
   }
@@ -1386,23 +1604,25 @@ export class ReticulumResourceStore {
     ttlMs = 30 * 60_000
   ): boolean {
     const expiresAt = this.now() + Math.max(60_000, ttlMs);
-    const result = this.db.prepare(`
+    const result = this.db
+      .prepare(
+        `
       UPDATE reticulum_resource_reservations
       SET size_bytes = ?, expires_at = ?
       WHERE reservation_id = ?
-    `).run(
-      Math.max(0, Math.floor(sizeBytes)),
-      expiresAt,
-      reservationId
-    );
+    `
+      )
+      .run(Math.max(0, Math.floor(sizeBytes)), expiresAt, reservationId);
     if (result.changes > 0) this.considerExpirationAt(expiresAt);
     return result.changes > 0;
   }
 
   releaseReservation(reservationId: string): void {
-    this.db.prepare(
-      'DELETE FROM reticulum_resource_reservations WHERE reservation_id = ?'
-    ).run(reservationId);
+    this.db
+      .prepare(
+        'DELETE FROM reticulum_resource_reservations WHERE reservation_id = ?'
+      )
+      .run(reservationId);
   }
 
   recordProviderReceipt(input: {
@@ -1413,13 +1633,21 @@ export class ReticulumResourceStore {
     retentionUntil: number;
     receiptAt?: number;
   }): void {
-    const fileHash = String(input.fileHash || '').trim().toLowerCase();
-    const providerId = String(input.providerId || '').trim().toLowerCase();
+    const fileHash = String(input.fileHash || '')
+      .trim()
+      .toLowerCase();
+    const providerId = String(input.providerId || '')
+      .trim()
+      .toLowerCase();
     if (!this.getManifest(fileHash) || !providerId) return;
     const now = this.now();
-    const receiptAt = Number.isFinite(input.receiptAt) ? Number(input.receiptAt) : now;
+    const receiptAt = Number.isFinite(input.receiptAt)
+      ? Number(input.receiptAt)
+      : now;
     const retentionUntil = Math.max(now, Math.floor(input.retentionUntil));
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       INSERT INTO reticulum_resource_providers
         (file_hash, provider_id, scope_type, scope_id, receipt_at,
          retention_until, last_confirmed_at)
@@ -1428,31 +1656,47 @@ export class ReticulumResourceStore {
         receipt_at = excluded.receipt_at,
         retention_until = MAX(reticulum_resource_providers.retention_until, excluded.retention_until),
         last_confirmed_at = excluded.last_confirmed_at
-    `).run(
-      fileHash,
-      providerId,
-      input.scopeType,
-      String(input.scopeId),
-      receiptAt,
-      retentionUntil,
-      now
-    );
+    `
+      )
+      .run(
+        fileHash,
+        providerId,
+        input.scopeType,
+        String(input.scopeId),
+        receiptAt,
+        retentionUntil,
+        now
+      );
     this.considerExpirationAt(retentionUntil);
     this.scheduleCleanup('provider_receipt');
   }
 
   countActiveProviders(fileHash: string): number {
-    const row = this.db.prepare(`
+    const row = this.db
+      .prepare(
+        `
       SELECT COUNT(DISTINCT provider_id) AS count
       FROM reticulum_resource_providers
       WHERE file_hash = ? AND retention_until > ?
-    `).get(String(fileHash || '').trim().toLowerCase(), this.now()) as { count: number };
+    `
+      )
+      .get(
+        String(fileHash || '')
+          .trim()
+          .toLowerCase(),
+        this.now()
+      ) as { count: number };
     return Number(row?.count || 0);
   }
 
   markReplicaRetention(fileHash: string, retentionUntil: number): void {
-    const normalizedRetentionUntil = Math.max(this.now(), Math.floor(retentionUntil));
-    this.db.prepare(`
+    const normalizedRetentionUntil = Math.max(
+      this.now(),
+      Math.floor(retentionUntil)
+    );
+    this.db
+      .prepare(
+        `
       UPDATE reticulum_resources
       SET provenance = CASE
             WHEN provenance = 'local_authored' THEN provenance
@@ -1461,11 +1705,15 @@ export class ReticulumResourceStore {
           retention_until = MAX(COALESCE(retention_until, 0), ?),
           updated_at = ?
       WHERE file_hash = ?
-    `).run(
-      normalizedRetentionUntil,
-      this.now(),
-      String(fileHash || '').trim().toLowerCase()
-    );
+    `
+      )
+      .run(
+        normalizedRetentionUntil,
+        this.now(),
+        String(fileHash || '')
+          .trim()
+          .toLowerCase()
+      );
     this.considerExpirationAt(normalizedRetentionUntil);
   }
 
@@ -1481,10 +1729,14 @@ export class ReticulumResourceStore {
 
   private getLegacyStorageStatus(): ReticulumResourceStorageStatus {
     const rows = this.getManagedRowsWithState();
-    const reserved = this.db.prepare(`
+    const reserved = this.db
+      .prepare(
+        `
       SELECT COALESCE(SUM(size_bytes), 0) AS bytes
       FROM reticulum_resource_reservations WHERE expires_at > ?
-    `).get(this.now()) as { bytes: number };
+    `
+      )
+      .get(this.now()) as { bytes: number };
     let totalResidentBytes = 0;
     let authoredResidentBytes = 0;
     let remoteResidentBytes = 0;
@@ -1508,7 +1760,9 @@ export class ReticulumResourceStore {
     }
     return {
       limitBytes: this.policy.limitBytes,
-      lowWatermarkBytes: Math.floor(this.policy.limitBytes * this.policy.lowWatermarkRatio),
+      lowWatermarkBytes: Math.floor(
+        this.policy.limitBytes * this.policy.lowWatermarkRatio
+      ),
       totalResidentBytes,
       authoredResidentBytes,
       remoteResidentBytes,
@@ -1533,14 +1787,16 @@ export class ReticulumResourceStore {
   }
 
   private listDbGroupReferences(fileHash: string): ReticulumResourceGroupRef[] {
-    return (this.stmtListGroupRefs.all(fileHash) as Array<{
-      file_hash: string;
-      group_id: number;
-      event_id: string | null;
-      owner_id: string | null;
-      created_at: number;
-      updated_at: number;
-    }>).map((row) => ({
+    return (
+      this.stmtListGroupRefs.all(fileHash) as Array<{
+        file_hash: string;
+        group_id: number;
+        event_id: string | null;
+        owner_id: string | null;
+        created_at: number;
+        updated_at: number;
+      }>
+    ).map((row) => ({
       fileHash: row.file_hash,
       groupId: row.group_id,
       ...(row.event_id ? { eventId: row.event_id } : {}),
@@ -1553,13 +1809,16 @@ export class ReticulumResourceStore {
   ensurePartialFile(fileHash: string): string {
     const manifest = this.getManifest(fileHash);
     if (!manifest) throw new Error('Unknown resource manifest');
-    const row = this.stmtGetResource.get(manifest.fileHash) as ResourceRow | undefined;
+    const row = this.stmtGetResource.get(manifest.fileHash) as
+      | ResourceRow
+      | undefined;
     const existingPath = row?.partial_path || this.partialPath(manifest);
     fs.mkdirSync(path.dirname(existingPath), { recursive: true });
     const fd = fs.openSync(existingPath, 'a');
     try {
       const stat = fs.fstatSync(fd);
-      if (stat.size > manifest.sizeBytes) fs.ftruncateSync(fd, manifest.sizeBytes);
+      if (stat.size > manifest.sizeBytes)
+        fs.ftruncateSync(fd, manifest.sizeBytes);
     } finally {
       fs.closeSync(fd);
     }
@@ -1594,11 +1853,15 @@ export class ReticulumResourceStore {
       startByte,
       endByteExclusive
     );
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       UPDATE reticulum_resources
       SET resident_bytes = ?, updated_at = ?
       WHERE file_hash = ?
-    `).run(completedBytes, this.now(), manifest.fileHash);
+    `
+      )
+      .run(completedBytes, this.now(), manifest.fileHash);
   }
 
   async storeByteRangeAsync(
@@ -1618,7 +1881,9 @@ export class ReticulumResourceStore {
     }
     const releaseOperation = this.beginResourceOperation(manifest.fileHash);
     try {
-      const releaseDiskReservation = await this.reservePhysicalDisk(bytes.length);
+      const releaseDiskReservation = await this.reservePhysicalDisk(
+        bytes.length
+      );
       let committed = false;
       try {
         if (this.evictingFileHashes.has(manifest.fileHash)) {
@@ -1635,7 +1900,8 @@ export class ReticulumResourceStore {
       } finally {
         releaseDiskReservation(committed);
       }
-      if (this.closed) throw new Error('Resource store closed while writing byte range');
+      if (this.closed)
+        throw new Error('Resource store closed while writing byte range');
       if (this.evictingFileHashes.has(manifest.fileHash)) {
         throw new Error('Resource is currently being reclaimed');
       }
@@ -1644,19 +1910,26 @@ export class ReticulumResourceStore {
         startByte,
         endByteExclusive
       );
-      this.db.prepare(`
+      this.db
+        .prepare(
+          `
         UPDATE reticulum_resources SET resident_bytes = ?, updated_at = ? WHERE file_hash = ?
-      `).run(completedBytes, this.now(), manifest.fileHash);
+      `
+        )
+        .run(completedBytes, this.now(), manifest.fileHash);
     } finally {
       releaseOperation();
     }
   }
 
-  private async ensurePhysicalDiskCapacity(additionalBytes: number): Promise<void> {
+  private async ensurePhysicalDiskCapacity(
+    additionalBytes: number
+  ): Promise<void> {
     const required = Math.max(0, Math.floor(additionalBytes));
     if (required <= 0) return;
     const initialCapacity = this.getPhysicalWriteCapacity(required);
-    if (initialCapacity == null || initialCapacity.writableBytes >= required) return;
+    if (initialCapacity == null || initialCapacity.writableBytes >= required)
+      return;
     try {
       this.physicalReclaimBytes = Math.max(
         this.physicalReclaimBytes,
@@ -1730,7 +2003,8 @@ export class ReticulumResourceStore {
   } | null {
     const space = this.getPhysicalDiskSpace();
     if (space == null) return null;
-    const availableAfterPending = space.availableBytes - this.pendingPhysicalWriteBytes;
+    const availableAfterPending =
+      space.availableBytes - this.pendingPhysicalWriteBytes;
     const required = Math.max(0, Math.floor(requiredBytes));
     return {
       writableBytes: Math.max(0, availableAfterPending - space.reserveBytes),
@@ -1744,7 +2018,10 @@ export class ReticulumResourceStore {
 
   private getPhysicalDiskSpace(): PhysicalDiskSpace | null {
     const now = this.now();
-    if (this.diskSpaceCache && now - this.diskSpaceCache.checkedAt < DISK_SPACE_CACHE_MS) {
+    if (
+      this.diskSpaceCache &&
+      now - this.diskSpaceCache.checkedAt < DISK_SPACE_CACHE_MS
+    ) {
       return this.diskSpaceCache.space;
     }
     let space: PhysicalDiskSpace | null = null;
@@ -1763,19 +2040,28 @@ export class ReticulumResourceStore {
     return space;
   }
 
-  async readAndHashFile(filePath: string): Promise<{ bytes: Buffer; hash: string }> {
+  async readAndHashFile(
+    filePath: string
+  ): Promise<{ bytes: Buffer; hash: string }> {
     const workerResult = await this.workerPool.run(
       { kind: 'read_and_hash_file', path: filePath },
       1
     );
     if (workerResult?.ok && workerResult.bytes && workerResult.hash) {
-      return { bytes: Buffer.from(workerResult.bytes), hash: workerResult.hash };
+      return {
+        bytes: Buffer.from(workerResult.bytes),
+        hash: workerResult.hash,
+      };
     }
     if (workerResult?.ok === false) throw new Error(workerResult.error);
     throw new Error('Resource worker unavailable while reading transfer data');
   }
 
-  readByteRange(fileHash: string, startByte: number, endByteExclusive: number): {
+  readByteRange(
+    fileHash: string,
+    startByte: number,
+    endByteExclusive: number
+  ): {
     path: string;
     sizeBytes: number;
     sha256: string;
@@ -1795,14 +2081,17 @@ export class ReticulumResourceStore {
       const source = fs.openSync(sourcePath, 'r');
       const out = fs.openSync(tempPath, 'w');
       const hash = nodeCrypto.createHash('sha256');
-      const buffer = Buffer.allocUnsafe(Math.min(1024 * 1024, Math.max(1, sizeBytes)));
+      const buffer = Buffer.allocUnsafe(
+        Math.min(1024 * 1024, Math.max(1, sizeBytes))
+      );
       let remaining = sizeBytes;
       let offset = startByte;
       try {
         while (remaining > 0) {
           const readSize = Math.min(buffer.length, remaining);
           const bytesRead = fs.readSync(source, buffer, 0, readSize, offset);
-          if (bytesRead <= 0) throw new Error('Unexpected EOF while reading range');
+          if (bytesRead <= 0)
+            throw new Error('Unexpected EOF while reading range');
           const slice = buffer.subarray(0, bytesRead);
           fs.writeSync(out, slice);
           hash.update(slice);
@@ -1834,7 +2123,10 @@ export class ReticulumResourceStore {
     let tempPath = '';
     try {
       this.validateRange(manifest, startByte, endByteExclusive);
-      const sourcePath = await this.assembleResourceAsync(manifest.fileHash, false);
+      const sourcePath = await this.assembleResourceAsync(
+        manifest.fileHash,
+        false
+      );
       this.touchServed(manifest.fileHash);
       tempPath = this.createPlaintextTempPath(
         manifest.fileHash,
@@ -1850,9 +2142,13 @@ export class ReticulumResourceStore {
         },
         1
       );
-      if (!workerResult) throw new Error('Resource worker unavailable while serving byte range');
+      if (!workerResult)
+        throw new Error('Resource worker unavailable while serving byte range');
       if (workerResult.ok === false) throw new Error(workerResult.error);
-      if (!workerResult.hash || workerResult.sizeBytes !== endByteExclusive - startByte) {
+      if (
+        !workerResult.hash ||
+        workerResult.sizeBytes !== endByteExclusive - startByte
+      ) {
         throw new Error('Resource worker returned an invalid byte range');
       }
       return {
@@ -1869,13 +2165,17 @@ export class ReticulumResourceStore {
   }
 
   discardResourceDataAsync(fileHash: string): Promise<void> {
-    const normalizedHash = String(fileHash || '').trim().toLowerCase();
+    const normalizedHash = String(fileHash || '')
+      .trim()
+      .toLowerCase();
     if (!normalizedHash) return Promise.resolve();
     const existing = this.pendingDiscards.get(normalizedHash);
     if (existing) return existing;
-    const pending = this.discardResourceDataWithWorker(normalizedHash).finally(() => {
-      this.pendingDiscards.delete(normalizedHash);
-    });
+    const pending = this.discardResourceDataWithWorker(normalizedHash).finally(
+      () => {
+        this.pendingDiscards.delete(normalizedHash);
+      }
+    );
     this.pendingDiscards.set(normalizedHash, pending);
     return pending;
   }
@@ -1887,10 +2187,15 @@ export class ReticulumResourceStore {
     if (this.closed) return;
     const manifest = this.getManifest(fileHash);
     if (!manifest) return;
-    const row = this.stmtGetResource.get(manifest.fileHash) as ResourceRow | undefined;
+    const row = this.stmtGetResource.get(manifest.fileHash) as
+      | ResourceRow
+      | undefined;
     this.evictingFileHashes.add(manifest.fileHash);
     try {
-      while (!this.closed && (this.activeResourceOperations.get(manifest.fileHash) ?? 0) > 0) {
+      while (
+        !this.closed &&
+        (this.activeResourceOperations.get(manifest.fileHash) ?? 0) > 0
+      ) {
         await new Promise<void>((resolve) => setTimeout(resolve, 10));
       }
       if (this.closed) return;
@@ -1912,10 +2217,21 @@ export class ReticulumResourceStore {
       const now = this.now();
       this.db.transaction(() => {
         this.stmtDeleteRanges.run(manifest.fileHash);
-        this.stmtUpdateResourceStatus.run('pending', null, null, now, null, manifest.fileHash);
-        this.db.prepare(`
+        this.stmtUpdateResourceStatus.run(
+          'pending',
+          null,
+          null,
+          now,
+          null,
+          manifest.fileHash
+        );
+        this.db
+          .prepare(
+            `
           UPDATE reticulum_resources SET resident_bytes = 0, updated_at = ? WHERE file_hash = ?
-        `).run(now, manifest.fileHash);
+        `
+          )
+          .run(now, manifest.fileHash);
       })();
     } finally {
       this.evictingFileHashes.delete(manifest.fileHash);
@@ -1928,7 +2244,9 @@ export class ReticulumResourceStore {
     if (this.evictingFileHashes.has(manifest.fileHash)) {
       throw new Error('Resource is currently being reclaimed');
     }
-    const row = this.stmtGetResource.get(manifest.fileHash) as ResourceRow | undefined;
+    const row = this.stmtGetResource.get(manifest.fileHash) as
+      | ResourceRow
+      | undefined;
     const verifiedPath = this.getVerifiedAssembledPath(
       manifest.fileHash,
       recordAccess
@@ -1949,9 +2267,13 @@ export class ReticulumResourceStore {
               row.final_verified_at ?? now,
               manifest.fileHash
             );
-            this.db.prepare(`
+            this.db
+              .prepare(
+                `
               UPDATE reticulum_resources SET resident_bytes = ?, updated_at = ? WHERE file_hash = ?
-            `).run(manifest.sizeBytes, now, manifest.fileHash);
+            `
+              )
+              .run(manifest.sizeBytes, now, manifest.fileHash);
             if (recordAccess) this.touchAccess(manifest.fileHash);
             return row.assembled_path;
           }
@@ -1990,21 +2312,34 @@ export class ReticulumResourceStore {
       this.now(),
       manifest.fileHash
     );
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       UPDATE reticulum_resources
       SET retention_until = MAX(COALESCE(retention_until, 0), ?)
       WHERE file_hash = ? AND provenance <> 'local_authored'
-    `).run(this.now() + COMPLETED_DOWNLOAD_RETENTION_MS, manifest.fileHash);
-    this.db.prepare(`
+    `
+      )
+      .run(this.now() + COMPLETED_DOWNLOAD_RETENTION_MS, manifest.fileHash);
+    this.db
+      .prepare(
+        `
       UPDATE reticulum_resources SET resident_bytes = ?, updated_at = ? WHERE file_hash = ?
-    `).run(manifest.sizeBytes, this.now(), manifest.fileHash);
+    `
+      )
+      .run(manifest.sizeBytes, this.now(), manifest.fileHash);
     this.scheduleCleanup('resource_assembled');
     if (recordAccess) this.touchAccess(manifest.fileHash);
     return assembledPath;
   }
 
-  assembleResourceAsync(fileHash: string, recordAccess = true): Promise<string> {
-    const normalizedHash = String(fileHash || '').trim().toLowerCase();
+  assembleResourceAsync(
+    fileHash: string,
+    recordAccess = true
+  ): Promise<string> {
+    const normalizedHash = String(fileHash || '')
+      .trim()
+      .toLowerCase();
     const existing = this.pendingAssemblies.get(normalizedHash);
     const pending =
       existing ??
@@ -2018,11 +2353,17 @@ export class ReticulumResourceStore {
     });
   }
 
-  private async finalizeResourceWithProtection(fileHash: string): Promise<string> {
+  private async finalizeResourceWithProtection(
+    fileHash: string
+  ): Promise<string> {
     const releaseOperation = this.beginResourceOperation(fileHash);
     let leaseId: string | null = null;
     try {
-      leaseId = this.acquireLease(fileHash, 'assembly', RESOURCE_OPERATION_LEASE_MS);
+      leaseId = this.acquireLease(
+        fileHash,
+        'assembly',
+        RESOURCE_OPERATION_LEASE_MS
+      );
       return await this.finalizeResourceWithWorker(fileHash);
     } finally {
       if (leaseId && !this.closed) this.releaseLease(leaseId);
@@ -2036,13 +2377,20 @@ export class ReticulumResourceStore {
     if (this.evictingFileHashes.has(manifest.fileHash)) {
       throw new Error('Resource is currently being reclaimed');
     }
-    const verifiedPath = this.getVerifiedAssembledPath(manifest.fileHash, false);
+    const verifiedPath = this.getVerifiedAssembledPath(
+      manifest.fileHash,
+      false
+    );
     if (verifiedPath) return verifiedPath;
-    const row = this.stmtGetResource.get(manifest.fileHash) as ResourceRow | undefined;
-    const sourcePath = row?.assembled_path && fs.existsSync(row.assembled_path)
-      ? row.assembled_path
-      : row?.partial_path || this.partialPath(manifest);
-    if (!fs.existsSync(sourcePath)) throw new Error('Resource has no partial file');
+    const row = this.stmtGetResource.get(manifest.fileHash) as
+      | ResourceRow
+      | undefined;
+    const sourcePath =
+      row?.assembled_path && fs.existsSync(row.assembled_path)
+        ? row.assembled_path
+        : row?.partial_path || this.partialPath(manifest);
+    if (!fs.existsSync(sourcePath))
+      throw new Error('Resource has no partial file');
     if (sourcePath !== row?.assembled_path) {
       const ranges = this.getCompletedRanges(manifest.fileHash);
       if (!this.rangesCoverFile(ranges, manifest.sizeBytes)) {
@@ -2061,7 +2409,8 @@ export class ReticulumResourceStore {
       },
       1
     );
-    if (!workerResult) throw new Error('Resource worker unavailable during assembly');
+    if (!workerResult)
+      throw new Error('Resource worker unavailable during assembly');
     if (workerResult.ok === false) throw new Error(workerResult.error);
     if (sourcePath !== assembledPath) {
       await fs.promises.rm(sourcePath, { force: true });
@@ -2080,7 +2429,9 @@ export class ReticulumResourceStore {
         now,
         manifest.fileHash
       );
-      this.db.prepare(`
+      this.db
+        .prepare(
+          `
         UPDATE reticulum_resources
         SET resident_bytes = ?,
             retention_until = CASE
@@ -2089,12 +2440,14 @@ export class ReticulumResourceStore {
             END,
             updated_at = ?
         WHERE file_hash = ?
-      `).run(
-        manifest.sizeBytes,
-        now + COMPLETED_DOWNLOAD_RETENTION_MS,
-        now,
-        manifest.fileHash
-      );
+      `
+        )
+        .run(
+          manifest.sizeBytes,
+          now + COMPLETED_DOWNLOAD_RETENTION_MS,
+          now,
+          manifest.fileHash
+        );
       this.stmtDeleteRanges.run(manifest.fileHash);
     })();
     this.scheduleCleanup('resource_assembled');
@@ -2103,7 +2456,8 @@ export class ReticulumResourceStore {
 
   createPlaintextTempPath(fileHash: string, extension = ''): string {
     const manifest = this.getManifest(fileHash);
-    const suffix = extension || path.extname(manifest?.fileName || '') || '.bin';
+    const suffix =
+      extension || path.extname(manifest?.fileName || '') || '.bin';
     const safeSuffix = suffix.startsWith('.') ? suffix : `.${suffix}`;
     const tempDir = path.join(this.tempDir, 'qortal-reticulum-resources');
     fs.mkdirSync(tempDir, { recursive: true });
@@ -2115,22 +2469,28 @@ export class ReticulumResourceStore {
 
   private reconcileResidentState(): void {
     if (this.closed || this.reconciliationPending) return;
-    const hasResources = this.db.prepare(
-      'SELECT 1 AS present FROM reticulum_resources LIMIT 1'
-    ).get() as { present?: number } | undefined;
+    const hasResources = this.db
+      .prepare('SELECT 1 AS present FROM reticulum_resources LIMIT 1')
+      .get() as { present?: number } | undefined;
     if (!hasResources) return;
     this.reconciliationReady = false;
     this.reconciliationPending = true;
     let succeeded = false;
-    this.reconciliationPromise = new Promise<void>((resolve) => setImmediate(resolve))
+    this.reconciliationPromise = new Promise<void>((resolve) =>
+      setImmediate(resolve)
+    )
       .then(() => this.reconcileResidentStateInWorker())
       .then(() => {
         succeeded = true;
         this.reconciliationReady = true;
       })
       .catch((error) => {
-        loggerWarn('[ReticulumResourceStore] resident_reconcile_worker_failed', error);
-      }).finally(() => {
+        loggerWarn(
+          '[ReticulumResourceStore] resident_reconcile_worker_failed',
+          error
+        );
+      })
+      .finally(() => {
         this.reconciliationPending = false;
         this.reconciliationPromise = null;
         if (this.closed) return;
@@ -2150,11 +2510,15 @@ export class ReticulumResourceStore {
     let corrected = 0;
     let afterFileHash = '';
     while (!this.closed) {
-      const rows = this.db.prepare(`
+      const rows = this.db
+        .prepare(
+          `
         SELECT * FROM reticulum_resources
         WHERE file_hash > ?
         ORDER BY file_hash LIMIT ?
-      `).all(afterFileHash, STARTUP_RECONCILE_BATCH_SIZE) as ResourceRow[];
+      `
+        )
+        .all(afterFileHash, STARTUP_RECONCILE_BATCH_SIZE) as ResourceRow[];
       if (rows.length === 0) break;
       const entries = rows.map((row) => {
         const manifest = rowToManifest(row);
@@ -2164,17 +2528,25 @@ export class ReticulumResourceStore {
           partialPath: row.partial_path || this.partialPath(manifest),
           expectedSize: manifest.sizeBytes,
           expectedHash: manifest.fileHash,
-          expectComplete: row.status === 'complete' && Boolean(row.final_verified_at),
+          expectComplete:
+            row.status === 'complete' && Boolean(row.final_verified_at),
         };
       });
-      const result = await this.workerPool.run({ kind: 'inspect_paths', entries }, 3);
+      const result = await this.workerPool.run(
+        { kind: 'inspect_paths', entries },
+        3
+      );
       if (this.closed) return;
       if (!result || result.ok === false || !result.inspections) {
         throw new Error(
-          result?.ok === false ? result.error : 'Resource worker unavailable during reconciliation'
+          result?.ok === false
+            ? result.error
+            : 'Resource worker unavailable during reconciliation'
         );
       }
-      const inspections = new Map(result.inspections.map((item) => [item.fileHash, item]));
+      const inspections = new Map(
+        result.inspections.map((item) => [item.fileHash, item])
+      );
       for (const row of rows) {
         const inspection = inspections.get(row.file_hash);
         if (!inspection) continue;
@@ -2188,7 +2560,9 @@ export class ReticulumResourceStore {
       await new Promise<void>((resolve) => setImmediate(resolve));
     }
     if (corrected > 0) {
-      loggerLog(`[ReticulumResourceStore] resident_state_reconciled resources=${corrected}`);
+      loggerLog(
+        `[ReticulumResourceStore] resident_state_reconciled resources=${corrected}`
+      );
     }
   }
 
@@ -2204,45 +2578,75 @@ export class ReticulumResourceStore {
         row.assembled_path === assembledPath &&
         row.partial_path === null &&
         Number(row.resident_bytes || 0) === manifest.sizeBytes
-      ) return 0;
+      )
+        return 0;
       const now = this.now();
       this.stmtUpdateResourceStatus.run(
-        'complete', assembledPath, null, now, row.final_verified_at ?? now, row.file_hash
+        'complete',
+        assembledPath,
+        null,
+        now,
+        row.final_verified_at ?? now,
+        row.file_hash
       );
-      this.db.prepare(`
+      this.db
+        .prepare(
+          `
         UPDATE reticulum_resources SET resident_bytes = ?, updated_at = ? WHERE file_hash = ?
-      `).run(manifest.sizeBytes, now, row.file_hash);
+      `
+        )
+        .run(manifest.sizeBytes, now, row.file_hash);
       this.stmtDeleteRanges.run(row.file_hash);
       const stalePaths = [this.rangeStatePath(row.file_hash)];
-      if (row.partial_path && row.partial_path !== assembledPath) stalePaths.push(row.partial_path);
+      if (row.partial_path && row.partial_path !== assembledPath)
+        stalePaths.push(row.partial_path);
       void this.workerPool.run({ kind: 'delete_paths', paths: stalePaths }, 4);
       return 1;
     }
     const partialPath = row.partial_path || this.partialPath(manifest);
     if (!partialExists) this.stmtDeleteRanges.run(row.file_hash);
     const rangeTotal = partialExists
-      ? this.db.prepare(`
+      ? (this.db
+          .prepare(
+            `
           SELECT COALESCE(SUM(end_byte_exclusive - start_byte), 0) AS bytes
           FROM reticulum_resource_ranges
           WHERE file_hash = ? AND status = 'complete'
-        `).get(row.file_hash) as { bytes?: number } | undefined
+        `
+          )
+          .get(row.file_hash) as { bytes?: number } | undefined)
       : undefined;
     const residentBytes = partialExists
-      ? Math.min(manifest.sizeBytes, Math.max(0, Number(rangeTotal?.bytes || 0)))
+      ? Math.min(
+          manifest.sizeBytes,
+          Math.max(0, Number(rangeTotal?.bytes || 0))
+        )
       : 0;
     const nextPartialPath = partialExists ? partialPath : null;
     if (
-      row.status === 'pending' && row.assembled_path === null &&
-      row.partial_path === nextPartialPath && row.final_verified_at === null &&
+      row.status === 'pending' &&
+      row.assembled_path === null &&
+      row.partial_path === nextPartialPath &&
+      row.final_verified_at === null &&
       Number(row.resident_bytes || 0) === residentBytes
-    ) return 0;
+    )
+      return 0;
     const now = this.now();
     this.stmtUpdateResourceStatus.run(
-      'pending', null, nextPartialPath, now, null, row.file_hash
+      'pending',
+      null,
+      nextPartialPath,
+      now,
+      null,
+      row.file_hash
     );
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       UPDATE reticulum_resources SET resident_bytes = ?, updated_at = ? WHERE file_hash = ?
-    `).run(residentBytes, now, row.file_hash);
+    `
+      )
+      .run(residentBytes, now, row.file_hash);
     return 1;
   }
 
@@ -2251,23 +2655,37 @@ export class ReticulumResourceStore {
   ): ReticulumResourceStoragePolicy {
     const limitBytes = Math.max(
       RETICULUM_RESOURCE_MIN_LIMIT_BYTES,
-      Math.floor(Number(policy.limitBytes) || RETICULUM_RESOURCE_DEFAULT_LIMIT_BYTES)
+      Math.floor(
+        Number(policy.limitBytes) || RETICULUM_RESOURCE_DEFAULT_LIMIT_BYTES
+      )
     );
     const lowWatermarkRatio = Math.min(
       0.95,
-      Math.max(0.5, Number(policy.lowWatermarkRatio) || DEFAULT_LOW_WATERMARK_RATIO)
+      Math.max(
+        0.5,
+        Number(policy.lowWatermarkRatio) || DEFAULT_LOW_WATERMARK_RATIO
+      )
     );
     const authoredCapRatio = Math.min(
       0.8,
-      Math.max(0.2, Number(policy.authoredCapRatio) || DEFAULT_AUTHORED_CAP_RATIO)
+      Math.max(
+        0.2,
+        Number(policy.authoredCapRatio) || DEFAULT_AUTHORED_CAP_RATIO
+      )
     );
     const remoteGuaranteeRatio = Math.min(
       0.6,
-      Math.max(0.1, Number(policy.remoteGuaranteeRatio) || DEFAULT_REMOTE_GUARANTEE_RATIO)
+      Math.max(
+        0.1,
+        Number(policy.remoteGuaranteeRatio) || DEFAULT_REMOTE_GUARANTEE_RATIO
+      )
     );
     const transferReserveRatio = Math.min(
       0.3,
-      Math.max(0.05, Number(policy.transferReserveRatio) || DEFAULT_TRANSFER_RESERVE_RATIO)
+      Math.max(
+        0.05,
+        Number(policy.transferReserveRatio) || DEFAULT_TRANSFER_RESERVE_RATIO
+      )
     );
     return {
       limitBytes,
@@ -2277,15 +2695,21 @@ export class ReticulumResourceStore {
       transferReserveRatio,
       stalePartialAgeMs: Math.max(
         60 * 60_000,
-        Math.floor(Number(policy.stalePartialAgeMs) || DEFAULT_STALE_PARTIAL_AGE_MS)
+        Math.floor(
+          Number(policy.stalePartialAgeMs) || DEFAULT_STALE_PARTIAL_AGE_MS
+        )
       ),
     };
   }
 
   private getProvenance(fileHash: string): ReticulumResourceProvenance | null {
-    const row = this.db.prepare(`
+    const row = this.db
+      .prepare(
+        `
       SELECT provenance FROM reticulum_resources WHERE file_hash = ?
-    `).get(fileHash) as { provenance: ReticulumResourceProvenance } | undefined;
+    `
+      )
+      .get(fileHash) as { provenance: ReticulumResourceProvenance } | undefined;
     return row?.provenance ?? null;
   }
 
@@ -2294,11 +2718,15 @@ export class ReticulumResourceStore {
     const last = this.lastAccessTouch.get(fileHash) ?? 0;
     if (now - last < ACCESS_TOUCH_INTERVAL_MS) return;
     this.lastAccessTouch.set(fileHash, now);
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       UPDATE reticulum_resources
       SET last_accessed_at = ?, access_count = access_count + 1
       WHERE file_hash = ?
-    `).run(now, fileHash);
+    `
+      )
+      .run(now, fileHash);
   }
 
   private touchServed(fileHash: string): void {
@@ -2307,27 +2735,49 @@ export class ReticulumResourceStore {
     // its complete replica after transfer, so treating that transfer as local
     // use would make the 30-day recovery threshold and 24-hour confirmation
     // window mutually exclusive.
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       UPDATE reticulum_resources
       SET last_served_at = ?, access_count = access_count + 1
       WHERE file_hash = ?
-    `).run(now, fileHash);
+    `
+      )
+      .run(now, fileHash);
   }
 
   private pruneTransientState(): void {
     const now = this.now();
-    this.db.prepare('DELETE FROM reticulum_resource_leases WHERE expires_at <= ?').run(now);
-    this.db.prepare('DELETE FROM reticulum_resource_reservations WHERE expires_at <= ?').run(now);
-    this.db.prepare('DELETE FROM reticulum_resource_providers WHERE retention_until <= ?').run(now);
-    this.db.prepare(`
+    this.db
+      .prepare('DELETE FROM reticulum_resource_leases WHERE expires_at <= ?')
+      .run(now);
+    this.db
+      .prepare(
+        'DELETE FROM reticulum_resource_reservations WHERE expires_at <= ?'
+      )
+      .run(now);
+    this.db
+      .prepare(
+        'DELETE FROM reticulum_resource_providers WHERE retention_until <= ?'
+      )
+      .run(now);
+    this.db
+      .prepare(
+        `
       UPDATE reticulum_resources SET retention_until = NULL
       WHERE retention_until IS NOT NULL AND retention_until <= ?
-    `).run(now);
-    this.db.prepare(`
+    `
+      )
+      .run(now);
+    this.db
+      .prepare(
+        `
       UPDATE reticulum_resource_refs
       SET state = 'expired', updated_at = ?
       WHERE state = 'live' AND expires_at IS NOT NULL AND expires_at <= ?
-    `).run(now, now);
+    `
+      )
+      .run(now, now);
   }
 
   private assertAdmissionCapacity(
@@ -2352,11 +2802,14 @@ export class ReticulumResourceStore {
       }
       return;
     }
-    const authoredCap = Math.floor(this.policy.limitBytes * this.policy.authoredCapRatio);
+    const authoredCap = Math.floor(
+      this.policy.limitBytes * this.policy.authoredCapRatio
+    );
     if (
       status.authoredResidentBytes +
         this.pendingAuthoredImportBytes +
-        sizeBytes > authoredCap
+        sizeBytes >
+      authoredCap
     ) {
       this.blockedAuthoredPublishes += 1;
       this.scheduleCleanup('authored_admission_blocked');
@@ -2388,7 +2841,9 @@ export class ReticulumResourceStore {
     sizeBytes: number,
     residentBytes: number
   ): () => void {
-    const normalizedHash = String(fileHash || '').trim().toLowerCase();
+    const normalizedHash = String(fileHash || '')
+      .trim()
+      .toLowerCase();
     const existing = this.pendingAuthoredImports.get(normalizedHash);
     if (existing) {
       existing.references += 1;
@@ -2396,7 +2851,11 @@ export class ReticulumResourceStore {
     }
     const normalizedSize = Math.max(0, Math.floor(sizeBytes));
     const normalizedResident = Math.max(0, Math.floor(residentBytes));
-    this.assertAdmissionCapacity(normalizedSize, 'local_authored', normalizedResident);
+    this.assertAdmissionCapacity(
+      normalizedSize,
+      'local_authored',
+      normalizedResident
+    );
     this.pendingAuthoredImports.set(normalizedHash, {
       sizeBytes: normalizedSize,
       residentBytes: normalizedResident,
@@ -2430,7 +2889,9 @@ export class ReticulumResourceStore {
 
   private getManagedRowsWithState(): CleanupCandidate[] {
     const now = this.now();
-    return this.db.prepare(`
+    return this.db
+      .prepare(
+        `
       SELECT r.*,
         (SELECT COUNT(*) FROM reticulum_resource_refs ref
           WHERE ref.file_hash = r.file_hash AND ref.event_id <> '' AND ref.state = 'live'
@@ -2441,12 +2902,16 @@ export class ReticulumResourceStore {
           WHERE l.file_hash = r.file_hash AND l.expires_at > ?) AS active_lease_count
       FROM reticulum_resources r
       WHERE r.managed = 1
-    `).all(now, now, now) as CleanupCandidate[];
+    `
+      )
+      .all(now, now, now) as CleanupCandidate[];
   }
 
   private getManagedRowWithState(fileHash: string): CleanupCandidate | null {
     const now = this.now();
-    const row = this.db.prepare(`
+    const row = this.db
+      .prepare(
+        `
       SELECT r.*,
         (SELECT COUNT(*) FROM reticulum_resource_refs ref
           WHERE ref.file_hash = r.file_hash AND ref.event_id <> '' AND ref.state = 'live'
@@ -2458,16 +2923,15 @@ export class ReticulumResourceStore {
       FROM reticulum_resources r
       WHERE r.file_hash = ? AND r.managed = 1
       LIMIT 1
-    `).get(now, now, now, fileHash) as CleanupCandidate | undefined;
+    `
+      )
+      .get(now, now, now, fileHash) as CleanupCandidate | undefined;
     return row ?? null;
   }
 
   private isProtectedCandidate(row: CleanupCandidate): boolean {
     const now = this.now();
-    return (
-      row.active_lease_count > 0 ||
-      Number(row.retention_until || 0) > now
-    );
+    return row.active_lease_count > 0 || Number(row.retention_until || 0) > now;
   }
 
   private cleanupTier(row: CleanupCandidate): number | null {
@@ -2476,7 +2940,8 @@ export class ReticulumResourceStore {
     if (
       row.status !== 'complete' &&
       now - row.updated_at >= this.policy.stalePartialAgeMs
-    ) return 1;
+    )
+      return 1;
     if (row.live_ref_count === 0) return 2;
     if (row.provenance !== 'local_authored' && !row.last_accessed_at) return 4;
     if (row.provenance !== 'local_authored' && row.provider_count > 0) return 5;
@@ -2515,23 +2980,31 @@ export class ReticulumResourceStore {
       this.reconciliationPending ||
       this.cleanupPromise ||
       this.cleanupScheduled
-    ) return;
+    )
+      return;
     this.cleanupScheduled = true;
     setImmediate(() => {
       this.cleanupScheduled = false;
       if (this.closed) return;
       void this.cleanupStorage(reason).catch((error) => {
-        loggerWarn(`[ReticulumResourceStore] cleanup_failed reason=${reason}`, error);
+        loggerWarn(
+          `[ReticulumResourceStore] cleanup_failed reason=${reason}`,
+          error
+        );
       });
     });
   }
 
   private considerExpirationAt(expiresAt: number): void {
     if (this.closed || !Number.isFinite(expiresAt) || expiresAt <= 0) return;
-    if (this.nextExpirationAt != null && this.nextExpirationAt <= expiresAt) return;
+    if (this.nextExpirationAt != null && this.nextExpirationAt <= expiresAt)
+      return;
     if (this.expirationTimer) clearTimeout(this.expirationTimer);
     this.nextExpirationAt = expiresAt;
-    const delay = Math.max(1_000, Math.min(2_147_000_000, expiresAt - this.now()));
+    const delay = Math.max(
+      1_000,
+      Math.min(2_147_000_000, expiresAt - this.now())
+    );
     this.expirationTimer = setTimeout(() => {
       this.expirationTimer = null;
       this.nextExpirationAt = null;
@@ -2544,7 +3017,9 @@ export class ReticulumResourceStore {
   }
 
   private scheduleNextExpirationMaintenance(): void {
-    const row = this.db.prepare(`
+    const row = this.db
+      .prepare(
+        `
       SELECT MIN(expiry_at) AS expiry_at FROM (
         SELECT MIN(expires_at) AS expiry_at FROM reticulum_resource_leases
         UNION ALL
@@ -2562,15 +3037,20 @@ export class ReticulumResourceStore {
           WHERE managed = 1 AND status <> 'complete' AND resident_bytes > 0
             AND updated_at + ? > ?
       ) WHERE expiry_at IS NOT NULL
-    `).get(
-      this.policy.stalePartialAgeMs,
-      this.policy.stalePartialAgeMs,
-      this.now()
-    ) as { expiry_at?: number | null } | undefined;
-    if (Number.isFinite(row?.expiry_at)) this.considerExpirationAt(Number(row?.expiry_at));
+    `
+      )
+      .get(
+        this.policy.stalePartialAgeMs,
+        this.policy.stalePartialAgeMs,
+        this.now()
+      ) as { expiry_at?: number | null } | undefined;
+    if (Number.isFinite(row?.expiry_at))
+      this.considerExpirationAt(Number(row?.expiry_at));
   }
 
-  private async runCleanup(reason: string): Promise<ReticulumResourceCleanupResult> {
+  private async runCleanup(
+    reason: string
+  ): Promise<ReticulumResourceCleanupResult> {
     if (this.reconciliationPromise) await this.reconciliationPromise;
     const startedAt = this.now();
     if (!this.reconciliationReady) {
@@ -2589,11 +3069,15 @@ export class ReticulumResourceStore {
     this.markDueCleanupStateDirty();
     await this.ensureCleanupStateFresh();
     const initial = this.getStorageStatus();
-    const targetBytes = Math.floor(this.policy.limitBytes * this.policy.lowWatermarkRatio);
+    const targetBytes = Math.floor(
+      this.policy.limitBytes * this.policy.lowWatermarkRatio
+    );
     const authoredTargetBytes = Math.floor(
       this.policy.limitBytes * this.policy.authoredCapRatio * 0.9
     );
-    const remoteFloor = Math.floor(this.policy.limitBytes * this.policy.remoteGuaranteeRatio);
+    const remoteFloor = Math.floor(
+      this.policy.limitBytes * this.policy.remoteGuaranteeRatio
+    );
     let currentBytes = initial.totalResidentBytes;
     let authoredBytes = initial.authoredResidentBytes;
     let remoteBytes = initial.remoteResidentBytes;
@@ -2612,8 +3096,10 @@ export class ReticulumResourceStore {
         if (
           !row ||
           row.active_lease_count > 0 ||
-          (!physicalCleanupNeeded && Number(row.retention_until || 0) > this.now())
-        ) continue;
+          (!physicalCleanupNeeded &&
+            Number(row.retention_until || 0) > this.now())
+        )
+          continue;
         const tier = this.cleanupTier(row);
         if (tier == null) continue;
         const staleOrUnreferenced = tier <= 2;
@@ -2644,7 +3130,8 @@ export class ReticulumResourceStore {
           !physicalCleanupNeeded &&
           currentBytes <= this.policy.limitBytes &&
           remoteBytes - row.resident_bytes < remoteFloor
-        ) continue;
+        )
+          continue;
         const removed = await this.evictResidentBytes(row);
         if (removed <= 0) continue;
         currentBytes = Math.max(0, currentBytes - removed);
@@ -2656,7 +3143,10 @@ export class ReticulumResourceStore {
       if (this.closed || finished || candidates.length < 64) break;
       await new Promise<void>((resolve) => setImmediate(resolve));
     }
-    this.physicalReclaimBytes = Math.max(0, this.physicalReclaimBytes - freedBytes);
+    this.physicalReclaimBytes = Math.max(
+      0,
+      this.physicalReclaimBytes - freedBytes
+    );
     this.markDueCleanupStateDirty();
     await this.ensureCleanupStateFresh();
     const completedAt = this.now();
@@ -2685,9 +3175,10 @@ export class ReticulumResourceStore {
     limit: number
   ): CleanupCandidateItem[] {
     if (this.readStorageStats()) {
-      const protectionClause = this.physicalReclaimBytes > 0
-        ? 's.active_lease_count = 0'
-        : 's.is_protected = 0';
+      const protectionClause =
+        this.physicalReclaimBytes > 0
+          ? 's.active_lease_count = 0'
+          : 's.is_protected = 0';
       const cursorClause = cursor
         ? `AND (
             s.cleanup_tier > @cursorTier
@@ -2707,7 +3198,9 @@ export class ReticulumResourceStore {
             limit: Math.max(1, Math.floor(limit)),
           }
         : { limit: Math.max(1, Math.floor(limit)) };
-      const rows = this.db.prepare(`
+      const rows = this.db
+        .prepare(
+          `
         SELECT r.*, s.live_ref_count, s.provider_count, s.active_lease_count,
                s.cleanup_tier, s.sort_access_at AS cleanup_sort_access_at,
                s.resident_bytes AS cleanup_resident_bytes
@@ -2719,7 +3212,9 @@ export class ReticulumResourceStore {
         ORDER BY s.cleanup_tier ASC, s.sort_access_at ASC,
                  s.resident_bytes DESC, s.file_hash ASC
         LIMIT @limit
-      `).all(parameters) as Array<
+      `
+        )
+        .all(parameters) as Array<
         CleanupCandidate & {
           cleanup_tier: number;
           cleanup_sort_access_at: number;
@@ -2738,31 +3233,35 @@ export class ReticulumResourceStore {
       }));
     }
     return this.getManagedRowsWithState()
-      .filter((row) =>
-        row.active_lease_count === 0 &&
-        (this.physicalReclaimBytes > 0 || !this.isProtectedCandidate(row))
+      .filter(
+        (row) =>
+          row.active_lease_count === 0 &&
+          (this.physicalReclaimBytes > 0 || !this.isProtectedCandidate(row))
       )
       .map((row) => {
         const tier = this.cleanupTier(row);
         return {
           row,
           tier,
-          cursor: tier == null ? null : {
-            tier,
-            sortAccessAt: this.cleanupSortAccessAt(row),
-            residentBytes: Number(row.resident_bytes || 0),
-            fileHash: row.file_hash,
-          },
+          cursor:
+            tier == null
+              ? null
+              : {
+                  tier,
+                  sortAccessAt: this.cleanupSortAccessAt(row),
+                  residentBytes: Number(row.resident_bytes || 0),
+                  fileHash: row.file_hash,
+                },
         };
       })
       .filter(
-        (item): item is CleanupCandidateItem => item.tier != null && item.cursor != null
+        (item): item is CleanupCandidateItem =>
+          item.tier != null && item.cursor != null
       )
-      .sort(
-        (a, b) =>
-          this.compareCleanupCursors(a.cursor, b.cursor)
+      .sort((a, b) => this.compareCleanupCursors(a.cursor, b.cursor))
+      .filter(
+        (item) => !cursor || this.compareCleanupCursors(item.cursor, cursor) > 0
       )
-      .filter((item) => !cursor || this.compareCleanupCursors(item.cursor, cursor) > 0)
       .slice(0, limit);
   }
 
@@ -2779,7 +3278,8 @@ export class ReticulumResourceStore {
     if (
       this.evictingFileHashes.has(row.file_hash) ||
       (this.activeResourceOperations.get(row.file_hash) ?? 0) > 0
-    ) return 0;
+    )
+      return 0;
     this.evictingFileHashes.add(row.file_hash);
     try {
       const expectedBytes = Math.max(0, Number(row.resident_bytes || 0));
@@ -2797,7 +3297,10 @@ export class ReticulumResourceStore {
       if (!workerResult || !workerResult.ok) {
         for (const candidatePath of pathList) {
           try {
-            await fs.promises.rm(candidatePath, { recursive: true, force: true });
+            await fs.promises.rm(candidatePath, {
+              recursive: true,
+              force: true,
+            });
           } catch (error) {
             loggerWarn(
               `[ReticulumResourceStore] cleanup_remove_failed file=${row.file_hash.slice(0, 12)}`,
@@ -2811,17 +3314,32 @@ export class ReticulumResourceStore {
       if (row.assembled_path) remainingDataPaths.add(row.assembled_path);
       remainingDataPaths.add(this.partialPath(manifest));
       remainingDataPaths.add(this.assembledPath(manifest));
-      if ([...remainingDataPaths].some((candidatePath) => fs.existsSync(candidatePath))) {
+      if (
+        [...remainingDataPaths].some((candidatePath) =>
+          fs.existsSync(candidatePath)
+        )
+      ) {
         return 0;
       }
       if (this.closed) return 0;
       const now = this.now();
       this.db.transaction(() => {
         this.stmtDeleteRanges.run(row.file_hash);
-        this.stmtUpdateResourceStatus.run('pending', null, null, now, null, row.file_hash);
-        this.db.prepare(`
+        this.stmtUpdateResourceStatus.run(
+          'pending',
+          null,
+          null,
+          now,
+          null,
+          row.file_hash
+        );
+        this.db
+          .prepare(
+            `
           UPDATE reticulum_resources SET resident_bytes = 0, updated_at = ? WHERE file_hash = ?
-        `).run(now, row.file_hash);
+        `
+          )
+          .run(now, row.file_hash);
       })();
       return expectedBytes;
     } finally {
@@ -2831,7 +3349,9 @@ export class ReticulumResourceStore {
 
   private initSchema(): boolean {
     const existing = this.db
-      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='reticulum_resources'")
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='reticulum_resources'"
+      )
       .get() as { name: string } | undefined;
     if (existing) {
       const columns = this.db
@@ -3000,7 +3520,10 @@ export class ReticulumResourceStore {
         file_hash TEXT PRIMARY KEY
       );
     `);
-    this.ensureResourceColumn('provenance', "TEXT NOT NULL DEFAULT 'remote_downloaded'");
+    this.ensureResourceColumn(
+      'provenance',
+      "TEXT NOT NULL DEFAULT 'remote_downloaded'"
+    );
     this.ensureResourceColumn('resident_bytes', 'INTEGER NOT NULL DEFAULT 0');
     this.ensureResourceColumn('last_accessed_at', 'INTEGER');
     this.ensureResourceColumn('last_served_at', 'INTEGER');
@@ -3047,7 +3570,9 @@ export class ReticulumResourceStore {
       this.initStorageAccountingTriggers();
       this.setResourceMeta('schema_version', String(RESOURCE_SCHEMA_VERSION));
     }
-    const accountingVersion = Number(this.getResourceMeta('accounting_version') || 0);
+    const accountingVersion = Number(
+      this.getResourceMeta('accounting_version') || 0
+    );
     return accountingVersion !== STORAGE_ACCOUNTING_VERSION;
   }
 
@@ -3061,33 +3586,47 @@ export class ReticulumResourceStore {
   }
 
   private getResourceMeta(key: string): string | null {
-    const row = this.db.prepare(
-      'SELECT value FROM reticulum_resource_meta WHERE key = ? LIMIT 1'
-    ).get(key) as { value?: string } | undefined;
+    const row = this.db
+      .prepare(
+        'SELECT value FROM reticulum_resource_meta WHERE key = ? LIMIT 1'
+      )
+      .get(key) as { value?: string } | undefined;
     return typeof row?.value === 'string' ? row.value : null;
   }
 
   private setResourceMeta(key: string, value: string): void {
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       INSERT INTO reticulum_resource_meta(key, value) VALUES (?, ?)
       ON CONFLICT(key) DO UPDATE SET value = excluded.value
-    `).run(key, value);
+    `
+      )
+      .run(key, value);
   }
 
   private ensureResourceColumn(name: string, definition: string): void {
-    const columns = this.db.prepare('PRAGMA table_info(reticulum_resources)').all() as Array<{
+    const columns = this.db
+      .prepare('PRAGMA table_info(reticulum_resources)')
+      .all() as Array<{
       name: string;
     }>;
     if (columns.some((column) => column.name === name)) return;
-    this.db.exec(`ALTER TABLE reticulum_resources ADD COLUMN ${name} ${definition}`);
+    this.db.exec(
+      `ALTER TABLE reticulum_resources ADD COLUMN ${name} ${definition}`
+    );
   }
 
   private ensureReferenceColumn(name: string, definition: string): void {
-    const columns = this.db.prepare('PRAGMA table_info(reticulum_resource_refs)').all() as Array<{
+    const columns = this.db
+      .prepare('PRAGMA table_info(reticulum_resource_refs)')
+      .all() as Array<{
       name: string;
     }>;
     if (columns.some((column) => column.name === name)) return;
-    this.db.exec(`ALTER TABLE reticulum_resource_refs ADD COLUMN ${name} ${definition}`);
+    this.db.exec(
+      `ALTER TABLE reticulum_resource_refs ADD COLUMN ${name} ${definition}`
+    );
   }
 
   private rebuildStorageAccounting(): void {
@@ -3096,7 +3635,9 @@ export class ReticulumResourceStore {
         DELETE FROM reticulum_resource_cleanup_state;
         DELETE FROM reticulum_resource_cleanup_dirty;
       `);
-      this.db.prepare(`
+      this.db
+        .prepare(
+          `
         UPDATE reticulum_resource_storage_stats SET
           total_resident_bytes = COALESCE((
             SELECT SUM(resident_bytes) FROM reticulum_resources WHERE managed = 1
@@ -3123,37 +3664,62 @@ export class ReticulumResourceStore {
             SELECT COUNT(*) FROM reticulum_resources WHERE managed = 1 AND resident_bytes > 0
           )
         WHERE id = 1
-      `).run(this.now());
+      `
+        )
+        .run(this.now());
       this.db.exec(`
         INSERT OR IGNORE INTO reticulum_resource_cleanup_dirty(file_hash)
         SELECT file_hash FROM reticulum_resources WHERE managed = 1;
       `);
       this.refreshDirtyCleanupState(16);
       this.scheduleCleanupStateRefresh();
-      this.setResourceMeta('accounting_version', String(STORAGE_ACCOUNTING_VERSION));
+      this.setResourceMeta(
+        'accounting_version',
+        String(STORAGE_ACCOUNTING_VERSION)
+      );
     } catch (error) {
-      loggerWarn('[ReticulumResourceStore] storage_accounting_rebuild_failed', error);
+      loggerWarn(
+        '[ReticulumResourceStore] storage_accounting_rebuild_failed',
+        error
+      );
     }
   }
 
   private readStorageStats(): StorageStatsRow | null {
-    const row = this.db.prepare(`
+    const row = this.db
+      .prepare(
+        `
       SELECT total_resident_bytes, authored_resident_bytes, remote_resident_bytes,
              partial_resident_bytes, reserved_bytes, protected_bytes,
              evictable_bytes, blob_count, resident_blob_count
       FROM reticulum_resource_storage_stats WHERE id = 1
-    `).get() as StorageStatsRow | undefined;
+    `
+      )
+      .get() as StorageStatsRow | undefined;
     return row ?? null;
   }
 
-  private storageStatusFromStats(stats: StorageStatsRow): ReticulumResourceStorageStatus {
+  private storageStatusFromStats(
+    stats: StorageStatsRow
+  ): ReticulumResourceStorageStatus {
     return {
       limitBytes: this.policy.limitBytes,
-      lowWatermarkBytes: Math.floor(this.policy.limitBytes * this.policy.lowWatermarkRatio),
+      lowWatermarkBytes: Math.floor(
+        this.policy.limitBytes * this.policy.lowWatermarkRatio
+      ),
       totalResidentBytes: Math.max(0, Number(stats.total_resident_bytes || 0)),
-      authoredResidentBytes: Math.max(0, Number(stats.authored_resident_bytes || 0)),
-      remoteResidentBytes: Math.max(0, Number(stats.remote_resident_bytes || 0)),
-      partialResidentBytes: Math.max(0, Number(stats.partial_resident_bytes || 0)),
+      authoredResidentBytes: Math.max(
+        0,
+        Number(stats.authored_resident_bytes || 0)
+      ),
+      remoteResidentBytes: Math.max(
+        0,
+        Number(stats.remote_resident_bytes || 0)
+      ),
+      partialResidentBytes: Math.max(
+        0,
+        Number(stats.partial_resident_bytes || 0)
+      ),
       reservedBytes: Math.max(0, Number(stats.reserved_bytes || 0)),
       protectedBytes: Math.max(0, Number(stats.protected_bytes || 0)),
       evictableBytes: Math.max(0, Number(stats.evictable_bytes || 0)),
@@ -3166,18 +3732,26 @@ export class ReticulumResourceStore {
   }
 
   private markDueCleanupStateDirty(): void {
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       INSERT OR IGNORE INTO reticulum_resource_cleanup_dirty(file_hash)
       SELECT file_hash FROM reticulum_resource_cleanup_state
       WHERE next_refresh_at IS NOT NULL AND next_refresh_at <= ?
-    `).run(this.now());
+    `
+      )
+      .run(this.now());
   }
 
   private refreshDirtyCleanupState(limit = 16): number {
-    const dirty = this.db.prepare(`
+    const dirty = this.db
+      .prepare(
+        `
       SELECT file_hash FROM reticulum_resource_cleanup_dirty
       ORDER BY file_hash LIMIT ?
-    `).all(Math.max(1, Math.floor(limit))) as Array<{ file_hash: string }>;
+    `
+      )
+      .all(Math.max(1, Math.floor(limit))) as Array<{ file_hash: string }>;
     if (dirty.length === 0) return 0;
     const upsert = this.db.prepare(`
       INSERT INTO reticulum_resource_cleanup_state
@@ -3215,7 +3789,10 @@ export class ReticulumResourceStore {
       if (Number(row.retention_until || 0) > now) {
         refreshTimes.push(Number(row.retention_until));
       }
-      if (row.status !== 'complete' && now - row.updated_at < this.policy.stalePartialAgeMs) {
+      if (
+        row.status !== 'complete' &&
+        now - row.updated_at < this.policy.stalePartialAgeMs
+      ) {
         refreshTimes.push(row.updated_at + this.policy.stalePartialAgeMs);
       }
       if (
@@ -3251,9 +3828,11 @@ export class ReticulumResourceStore {
     if (this.closed || this.cleanupStateRefreshPromise) return;
     this.cleanupStateRefreshPromise = new Promise<void>((resolve) => {
       setImmediate(resolve);
-    }).then(() => this.refreshAllDirtyCleanupState()).finally(() => {
-      this.cleanupStateRefreshPromise = null;
-    });
+    })
+      .then(() => this.refreshAllDirtyCleanupState())
+      .finally(() => {
+        this.cleanupStateRefreshPromise = null;
+      });
   }
 
   private async refreshAllDirtyCleanupState(): Promise<void> {
@@ -3522,12 +4101,15 @@ export class ReticulumResourceStore {
   }
 
   private validateManifest(manifest: ReticulumResourceManifest): void {
-    if (!manifest.fileHash || !manifest.namespace) throw new Error('Invalid resource identity');
-    if (!manifest.fileName || !manifest.mimeType) throw new Error('Invalid resource metadata');
+    if (!manifest.fileHash || !manifest.namespace)
+      throw new Error('Invalid resource identity');
+    if (!manifest.fileName || !manifest.mimeType)
+      throw new Error('Invalid resource metadata');
     if (!Number.isInteger(manifest.sizeBytes) || manifest.sizeBytes < 0) {
       throw new Error('Invalid resource size');
     }
-    if (!/^[0-9a-f]{64}$/i.test(manifest.fileHash)) throw new Error('Invalid file hash');
+    if (!/^[0-9a-f]{64}$/i.test(manifest.fileHash))
+      throw new Error('Invalid file hash');
   }
 
   private validateRange(
@@ -3538,7 +4120,11 @@ export class ReticulumResourceStore {
     if (!Number.isInteger(startByte) || !Number.isInteger(endByteExclusive)) {
       throw new Error('Invalid byte range');
     }
-    if (startByte < 0 || endByteExclusive <= startByte || endByteExclusive > manifest.sizeBytes) {
+    if (
+      startByte < 0 ||
+      endByteExclusive <= startByte ||
+      endByteExclusive > manifest.sizeBytes
+    ) {
       throw new Error('Invalid byte range');
     }
     if (endByteExclusive - startByte > RETICULUM_RESOURCE_MAX_RANGE_SIZE) {
@@ -3554,12 +4140,16 @@ export class ReticulumResourceStore {
     const now = this.now();
     let completedBytes = 0;
     this.db.transaction(() => {
-      const overlaps = this.db.prepare(`
+      const overlaps = this.db
+        .prepare(
+          `
         SELECT * FROM reticulum_resource_ranges
         WHERE file_hash = ? AND status = 'complete'
           AND start_byte <= ? AND end_byte_exclusive >= ?
         ORDER BY start_byte ASC
-      `).all(fileHash, endByteExclusive, startByte) as RangeRow[];
+      `
+        )
+        .all(fileHash, endByteExclusive, startByte) as RangeRow[];
       let mergedStart = startByte;
       let mergedEnd = endByteExclusive;
       let replacedBytes = 0;
@@ -3568,13 +4158,19 @@ export class ReticulumResourceStore {
         mergedEnd = Math.max(mergedEnd, row.end_byte_exclusive);
         replacedBytes += Math.max(0, row.end_byte_exclusive - row.start_byte);
       }
-      this.db.prepare(`
+      this.db
+        .prepare(
+          `
         DELETE FROM reticulum_resource_ranges
         WHERE file_hash = ? AND status = 'complete'
           AND start_byte <= ? AND end_byte_exclusive >= ?
-      `).run(fileHash, endByteExclusive, startByte);
+      `
+        )
+        .run(fileHash, endByteExclusive, startByte);
       this.stmtInsertRange.run(fileHash, mergedStart, mergedEnd, now);
-      const resource = this.stmtGetResource.get(fileHash) as ResourceRow | undefined;
+      const resource = this.stmtGetResource.get(fileHash) as
+        | ResourceRow
+        | undefined;
       completedBytes = Math.min(
         Number(resource?.size_bytes || mergedEnd),
         Math.max(
@@ -3599,12 +4195,18 @@ export class ReticulumResourceStore {
           range.startByte >= 0 &&
           range.endByteExclusive > range.startByte
       )
-      .sort((a, b) => a.startByte - b.startByte || a.endByteExclusive - b.endByteExclusive);
+      .sort(
+        (a, b) =>
+          a.startByte - b.startByte || a.endByteExclusive - b.endByteExclusive
+      );
     const merged: ReticulumResourceByteRangeStatus[] = [];
     for (const range of sorted) {
       const previous = merged[merged.length - 1];
       if (previous && range.startByte <= previous.endByteExclusive) {
-        previous.endByteExclusive = Math.max(previous.endByteExclusive, range.endByteExclusive);
+        previous.endByteExclusive = Math.max(
+          previous.endByteExclusive,
+          range.endByteExclusive
+        );
         previous.sizeBytes = previous.endByteExclusive - previous.startByte;
         previous.updatedAt = Math.max(previous.updatedAt, range.updatedAt);
       } else {
@@ -3649,5 +4251,4 @@ export class ReticulumResourceStore {
       safeFileName(manifest.fileName)
     );
   }
-
 }

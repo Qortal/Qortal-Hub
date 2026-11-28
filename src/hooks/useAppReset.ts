@@ -23,7 +23,6 @@ import {
   managedSubscriptionsAtom,
   managedSubscriptionsLoadingAtom,
   memberGroupsAtom,
-  mutedGroupsAtom,
   myGroupsWhereIAmAdminAtom,
   myMemberGroupsAtom,
   myMemberGroupsLastFetchedAtom,
@@ -37,6 +36,7 @@ import {
   quitterDashboardFeedCacheAtom,
   reticulumChatSummariesAtom,
   reticulumDirectSummariesAtom,
+  notificationSettingsCacheAtom,
   resourceDownloadControllerAtom,
   selectedGroupIdAtom,
   settingsLocalLastUpdatedAtom,
@@ -47,7 +47,6 @@ import {
   txListAtom,
   isUsingImportExportSettingsAtom,
 } from '../atoms/global';
-import { clearMemberGroupsPolling } from '../subscriptions/useInitializeMySubscriptions';
 import {
   appCategoryFilterAtom,
   appSearchQueryAtom,
@@ -91,13 +90,15 @@ export function useAppReset() {
   );
   const resetGroupsOwnerNamesAtom = useResetAtom(groupsOwnerNamesAtom);
   const resetGroupAnnouncementsAtom = useResetAtom(groupAnnouncementsAtom);
-  const resetMutedGroupsAtom = useResetAtom(mutedGroupsAtom);
   const resetGroupChatTimestampsAtom = useResetAtom(groupChatTimestampsAtom);
   const resetReticulumChatSummariesAtom = useResetAtom(
     reticulumChatSummariesAtom
   );
   const resetReticulumDirectSummariesAtom = useResetAtom(
     reticulumDirectSummariesAtom
+  );
+  const resetNotificationSettingsCacheAtom = useResetAtom(
+    notificationSettingsCacheAtom
   );
   const resetTimestampEnterAtom = useResetAtom(timestampEnterDataAtom);
   const resettxListAtomAtom = useResetAtom(txListAtom);
@@ -173,10 +174,10 @@ export function useAppReset() {
     resetLastPaymentSeenTimestampAtom();
     resetGroupsOwnerNamesAtom();
     resetGroupAnnouncementsAtom();
-    resetMutedGroupsAtom();
     resetGroupChatTimestampsAtom();
     resetReticulumChatSummariesAtom();
     resetReticulumDirectSummariesAtom();
+    resetNotificationSettingsCacheAtom();
     resetTimestampEnterAtom();
     resettxListAtomAtom();
     resetmemberGroupsAtomAtom();
@@ -224,10 +225,10 @@ export function useAppReset() {
     resetLastPaymentSeenTimestampAtom,
     resetGroupsOwnerNamesAtom,
     resetGroupAnnouncementsAtom,
-    resetMutedGroupsAtom,
     resetGroupChatTimestampsAtom,
     resetReticulumChatSummariesAtom,
     resetReticulumDirectSummariesAtom,
+    resetNotificationSettingsCacheAtom,
     resetTimestampEnterAtom,
     resettxListAtomAtom,
     resetmemberGroupsAtomAtom,
