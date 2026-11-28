@@ -1,0 +1,167 @@
+{
+  "account": {
+    "at_address": "这是一个 AT 地址：链上的程序，而不是账户。",
+    "failed": "无法加载此账户。",
+    "invalid": "这不是有效的 Qortal 地址。",
+    "name_failed": "无法查询此名称。",
+    "no_similar_names": "也没有以此开头的注册名称。",
+    "no_such_name": "没有账户拥有名称“{{name}}”。",
+    "signature": "这看起来是交易签名。区块浏览器用于打开账户：请搜索名称或地址。",
+    "similar_failed": "无法搜索以此开头的名称。",
+    "similar_names": "以此开头的名称：",
+    "unused": "此地址从未被使用过：还没有任何交易涉及它。"
+  },
+  "chip": {
+    "dev_admin": "Dev Admin",
+    "dev_admin_explained": "dev 群组（群组 1）的管理员，该群组由 Qortal 的开发者组成。",
+    "minter_admin": "Minter Admin",
+    "minter_admin_explained": "MINTER 的管理员；MINTER 是其成员进行铸币的群组。MINTER 的管理员决定谁可以加入。",
+    "minter_member": "MINTER 成员",
+    "minter_member_explained": "MINTER 的成员；MINTER 是其成员进行铸币的群组。",
+    "minting_now": "正在铸币",
+    "minting_now_explained": "它属于当前在线的奖励分享，因此正在参与区块铸币。",
+    "minting_penalty": "铸币惩罚",
+    "minting_penalty_explained": "节点在此账户上记录了铸币惩罚。具体数值见“备注”。"
+  },
+  "facts": {
+    "adjustment": "调整 {{blocks}}",
+    "at_block": "于区块 {{block}}",
+    "balance": "余额",
+    "balance_exact": "精确为 {{amount}} QORT",
+    "balance_failed": "无法加载其余额。",
+    "blocks_to_level_one": "距离等级 {{level}} 还需 {{blocks}} 个区块",
+    "blocks_to_level_other": "距离等级 {{level}} 还需 {{blocks}} 个区块",
+    "days_to_level_one": "约 {{count}} 天的铸币",
+    "days_to_level_other": "约 {{count}} 天的铸币",
+    "first_seen": "首次出现",
+    "first_seen_failed": "无法加载其首次出现时间。",
+    "first_seen_none": "未找到记录",
+    "groups": "群组",
+    "in_groups_one": "加入了 {{groups}} 个群组",
+    "in_groups_other": "加入了 {{groups}} 个群组",
+    "in_no_groups": "未加入任何群组",
+    "level_progress": "等级 {{level}} 的进度：{{percent}}%",
+    "pace_failed": "无法加载节点的出块节奏，计算到下一等级的区块数和天数需要它。",
+    "payments_all_one": "基于其全部 {{payments}} 笔付款",
+    "payments_all_other": "基于其全部 {{payments}} 笔付款",
+    "payments_newest_one": "基于其最新 {{payments}} 笔付款",
+    "payments_newest_other": "基于其最新 {{payments}} 笔付款",
+    "payments_none": "暂无付款",
+    "payments_single": "基于其唯一一笔付款",
+    "penalty": "惩罚 {{blocks}}",
+    "received_sent": "QORT 收到 / 发出",
+    "received_sent_info": "仅限 QORT 付款：不计入多笔付款、交易和铸币。",
+    "title": "概览",
+    "top_level": "最高等级"
+  },
+  "groups": {
+    "admin": "管理员",
+    "closed": "封闭群组",
+    "failed": "无法加载其群组。",
+    "members_one": "{{members}} 名成员",
+    "members_other": "{{members}} 名成员",
+    "none": "它不在任何群组中。",
+    "open": "公开群组",
+    "owner": "所有者",
+    "sort": "排序",
+    "sort_az": "名称 A–Z",
+    "sort_members": "成员最多",
+    "sort_minter": "MINTER 优先",
+    "sort_roles": "所有者和管理员优先",
+    "title": "群组",
+    "title_count": "群组（{{n}}）",
+    "unnamed": "群组 #{{id}}"
+  },
+  "header": {
+    "about": "关于此账户",
+    "blocked": "已屏蔽该账户。",
+    "copy_public_key": "复制公钥",
+    "name_failed": "无法加载其名称。",
+    "name_matched": "您搜索的是“{{typed}}”；节点在忽略大小写和形似字母后匹配到名称“{{matched}}”。",
+    "no_primary_name": "无主名称",
+    "opened_from_name": "通过其名称“{{name}}”打开。",
+    "public_key_copied": "公钥已复制到剪贴板。",
+    "unblocked": "已取消屏蔽该账户。"
+  },
+  "minter": {
+    "open_app": "打开 {{app}}",
+    "standing_admin": "Minter Admin，也是 MINTER 成员。",
+    "standing_member": "MINTER 成员。",
+    "standing_outside": "不在 MINTER 中。",
+    "story": "它在 MINTER 的经历，从提名到决定，都记录在 {{app}} 中。",
+    "title": "MINTER"
+  },
+  "minting": {
+    "last_signed": "最近一次于 {{date}} 签署区块（区块 {{block}}）。",
+    "last_signed_block": "最近签署的区块：{{block}}。",
+    "last_signed_failed": "无法加载其最近签署的区块。",
+    "last_signed_none": "它尚未签署过区块。",
+    "not_now": "当前未在铸币。",
+    "online_failed": "无法加载当前正在铸币的账户。",
+    "own_key": "正在使用自己的密钥铸币。",
+    "own_key_and_shares": "正在使用自己的密钥铸币，并通过奖励分享与以下账户一起铸币：",
+    "shares": "正在通过奖励分享与以下账户一起铸币：",
+    "show_all_one": "显示全部 {{count}} 个",
+    "show_all_other": "显示全部 {{count}} 个",
+    "show_fewer": "收起",
+    "title": "铸币"
+  },
+  "notes": {
+    "name_address_like": "其主名称“{{name}}”的写法像一个地址。",
+    "name_invisible_one": "其主名称“{{name}}”包含 {{count}} 个不可见字符或空白字符。",
+    "name_invisible_other": "其主名称“{{name}}”包含 {{count}} 个不可见字符或空白字符。",
+    "name_invisible_single": "其主名称“{{name}}”包含不可见字符或空白字符。",
+    "name_owner_end": "其主名称“{{name}}”的结尾字符与其地址相同（…{{end}}）。",
+    "name_owner_start": "其主名称“{{name}}”的开头字符与其地址相同（{{start}}…）。",
+    "penalty": "节点在此账户上记录了 {{blocks}} 个区块的铸币惩罚。",
+    "title": "备注"
+  },
+  "payments": {
+    "failed": "无法加载其付款。",
+    "newest_only": "这些只是其最新的付款。",
+    "received_from": "收自",
+    "sent_to": "发送至",
+    "show_more": "显示更多",
+    "shown": "显示 {{total}} 条中的 {{shown}} 条。",
+    "to_itself": "转给自己"
+  },
+  "search": {
+    "clear": "清除",
+    "compact_placeholder": "在区块浏览器中搜索",
+    "helper": "选择一个建议，或按 Enter 精确查找您输入的内容。",
+    "label": "查找账户",
+    "placeholder": "名称或 Q… 地址"
+  },
+  "settings": {
+    "remember": "在此设备上记住我浏览过的账户",
+    "remember_hint": "仅保存其地址，仅限此 Hub 账户。关闭后会清除它们。",
+    "title": "区块浏览器设置"
+  },
+  "start": {
+    "clear": "清除",
+    "clear_recent": "清除最近浏览",
+    "recent": "最近浏览",
+    "your_account": "您的账户"
+  },
+  "summary": {
+    "first_seen": "首次出现于 {{date}}",
+    "last_sent": "上次发送交易：{{ago}}",
+    "minter_admin": "Minter Admin，MINTER 成员",
+    "minter_member": "MINTER 成员",
+    "minter_outside": "非 MINTER 成员",
+    "no_names": "无注册名称",
+    "owns_names_more_one": "拥有至少 {{shown}} 个名称",
+    "owns_names_more_other": "拥有至少 {{shown}} 个名称",
+    "owns_names_one": "拥有 {{shown}} 个名称",
+    "owns_names_other": "拥有 {{shown}} 个名称"
+  },
+  "trail": {
+    "label": "您的浏览路径"
+  },
+  "window": {
+    "forward": "前进",
+    "full": "扩展到整个窗口",
+    "leave_full": "恢复正常大小",
+    "subtitle": "查询任意 Qortal 账户"
+  }
+}

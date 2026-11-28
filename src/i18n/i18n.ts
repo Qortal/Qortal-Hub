@@ -56,6 +56,7 @@ function getInitialLanguage(): string {
 export const namespaces = [
   'auth',
   'core',
+  'explorer',
   'group',
   'question',
   'node',
