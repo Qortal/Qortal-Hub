@@ -16,9 +16,19 @@
  * ended, the window offers to refill it; when a limit stops it, the window
  * says so. When a publish would replace something already published, or the
  * app is publishing the same resource right now, the window says that too.
+ *
+ * A request the budget pays for is signed in the signing session it came in,
+ * by the account whose budget took it, or not at all: right before it signs,
+ * `checkBudgetSigner` stops it when the wallet, its keys or the node changed
+ * since (a logout, another account signing in), or the key it would sign with
+ * is another account's. The request's `release` then gives the budget back
+ * what it held.
  */
 
+import i18n from 'i18next';
 import { isHubLocked } from '../atoms/presence';
+import { publicKeyBelongsToAddress } from '../encryption/addressKeyCheck';
+import { getSigningContextRevision } from '../utils/chromeStorage';
 import { parseDecimalAmount } from '../transactions/paymentSafety';
 import { nodePathSegment } from '../utils/nodeEndpointPath';
 import {
@@ -113,6 +123,51 @@ export type BudgetedAsk = {
   /** What the node says about the resources (`resourcesOnNode`). */
   resourcesOnNode?: (resources: BudgetResource[]) => Promise<ResourcesOnNode>;
 };
+
+/**
+ * A request the budget took that can no longer be signed as it was taken:
+ * the account logged out, another one signed in, or the node changed, before
+ * it was signed.
+ */
+export class BudgetAccountChangedError extends Error {
+  constructor() {
+    super(
+      i18n.t('question:message.error.account_changed', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+    this.name = 'BudgetAccountChangedError';
+  }
+}
+
+/**
+ * True while the signing session (`getSigningContextRevision`) is still
+ * `session`: the wallet, its keys and the node are as they were, and aren't
+ * being changed.
+ */
+const inSession = (session: number | null): boolean =>
+  session !== null && getSigningContextRevision() === session;
+
+/**
+ * Call right before a request signs, with the public key it signs with.
+ * When the app's budget pays for it, this throws, so that it isn't signed,
+ * unless the signing session is still the one the request came in and the
+ * key is the account's whose budget took it. A request the user approved in
+ * the window isn't the budget's: nothing is checked.
+ */
+export function checkBudgetSigner(
+  ticket: AppBudgetTicket | null | undefined,
+  publicKey: unknown
+): void {
+  if (!ticket?.paid) return;
+  if (
+    inSession(ticket.session) &&
+    publicKeyBelongsToAddress(publicKey, ticket.address)
+  ) {
+    return;
+  }
+  throw new BudgetAccountChangedError();
+}
 
 const currentAddress = (): string | null => {
   const w = window as Window & { __qortalCurrentAddress?: string | null };
@@ -224,6 +279,9 @@ export async function askUnlessBudgeted(
   const fee = readFee(request.fee);
   const app: BudgetApp | null = budgetAppOfRequest(request.appInfo);
   const address = currentAddress();
+  // The signing session the request came in: a budget pays only while it
+  // lasts (null while the wallet or node is changing).
+  const session = getSigningContextRevision();
   const resourceKeys = (request.resources ?? []).map((resource) =>
     budgetResourceKey(resource.service, resource.name, resource.identifier)
   );
@@ -260,7 +318,10 @@ export async function askUnlessBudgeted(
   }
 
   const take = (approved = false): AppBudgetDecision =>
-    budgetMayPay && !isHubLocked() && currentAddress() === address
+    budgetMayPay &&
+    !isHubLocked() &&
+    currentAddress() === address &&
+    inSession(session)
       ? takeFromAppBudget({
           address,
           app,
@@ -269,6 +330,7 @@ export async function askUnlessBudgeted(
           fee,
           resources: request.kind === 'publish' ? resourceKeys : undefined,
           approved,
+          session,
         })
       : { kind: 'ask' };
 

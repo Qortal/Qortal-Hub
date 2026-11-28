@@ -40,6 +40,7 @@
   },
   "message": {
     "error": {
+      "account_changed": "La cuenta o el nodo cambió antes de que se firmara, así que no se envió.",
       "add_to_list": "no se pudo agregar a la lista",
       "app_fee_not_sent": "la publicación se realizó, pero la tarifa de la aplicación no se envió: {{ error }}",
       "app_fee_outcome_unknown": "la publicación se realizó, pero Hub no pudo saber si se pagó la tarifa de la aplicación. Revise sus transacciones para comprobarlo.",

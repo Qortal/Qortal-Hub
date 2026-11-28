@@ -87,6 +87,7 @@ vi.mock('../qapp-save-file', async () =>
 );
 
 import { getDefaultStore } from 'jotai';
+import { SecureStoragePlugin } from '@evva/capacitor-secure-storage-plugin';
 import Base58Untyped from '../../encryption/Base58';
 import publicKeyToAddressUntyped from '../../utils/generateWallet/publicKeyToAddress';
 import { appLockedAtom } from '../../atoms/presence';
@@ -114,6 +115,7 @@ import {
 } from '../../background/background';
 import { getAllUserNames, getNameInfo } from '../../encryption/encryption';
 import { publishData } from '../../qdn/publish/publish';
+import { storeData } from '../../utils/chromeStorage';
 import { createTransaction } from '../../transactions/transactions';
 import {
   budgetState,
@@ -129,8 +131,13 @@ import { HUB_REQUEST } from '../requestingApp';
 const Base58 = Base58Untyped as any;
 const publicKeyToAddress = publicKeyToAddressUntyped as any;
 
-const ACCOUNT = 'QaccountOne';
-const OTHER_ACCOUNT = 'QaccountTwo';
+const keyPairBytes = Base58.encode(new Uint8Array(32).fill(1)) as string;
+// Another account's key: what signs once someone else has signed in.
+const otherKeyBytes = Base58.encode(new Uint8Array(32).fill(2)) as string;
+// The accounts of those keys (an address is made from its public key): a
+// request a budget pays for is signed by the account the budget is for.
+const ACCOUNT = String(publicKeyToAddress(Base58.decode(keyPairBytes)));
+const OTHER_ACCOUNT = String(publicKeyToAddress(Base58.decode(otherKeyBytes)));
 const FEE = '0.01000000';
 const FEE_ATOMIC = 1000000;
 const QORT = BigInt(100000000);
@@ -139,7 +146,6 @@ const OPENED_APP = { name: 'Opened-App', service: 'APP', tabId: 4 };
 const SECOND_TAB = { ...OPENED_APP, tabId: 5 };
 const APP: BudgetApp = { service: 'APP', name: 'Opened-App' };
 const SITE: BudgetApp = { service: 'WEBSITE', name: 'Opened-App' };
-const keyPairBytes = Base58.encode(new Uint8Array(32).fill(1)) as string;
 const store = getDefaultStore();
 
 const setAccount = (address: string | null) => {
@@ -602,6 +608,276 @@ describe('votes and chat messages', () => {
     expect(budget().recent).toEqual([
       { at: expect.any(Number), kind: 'chat', fee: '0', recipient },
     ]);
+  });
+});
+
+describe('a request the budget took is signed in its session by its own account, or not at all', () => {
+  const ownKeys = { privateKey: keyPairBytes, publicKey: keyPairBytes };
+  const otherKeys = { privateKey: otherKeyBytes, publicKey: otherKeyBytes };
+  const CHANGED = 'question:message.error.account_changed';
+
+  /** A promise the test settles. */
+  function deferred<T>() {
+    let resolve: (value: T) => void = () => undefined;
+    const promise = new Promise<T>((done) => {
+      resolve = done;
+    });
+    return { promise, resolve };
+  }
+
+  /**
+   * Signing in stores the wallet (a logout removes it): either starts a new
+   * signing session.
+   */
+  const signIn = async (address: string, keys: typeof ownKeys) => {
+    await storeData('walletInfo', { address0: address });
+    setAccount(address);
+    vi.mocked(getSaveWallet).mockResolvedValue({ address0: address });
+    vi.mocked(getKeyPair).mockResolvedValue(keys);
+  };
+  const switchAccount = () => signIn(OTHER_ACCOUNT, otherKeys);
+  const signInAgain = () => signIn(ACCOUNT, ownKeys);
+
+  /**
+   * publishData as it works: it uploads (`whileUploading` runs then), reads
+   * the key pair and signs.
+   */
+  const publishDataSigns = (
+    whileUploading?: (call: number) => Promise<void> | void
+  ) => {
+    let calls = 0;
+    vi.mocked(publishData).mockImplementation(async (options: any) => {
+      calls += 1;
+      await whileUploading?.(calls);
+      const { publicKey } = await getKeyPair();
+      options.beforeSigning?.(publicKey);
+      return { signature: 'PUBLISH_SIG' };
+    });
+  };
+
+  const vote = () =>
+    voteOnPoll({ pollName: 'Poll-1', optionIndex: 1 }, true, OPENED_APP);
+
+  it('stops a vote when the account changes while it waits for the wallet, and gives the budget back', async () => {
+    // One vote's fee: a hold left behind would make the next vote ask.
+    giveBudget(BigInt(FEE_ATOMIC));
+    stubNode();
+    const { shown } = watchWindows();
+    const wallet = deferred<{ address0: string }>();
+    vi.mocked(getSaveWallet).mockReturnValueOnce(wallet.promise);
+    const voting = vote();
+    await vi.waitFor(() => expect(getSaveWallet).toHaveBeenCalledTimes(1));
+    await switchAccount();
+    wallet.resolve({ address0: OTHER_ACCOUNT });
+
+    await expect(voting).rejects.toThrow(CHANGED);
+    expect(createTransaction).not.toHaveBeenCalled();
+    expect(processTransactionVersion2).not.toHaveBeenCalled();
+    expect(shown).toHaveLength(0);
+    expect(budget()).toMatchObject({ used: '0', actions: 0, recent: [] });
+    expect(findAppBudget(OTHER_ACCOUNT, APP)).toBeNull();
+
+    await signInAgain();
+    await expect(vote()).resolves.toEqual({ signature: 'VOTE_SIG' });
+    expect(shown).toHaveLength(0);
+    expect(budget()).toMatchObject({ used: '1000000', actions: 1 });
+  });
+
+  it('stops a vote when the same account logged out and in again meanwhile', async () => {
+    giveBudget(BigInt(FEE_ATOMIC));
+    stubNode();
+    const { shown } = watchWindows();
+    const wallet = deferred<{ address0: string }>();
+    vi.mocked(getSaveWallet).mockReturnValueOnce(wallet.promise);
+    const voting = vote();
+    await vi.waitFor(() => expect(getSaveWallet).toHaveBeenCalledTimes(1));
+    await signInAgain();
+    wallet.resolve({ address0: ACCOUNT });
+
+    // Its own keys, but taken before the logout: it isn't signed.
+    await expect(voting).rejects.toThrow(CHANGED);
+    expect(createTransaction).not.toHaveBeenCalled();
+    expect(budget()).toMatchObject({ used: '0', actions: 0 });
+
+    await expect(vote()).resolves.toEqual({ signature: 'VOTE_SIG' });
+    expect(shown).toHaveLength(0);
+    expect(budget()).toMatchObject({ used: '1000000', actions: 1 });
+  });
+
+  it("stops a vote about to be signed with another account's key", async () => {
+    giveBudget(BigInt(FEE_ATOMIC));
+    stubNode();
+    watchWindows();
+    vi.mocked(getKeyPair).mockResolvedValueOnce(otherKeys);
+    await expect(vote()).rejects.toThrow(CHANGED);
+    expect(createTransaction).not.toHaveBeenCalled();
+    expect(budget()).toMatchObject({ used: '0', actions: 0 });
+  });
+
+  it('counts a vote that was being sent when the account changed', async () => {
+    giveBudget(BigInt(FEE_ATOMIC));
+    stubNode();
+    watchWindows();
+    const sent = deferred<{ signature: string }>();
+    vi.mocked(processTransactionVersion2).mockReturnValueOnce(sent.promise);
+    const voting = vote();
+    await vi.waitFor(() =>
+      expect(processTransactionVersion2).toHaveBeenCalledTimes(1)
+    );
+    await switchAccount();
+    sent.resolve({ signature: 'VOTE_SIG' });
+
+    // Signed by its own account before the change: its fee was spent.
+    await expect(voting).resolves.toEqual({ signature: 'VOTE_SIG' });
+    expect(budget()).toMatchObject({ used: '1000000', actions: 1 });
+  });
+
+  it("doesn't send a chat message once another account signed in", async () => {
+    giveBudget(QORT);
+    stubNode();
+    const { shown } = watchWindows();
+    // The account changes while the handler reads the balance.
+    vi.mocked(getBalanceInfo).mockImplementationOnce(async () => {
+      await switchAccount();
+      return 100;
+    });
+    await expect(
+      sendChatMessage({ groupId: 7, message: 'hi' }, true, OPENED_APP)
+    ).rejects.toThrow(CHANGED);
+    expect(createTransaction).not.toHaveBeenCalled();
+    expect(signChatFunc).not.toHaveBeenCalled();
+    expect(shown).toHaveLength(0);
+    expect(budget()).toMatchObject({ actions: 0, recent: [] });
+  });
+
+  it("doesn't send a direct message once another account signed in", async () => {
+    giveBudget(QORT);
+    const node = stubNode();
+    const recipientKey = Base58.encode(new Uint8Array(32).fill(3)) as string;
+    const recipient = String(publicKeyToAddress(Base58.decode(recipientKey)));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        String(url).includes('/addresses/publickey/')
+          ? new Response(recipientKey, {
+              headers: { 'content-type': 'text/plain' },
+            })
+          : node(url)
+      )
+    );
+    const { shown } = watchWindows();
+    vi.mocked(getBalanceInfo).mockImplementationOnce(async () => {
+      await switchAccount();
+      return 100;
+    });
+    await expect(
+      sendChatMessage({ recipient, message: 'hi' }, true, OPENED_APP)
+    ).rejects.toThrow(CHANGED);
+    expect(createTransaction).not.toHaveBeenCalled();
+    expect(signChatFunc).not.toHaveBeenCalled();
+    expect(shown).toHaveLength(0);
+    expect(budget()).toMatchObject({ actions: 0, recent: [] });
+  });
+
+  it("doesn't sign a publish when another account signed in during the upload", async () => {
+    giveBudget(BigInt(FEE_ATOMIC));
+    stubNode();
+    const { shown } = watchWindows();
+    publishDataSigns(() => switchAccount());
+    await expect(publishPost('post-1')).rejects.toThrow(CHANGED);
+    expect(budget()).toMatchObject({ used: '0', actions: 0 });
+
+    // Back as the first account: the same new resource can be paid for.
+    await signInAgain();
+    publishDataSigns();
+    await expect(publishPost('post-1')).resolves.toEqual({
+      signature: 'PUBLISH_SIG',
+    });
+    expect(shown).toHaveLength(0);
+    expect(budget()).toMatchObject({ used: '1000000', actions: 1 });
+  });
+
+  it('stops the rest of a multi-publish once another account signed in, counting only what was signed', async () => {
+    giveBudget(BigInt(3 * FEE_ATOMIC));
+    stubNode();
+    const { shown } = watchWindows();
+    publishDataSigns(async (call) => {
+      if (call === 2) await switchAccount();
+    });
+    const result: any = await publishMultipleQDNResources(
+      { resources: [post('post-1'), post('post-2'), post('post-3')] },
+      null,
+      true,
+      OPENED_APP
+    );
+    // The third isn't uploaded at all.
+    expect(publishData).toHaveBeenCalledTimes(2);
+    expect(result.error.unsuccessfulPublishes).toEqual([
+      expect.objectContaining({ identifier: 'post-2', reason: CHANGED }),
+      expect.objectContaining({ identifier: 'post-3', reason: CHANGED }),
+    ]);
+    expect(budget()).toMatchObject({ used: '1000000', actions: 1 });
+
+    // What the other two held is free again.
+    await signInAgain();
+    publishDataSigns();
+    await publishMultipleQDNResources(
+      { resources: [post('post-4'), post('post-5')] },
+      null,
+      true,
+      OPENED_APP
+    );
+    expect(shown).toHaveLength(0);
+    expect(budget()).toMatchObject({ used: '3000000', actions: 3 });
+  });
+
+  it('still publishes what the user approved in the window', async () => {
+    giveBudget(QORT);
+    stubNode({ 'post-1': 'READY' });
+    const { shown, answer } = watchWindows();
+    publishDataSigns();
+    const publishing = publishPost('post-1');
+    await vi.waitFor(() => expect(shown).toHaveLength(1));
+    answer(0, { accepted: true });
+    await expect(publishing).resolves.toEqual({ signature: 'PUBLISH_SIG' });
+    expect(budget().actions).toBe(0);
+  });
+
+  it('asks for a publish when the account logged out and in while the node was asked about it', async () => {
+    giveBudget(QORT);
+    const fetchMock = stubNode();
+    const { shown, answer } = watchWindows();
+    const asNode = fetchMock.getMockImplementation();
+    fetchMock.mockImplementationOnce(async (url: string) => {
+      await signInAgain();
+      return asNode(url);
+    });
+    const publishing = publishPost('post-1');
+    await vi.waitFor(() => expect(shown).toHaveLength(1));
+    answer(0, { accepted: false });
+    await expect(publishing).rejects.toThrow();
+    expect(publishData).not.toHaveBeenCalled();
+    expect(budget()).toMatchObject({ used: '0', actions: 0 });
+  });
+
+  it('asks for a vote that comes while the wallet is being changed', async () => {
+    giveBudget(QORT);
+    stubNode();
+    const { shown, answer } = watchWindows();
+    const stored = deferred<{ value: boolean }>();
+    vi.mocked(SecureStoragePlugin.set).mockReturnValueOnce(stored.promise);
+    const changing = storeData('walletInfo', { address0: ACCOUNT });
+    // Ends the change whatever happens, so the next test has a session.
+    onTestFinished(async () => {
+      stored.resolve({ value: true });
+      await changing;
+    });
+    const voting = vote();
+    await vi.waitFor(() => expect(shown).toHaveLength(1));
+    answer(0, { accepted: false });
+    await expect(voting).rejects.toThrow();
+    expect(createTransaction).not.toHaveBeenCalled();
+    expect(budget().actions).toBe(0);
   });
 });
 

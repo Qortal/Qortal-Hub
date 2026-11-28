@@ -51,7 +51,9 @@ A budget is never used:
   marks them in `appInfo`: `isPrivate`, `isPreview`, `isDevMode`);
 - for a request without the tab it came from;
 - while Hub is locked;
-- when the node's fee for the action can't be read.
+- when the node's fee for the action can't be read;
+- when the signing session changed since the request came in (see below),
+  or is changing.
 
 The app is the tab the request came from (`appInfo`, as the approval window
 names it), never anything in the request: service `APP` or `WEBSITE` plus the
@@ -60,6 +62,19 @@ budgets of their own.
 
 Session permissions and the stored "always allow" switches are checked first,
 as before; a request they allow doesn't touch the budget.
+
+A request a budget pays for is signed in the signing session it came in, by
+the account whose budget took it, or not at all. The signing session is
+`getSigningContextRevision` (`src/utils/chromeStorage.ts`): it changes
+whenever the wallet, its keys or the node are stored or removed, so a logout,
+another account signing in or another node ends it. Right before the request
+signs, `checkBudgetSigner` checks the session and that the key it signs with
+is that account's: in the vote and chat handlers after they read the key
+pair, and in `publishData` through its `beforeSigning`. When either changed,
+nothing is signed, the request's fees go back to the budget, and the app gets
+`question:message.error.account_changed`. A multi-publish stops there: the
+resources after it aren't published either. A request already sent when the
+session changes was signed by its own account, and counts.
 
 ## Store
 

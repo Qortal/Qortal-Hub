@@ -801,6 +801,13 @@ export type AppBudgetTicket = {
   paid: boolean;
   /** The fee held for each action, in 1e-8 units. */
   fee: bigint;
+  /** The account whose budget holds the fees. */
+  address: string;
+  /**
+   * The signing session the request was taken in (`AppBudgetRequest`'s), or
+   * null when none was given.
+   */
+  session: number | null;
   /** One of the request's actions was done: a paid fee counts as used. */
   done: (details?: AppBudgetActionDetails) => void;
   /** Gives back what the request still holds. Safe to call more than once. */
@@ -839,6 +846,11 @@ export type AppBudgetRequest = {
   now?: number;
   /** The user approved this request in the window: the limits don't apply. */
   approved?: boolean;
+  /**
+   * The signing session the request came in (see `getSigningContextRevision`
+   * in utils/chromeStorage): it must still be the same when it signs.
+   */
+  session?: number | null;
 };
 
 const ASK: AppBudgetDecision = { kind: 'ask' };
@@ -904,7 +916,15 @@ export function takeFromAppBudget(
   resources.forEach((key) => startPublishing(address, key));
   return {
     kind: 'take',
-    ticket: newTicket(address, budget, kind, fee, count, resources),
+    ticket: newTicket(
+      address,
+      budget,
+      kind,
+      fee,
+      count,
+      resources,
+      request.session ?? null
+    ),
   };
 }
 
@@ -917,7 +937,15 @@ export function trackApprovedPublish(
   resources: string[]
 ): AppBudgetTicket {
   resources.forEach((key) => startPublishing(address, key));
-  return newTicket(address, null, 'publish', ZERO, resources.length, resources);
+  return newTicket(
+    address,
+    null,
+    'publish',
+    ZERO,
+    resources.length,
+    resources,
+    null
+  );
 }
 
 function newTicket(
@@ -926,7 +954,8 @@ function newTicket(
   kind: AppBudgetActionKind,
   fee: bigint,
   count: number,
-  resources: string[]
+  resources: string[],
+  session: number | null
 ): AppBudgetTicket {
   const budgetId = budget?.id ?? null;
   const hold = budgetId ? holdOf(address, budgetId) : null;
@@ -992,6 +1021,8 @@ function newTicket(
   return {
     paid: !!budgetId,
     fee,
+    address,
+    session,
     done(details = {}) {
       if (held <= 0) return;
       held -= 1;

@@ -109,7 +109,12 @@ import {
   PERMISSION_ALREADY_GIVEN,
 } from './permissionPromptQueue';
 import { isHubRequest, requestingAppFromAppInfo } from './requestingApp';
-import { askUnlessBudgeted, resourcesOnNode } from './appBudgetApproval';
+import {
+  askUnlessBudgeted,
+  BudgetAccountChangedError,
+  checkBudgetSigner,
+  resourcesOnNode,
+} from './appBudgetApproval';
 import Base58 from '../encryption/Base58.ts';
 import {
   assertPublicKeyForAddress,
@@ -432,6 +437,8 @@ export const _voteOnPoll = async (
     const address = wallet.address0;
     const resKeyPair = await getKeyPair();
     const parsedData = resKeyPair;
+    // Signed by the account whose budget took the vote, or not at all.
+    checkBudgetSigner(budgetTicket, parsedData.publicKey);
     const uint8PrivateKey = Base58.decode(parsedData.privateKey);
     const uint8PublicKey = Base58.decode(parsedData.publicKey);
     const keyPair = {
@@ -2219,6 +2226,9 @@ export const publishQDNResource = async (
           ? Number(budgetTicket.fee)
           : Number(parseDecimalAmount(fee.fee, { allowZero: true }).atomic),
         encryption: isStreamedEncryption ? encryption : null,
+        // Signed by the account whose budget took the publish, or not at all.
+        beforeSigning: (publicKey: string) =>
+          checkBudgetSigner(budgetTicket, publicKey),
       });
       budgetTicket?.done({ service, name, identifier });
       if (resPublish?.signature && appFeePayment && checkbox1Var) {
@@ -2554,11 +2564,24 @@ export const publishMultipleQDNResources = async (
     reason: string;
     identifier: any;
     service: any;
+    name?: string;
   };
 
   const failedPublishesIdentifiers: FailedPublish[] = [];
   const publishedResponses = [];
+  // Set when the account changed before a resource the budget pays for was
+  // signed: the resources after it aren't published either.
+  let accountChanged: BudgetAccountChangedError | null = null;
   for (const resource of resources) {
+    if (accountChanged) {
+      failedPublishesIdentifiers.push({
+        reason: accountChanged.message,
+        identifier: resource.identifier,
+        service: resource.service,
+        name: resource?.name || name,
+      });
+      continue;
+    }
     try {
       const requiredFields = ['service'];
       const missingFields: string[] = [];
@@ -2720,6 +2743,8 @@ export const publishMultipleQDNResources = async (
             : Number(parseDecimalAmount(fee.fee, { allowZero: true }).atomic),
           appInfo,
           encryption: encryption || null,
+          beforeSigning: (publicKey: string) =>
+            checkBudgetSigner(budgetTicket, publicKey),
         });
         budgetTicket?.done({
           service: resource.service,
@@ -2735,6 +2760,7 @@ export const publishMultipleQDNResources = async (
           }, TIME_SECONDS_1_IN_MILLISECONDS);
         });
       } catch (error) {
+        if (error instanceof BudgetAccountChangedError) accountChanged = error;
         const errorMsg =
           error.message ||
           i18n.t('question:message.error.upload', {
@@ -3104,6 +3130,8 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
       let reference = Base58.encode(_reference);
       const resKeyPair = await getKeyPair();
       const parsedData = resKeyPair;
+      // Sent by the account whose budget took the message, or not at all.
+      checkBudgetSigner(budgetTicket, parsedData.publicKey);
       const uint8PrivateKey = Base58.decode(parsedData.privateKey);
       const uint8PublicKey = Base58.decode(parsedData.publicKey);
       const keyPair = {
@@ -3148,6 +3176,7 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
       let reference = Base58.encode(_reference);
       const resKeyPair = await getKeyPair();
       const parsedData = resKeyPair;
+      checkBudgetSigner(budgetTicket, parsedData.publicKey);
       const uint8PrivateKey = Base58.decode(parsedData.privateKey);
       const uint8PublicKey = Base58.decode(parsedData.publicKey);
       const keyPair = {

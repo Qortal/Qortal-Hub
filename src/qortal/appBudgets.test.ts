@@ -452,6 +452,18 @@ describe('budgets and what they hold', () => {
     ).toBe('used_up');
   });
 
+  it('says whose budget a ticket holds and the signing session it was taken in', () => {
+    give(QORT);
+    const ticket = takeOne({ session: 7 });
+    expect(ticket).toMatchObject({ paid: true, address: ACCOUNT, session: 7 });
+    expect(takeOne().session).toBeNull();
+    expect(trackApprovedPublish(ACCOUNT, [POST_KEY])).toMatchObject({
+      paid: false,
+      address: ACCOUNT,
+      session: null,
+    });
+  });
+
   it('keeps a publish approved in the window from being published again by a budget', () => {
     give(QORT);
     const approved = trackApprovedPublish(ACCOUNT, [POST_KEY]);

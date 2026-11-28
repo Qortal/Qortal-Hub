@@ -40,6 +40,7 @@
   },
   "message": {
     "error": {
+      "account_changed": "Tili tai solmu vaihtui ennen allekirjoitusta, joten sitä ei lähetetty.",
       "add_to_list": "lisäys luetteloon epäonnistui",
       "app_fee_not_sent": "julkaisu onnistui, mutta sovelluksen maksua ei lähetetty: {{ error }}",
       "app_fee_outcome_unknown": "julkaisu onnistui, mutta Hub ei pystynyt selvittämään, maksettiinko sovelluksen maksu. Tarkista asia tapahtumistasi.",
