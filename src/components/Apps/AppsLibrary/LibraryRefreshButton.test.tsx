@@ -148,4 +148,17 @@ describe('LibraryRefreshButton', () => {
     expect(errors).not.toHaveBeenCalled();
     errors.mockRestore();
   });
+
+  // In sx, 1 means 100 % and margin -1 means -8 px. A status as wide as the
+  // library's header made the launcher wider than its window, and dragging
+  // an app near the edge then slid the whole launcher sideways.
+  it('keeps its status for screen readers in a 1 px box', () => {
+    renderButton(() => undefined);
+
+    const style = getComputedStyle(screen.getByRole('status'));
+    expect(style.position).toBe('absolute');
+    expect(style.width).toBe('1px');
+    expect(style.height).toBe('1px');
+    expect(style.margin).toBe('-1px');
+  });
 });

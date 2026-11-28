@@ -149,17 +149,20 @@ export const INSTANT_TOOLTIP = {
   enterNextDelay: 0,
 } as const;
 
-/** Read by screen readers, not shown. */
+/**
+ * Read by screen readers, not shown. The sizes are in px: in sx, 1 would be
+ * 100 % of the parent and a margin of -1 would be -8 px.
+ */
 export const visuallyHiddenSx = {
   border: 0,
   clip: 'rect(0 0 0 0)',
-  height: 1,
-  margin: -1,
+  height: '1px',
+  margin: '-1px',
   overflow: 'hidden',
   padding: 0,
   position: 'absolute',
   whiteSpace: 'nowrap',
-  width: 1,
+  width: '1px',
 } as const;
 
 const fadeIn = keyframes`
